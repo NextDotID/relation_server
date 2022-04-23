@@ -1,0 +1,10 @@
+/.dockerignore
+/Dockerfile
+/.git
+/.gitignore
+/config
+/docs
+
+/lambda.mk
+/Makefile
+/target

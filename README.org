@@ -1,0 +1,19 @@
+#+TITLE: Relation aggregation service for NextID
+#+AUTHOR: Nyk Ma <nykma@mask.io>
+
+* Relation service
+:PROPERTIES:
+:ID:       f593b646-bb51-49a1-a8a2-e67ff74bbd0b
+:END:
+
+This lambda function / standalone server provides relation
+aggregation store / search of web3 / web2.0.
+
+* Goal [0/1]
+:PROPERTIES:
+:ID:       5f4d4828-bf69-4119-a519-a4edd2aa8c36
+:END:
+
+** TODO Stage1: Search engine
+
+One search engine to rule them all.

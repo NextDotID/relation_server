@@ -1,0 +1,7 @@
+/lambda.mk
+/target
+
+.vscode
+
+/config/*.toml
+!/config/main_sample.toml

@@ -1,0 +1,13 @@
+[db]
+host = "127.0.0.1"
+port = 5441
+username = "relation_server"
+password = "relation_server"
+db = "relation_server_development"
+
+[web]
+listen = "127.0.0.1"
+port = 3722
+
+[proof_service]
+url = "https://proof-service.nextnext.id"
