@@ -23,6 +23,8 @@ pub enum Error {
     SignatureValidationError(String),
     #[error("Parse hex error: {0}")]
     HttpClientError(#[from] hyper::Error),
+    #[error("Gremlin error: {0}")]
+    GremlinError(#[from] gremlin_client::GremlinError),
 }
 
 impl Error {
@@ -37,6 +39,7 @@ impl Error {
             Error::ConfigError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::HttpClientError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::SignatureValidationError(_) => StatusCode::BAD_REQUEST,
+            Error::GremlinError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

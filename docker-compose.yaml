@@ -1,2 +1,6 @@
-# version: "3.8"
-# services:
+version: "3.8"
+services:
+  gremlin:
+    image: tinkerpop/gremlin-server:3.6
+    ports:
+    - 127.0.0.1:8182:8182
