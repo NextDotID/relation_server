@@ -2,9 +2,9 @@
 mod tests {
     use crate::{graph::connect, error::Error};
 
-    #[test]
-    fn test_connect() -> Result<(), Error> {
-        connect()?;
+    #[tokio::test]
+    async fn test_connect() -> Result<(), Error> {
+        connect().await?;
         Ok(())
     }
 }
