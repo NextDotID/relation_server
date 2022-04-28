@@ -13,6 +13,8 @@ pub enum Error {
     ParamError(String),
     #[error("no body provided")]
     BodyMissing,
+    #[error("Not exists")]
+    NotExists,
     #[error("JSON parse error")]
     ParseError(#[from] serde_json::error::Error),
     #[error("HTTP general error")]
@@ -40,6 +42,7 @@ impl Error {
             Error::HttpClientError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::SignatureValidationError(_) => StatusCode::BAD_REQUEST,
             Error::GremlinError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::NotExists => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
