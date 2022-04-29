@@ -1,5 +1,6 @@
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
+use async_trait::async_trait;
 
 use crate::error::Error;
 
@@ -13,7 +14,7 @@ pub enum EdgeType {
     PubkeySerialize,
 }
 /// All identity platform.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Platform {
     /// Twitter
     Twitter,
@@ -22,7 +23,7 @@ pub enum Platform {
 }
 
 /// All data respource platform.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum DataSource {
     /// https://github.com/Uniswap/sybil-list/blob/master/verified.json
     SybilList, // = "sybil_list",
@@ -40,6 +41,7 @@ pub enum Curve {
 
 /// TODO: use DB-defined struct instead.
 /// VertexType: Identity
+#[derive(Debug)]
 pub struct TempIdentity {
     pub uuid: uuid::Uuid,
     pub platform: Platform,
@@ -59,6 +61,7 @@ pub struct TempCryptoIdentity {
 }
 
 /// EdgeType: Proof
+#[derive(Debug)]
 pub struct TempProof {
     pub uuid: uuid::Uuid,
     pub method: DataSource,
@@ -70,11 +73,13 @@ pub struct TempProof {
 }
 
 /// EdgeType: PubkeySerialize
+#[derive(Debug)]
 pub struct TempPubkeySerialize {
     pub uuid: uuid::Uuid,
 }
 
 /// Info of a complete binding.
+#[derive(Debug)]
 pub struct Connection {
     pub from: TempIdentity,
     pub to: TempIdentity,
@@ -82,7 +87,8 @@ pub struct Connection {
 }
 
 /// Fetcher defines how to fetch data from upstream.
+#[async_trait]
 pub trait Fetcher {
     /// Fetch data from given source.
-    fn fetch(&self, url: Option<String>) -> Result<Vec<Connection>, Error>;
+    async fn fetch(&self, url: Option<String>) -> Result<Vec<Connection>, Error>;
 }
