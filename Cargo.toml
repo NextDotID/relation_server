@@ -37,5 +37,7 @@ uuid = "*"
 
 gremlin-client = { version = "0.8", features = ["tokio-runtime"] }
 
+async-trait = "*"
+
 [dev_dependencies]
 fake = "2.4"
