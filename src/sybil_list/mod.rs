@@ -81,6 +81,7 @@ impl Fetcher for SybilList {
 
         // all records in sybil list
         let body: Map<String, Value> = parse_body(&mut resp).await?;
+        //let body: Map<String, VerfiedItem> = parse_body(&mut resp).await?;
 
         let mut vec: Vec<Connection> = Vec::new(); 
         for (addr, value) in body {
