@@ -1,12 +1,9 @@
 mod tests;
 
 use crate::error::Error;
-use http::Response;
-use hyper::{body::HttpBody as _, client::HttpConnector, Body, Client};
-use hyper_tls::HttpsConnector;
 use serde::Deserialize;
 use serde_json::{Value, Map};
-use crate::util::{timestamp_to_naive, naive_now};
+use crate::util::{timestamp_to_naive, naive_now, make_client, parse_body};
 use uuid::Uuid;
 use async_trait::async_trait;
 use crate::upstream::{Fetcher,TempIdentity, TempProof, Platform, DataSource, Connection};
@@ -39,27 +36,6 @@ pub struct ErrorResponse {
     pub message: String,
 }
 
-
-pub fn make_client() -> Client<HttpsConnector<HttpConnector>> {
-    let https = HttpsConnector::new();
-    let client = Client::builder().build::<_, hyper::Body>(https);
-    client
-}
-
-async fn parse_body<T>(resp: &mut Response<Body>) -> Result<T, Error>
-where
-    T: for<'de> Deserialize<'de>,
-{
-    let mut body_bytes: Vec<u8> = vec![];
-    while let Some(chunk) = resp.body_mut().data().await {
-        let mut chunk_bytes = chunk.unwrap().to_vec();
-        body_bytes.append(&mut chunk_bytes);
-    }
-    let body = std::str::from_utf8(&body_bytes).unwrap();
-
-    Ok(serde_json::from_str(&body)?)
-}
-
 pub struct SybilList {}
 
 #[async_trait]
@@ -81,21 +57,19 @@ impl Fetcher for SybilList {
 
         // all records in sybil list
         let body: Map<String, Value> = parse_body(&mut resp).await?;
-        //let body: Map<String, VerfiedItem> = parse_body(&mut resp).await?;
-
-        let mut vec: Vec<Connection> = Vec::new(); 
-        for (addr, value) in body {
-            let item = match serde_json::from_value::<VerfiedItem>(value) {
-                Ok(item) => item,
-                Err(_) => continue,
-            };
-            
+        
+        // parse 
+        let parse_body: Vec<Connection> = body
+        .into_iter()
+        .filter_map(|(eth_wallet_address, value)| -> Option<Connection> {
+            let item: VerfiedItem = serde_json::from_value(value).ok()?;
+                        
             let from: TempIdentity = TempIdentity {
                 uuid: Uuid::new_v4(),
                 platform: Platform::Ethereum,
-                identity: addr.clone(),
+                identity: eth_wallet_address.clone(),
                 created_at: Some(timestamp_to_naive(item.twitter.timestamp)),
-                display_name: Some(addr.clone()),
+                display_name: Some(eth_wallet_address.clone()),
             };
 
             let to: TempIdentity = TempIdentity {
@@ -120,10 +94,10 @@ impl Fetcher for SybilList {
                 to: to,
                 proof: pf,
             };
-            vec.push(cnn)
-        }
-        println!("len {}\n", vec.len());
-        Ok(vec)
+            return Some(cnn);
+        }).collect();
+        
+        Ok(parse_body)
     }
 }
 

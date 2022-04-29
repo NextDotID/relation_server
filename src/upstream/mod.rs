@@ -1,8 +1,10 @@
+mod sybil_list;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use async_trait::async_trait;
 
 use crate::error::Error;
+
 
 pub enum VertexType {
     Identity,
@@ -92,3 +94,5 @@ pub trait Fetcher {
     /// Fetch data from given source.
     async fn fetch(&self, url: Option<String>) -> Result<Vec<Connection>, Error>;
 }
+
+

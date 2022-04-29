@@ -5,6 +5,7 @@ use http::Response;
 use hyper::{body::HttpBody as _, client::HttpConnector, Body, Client};
 use hyper_tls::HttpsConnector;
 use serde::Deserialize;
+use crate::util::{make_client, parse_body};
 
 /// https://github.com/nextdotid/proof-server/blob/master/docs/api.apib
 #[derive(Deserialize, Debug)]
@@ -40,26 +41,6 @@ pub struct ProofQueryResponsePagination {
 #[derive(Deserialize, Debug)]
 pub struct ErrorResponse {
     pub message: String,
-}
-
-pub fn make_client() -> Client<HttpsConnector<HttpConnector>> {
-    let https = HttpsConnector::new();
-    let client = Client::builder().build::<_, hyper::Body>(https);
-    client
-}
-
-async fn parse_body<T>(resp: &mut Response<Body>) -> Result<T, Error>
-where
-    T: for<'de> Deserialize<'de>,
-{
-    let mut body_bytes: Vec<u8> = vec![];
-    while let Some(chunk) = resp.body_mut().data().await {
-        let mut chunk_bytes = chunk.unwrap().to_vec();
-        body_bytes.append(&mut chunk_bytes);
-    }
-    let body = std::str::from_utf8(&body_bytes).unwrap();
-
-    Ok(serde_json::from_str(&body)?)
 }
 
 /// Persona should be 33-bytes hexstring (`0x[0-9a-f]{66}`)
