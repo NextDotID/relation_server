@@ -31,9 +31,8 @@ tokio = { version = "1", features = ["full"] }
 tokio-stream = "*"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-json-patch = "*"
 chrono = "0.4"
-uuid = "*"
+uuid = { version = "1.0", features = ["v4"] }
 
 gremlin-client = { version = "0.8", features = ["tokio-runtime"] }
 
