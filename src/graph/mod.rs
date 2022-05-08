@@ -1,9 +1,14 @@
+mod edge;
 mod tests;
 mod vertex;
-mod edge;
 
 use crate::error::Error;
-use gremlin_client::{aio::{GremlinClient, AsyncTerminator}, process::traversal::{traversal, GraphTraversalSource}, GValue, ToGValue};
+use async_trait::async_trait;
+use gremlin_client::{
+    aio::{AsyncTerminator, GremlinClient},
+    process::traversal::{traversal, GraphTraversalSource},
+    GremlinError, GID,
+};
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
@@ -16,29 +21,43 @@ pub struct CryptoIdentity {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Proof {
-    pub uuid: String,
-    pub method: String,
-    pub upstream: String,
-    pub record_id: String,
-    pub created_at: u128,
-    pub last_verified_at: u128,
-}
-
-#[derive(Deserialize, Debug)]
 pub struct PubKeyDerivation {
     pub uuid: String,
     pub method: String,
 }
 
-trait Edge {
+#[async_trait]
+trait Edge: Sized {
     // Label of edge (`addE()` parameter)
     fn label(&self) -> &'static str;
+
+    // Save self into GraphDB.
+    async fn save(&self, g: &GraphTraversalSource<AsyncTerminator>) -> Result<GID, GremlinError>;
+
+    // Query an Edge by given direction.
+    async fn find(
+        g: &GraphTraversalSource<AsyncTerminator>,
+        // Vertex ID
+        from: &GID,
+        // Vertex ID
+        to: &GID,
+    ) -> Result<Vec<Self>, GremlinError>;
 }
 
-trait Vertex {
+#[async_trait]
+trait Vertex: Sized {
     // Label of Vertex (`addV()` parameter)
     fn label(&self) -> &'static str;
+
+    // Save self into GraphDB.
+    async fn save(&self, g: &GraphTraversalSource<AsyncTerminator>) -> Result<GID, GremlinError>;
+
+    // Query a vertex from GraphDB.
+    async fn find(
+        g: &GraphTraversalSource<AsyncTerminator>,
+        platform: &str,
+        identity: &str,
+    ) -> Result<Vec<Self>, GremlinError>;
 }
 
 // TODO: should take URL from config.

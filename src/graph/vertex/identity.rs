@@ -1,4 +1,5 @@
 use crate::graph::Vertex;
+use async_trait::async_trait;
 use gremlin_client::{
     aio::AsyncTerminator, process::traversal::GraphTraversalSource, GremlinError, GID,
     derive::{FromGMap, FromGValue},
@@ -15,17 +16,13 @@ pub struct Identity {
     pub created_at: chrono::DateTime<chrono::offset::Utc>,
 }
 
+#[async_trait]
 impl Vertex for Identity {
     fn label(&self) -> &'static str {
         LABEL
     }
-}
 
-impl Identity {
-    pub async fn save(
-        &self,
-        g: &GraphTraversalSource<AsyncTerminator>,
-    ) -> Result<GID, GremlinError> {
+    async fn save(&self, g: &GraphTraversalSource<AsyncTerminator>) -> Result<GID, GremlinError> {
         let created = g.add_v(LABEL)
             .property("uuid", self.uuid.clone())
             .property("platform", &self.platform)
@@ -37,7 +34,7 @@ impl Identity {
         Ok(created.first().expect("Should have at least 1").id().clone())
     }
 
-    pub async fn find(
+    async fn find(
         g: &GraphTraversalSource<AsyncTerminator>,
         platform: &str,
         identity: &str,
