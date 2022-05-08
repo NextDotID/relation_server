@@ -560,6 +560,7 @@ dependencies = [
  "base64 0.12.3",
  "chrono",
  "futures",
+ "gremlin-derive",
  "lazy_static",
  "mobc",
  "native-tls",
@@ -573,8 +574,19 @@ dependencies = [
  "tokio-native-tls",
  "tokio-stream",
  "url 2.2.2",
- "uuid 0.8.2",
+ "uuid",
  "websocket",
+]
+
+[[package]]
+name = "gremlin-derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d61d24302ffd00623fe1426d964be49b864c12026682ab2d2cb2088ed52d2219"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1522,7 +1534,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "url 2.2.2",
- "uuid 1.0.0",
+ "uuid",
 ]
 
 [[package]]
@@ -2091,15 +2103,6 @@ checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
 dependencies = [
  "getrandom",
  "serde",
-]
-
-[[package]]
-name = "uuid"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cfcd319456c4d6ea10087ed423473267e1a071f3bc0aa89f80d60997843c6f0"
-dependencies = [
- "getrandom",
 ]
 
 [[package]]

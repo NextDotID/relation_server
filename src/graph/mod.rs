@@ -1,18 +1,10 @@
 mod tests;
+mod vertex;
+mod edge;
 
-use gremlin_client::{aio::GremlinClient, Vertex};
-use tokio_stream::StreamExt;
 use crate::error::Error;
+use gremlin_client::{aio::{GremlinClient, AsyncTerminator}, process::traversal::{traversal, GraphTraversalSource}, GValue, ToGValue};
 use serde::Deserialize;
-
-#[derive(Deserialize, Debug)]
-pub struct Identity {
-    pub uuid: String,
-    pub platform: String,
-    pub identity: String,
-    pub display_name: String,
-    pub created_at: u128,
-}
 
 #[derive(Deserialize, Debug)]
 pub struct CryptoIdentity {
@@ -39,15 +31,22 @@ pub struct PubKeyDerivation {
     pub method: String,
 }
 
+trait Edge {
+    // Label of edge (`addE()` parameter)
+    fn label(&self) -> &'static str;
+}
+
+trait Vertex {
+    // Label of Vertex (`addV()` parameter)
+    fn label(&self) -> &'static str;
+}
+
 // TODO: should take URL from config.
 const GREMLIN_URL: &str = "localhost";
+pub async fn create_client() -> Result<GremlinClient, Error> {
+    Ok(GremlinClient::connect(GREMLIN_URL).await?)
+}
 
-pub async fn connect() -> Result<(), Error> {
-    let client = GremlinClient::connect(GREMLIN_URL).await?;
-    let results = client.execute("g.V(param)", &[("param", &1)]).await?
-        .filter_map(Result::ok)
-        .map(|f| f.take::<Vertex>())
-        .collect::<Result<Vec<Vertex>, _>>().await?;
-    println!("{:?}", results);
-    Ok(())
+pub async fn create_traversal() -> Result<GraphTraversalSource<AsyncTerminator>, Error> {
+    Ok(traversal().with_remote_async(create_client().await?))
 }

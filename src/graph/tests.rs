@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use crate::{graph::connect, error::Error};
+    use crate::{error::Error, graph::create_traversal};
 
     #[tokio::test]
     async fn test_connect() -> Result<(), Error> {
-        connect().await?;
+        create_traversal().await?;
         Ok(())
     }
 }
