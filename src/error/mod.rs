@@ -14,6 +14,8 @@ pub enum Error {
     #[error("no body provided")]
     BodyMissing,
     #[error("JSON parse error")]
+    NoResult,
+    #[error("No result")]
     ParseError(#[from] serde_json::error::Error),
     #[error("HTTP general error")]
     HttpError(#[from] lambda_http::http::Error),
@@ -35,6 +37,7 @@ impl Error {
             Error::ParamError(_) => StatusCode::BAD_REQUEST,
             Error::BodyMissing => StatusCode::BAD_REQUEST,
             Error::ParseError(_) => StatusCode::BAD_REQUEST,
+            Error::NoResult => StatusCode::BAD_REQUEST,
             Error::HttpError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::ConfigError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::HttpClientError(_) => StatusCode::INTERNAL_SERVER_ERROR,

@@ -69,10 +69,7 @@ impl Fetcher for ProofClient {
 
         let mut body: ProofQueryResponse = parse_body(&mut resp).await?;  
         if body.pagination.total == 0 {
-            return Err(Error::General(
-                format!("No result:"),
-                resp.status(),
-            ));
+            return Err(Error::NoResult);
         }
 
         let proofs =  body.ids.pop().unwrap().proofs;
