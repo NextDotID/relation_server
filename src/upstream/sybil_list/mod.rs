@@ -40,7 +40,7 @@ pub struct SybilList {}
 
 #[async_trait]
 impl Fetcher for SybilList {
-    async fn fetch(&self, url: Option<String>) -> Result<Vec<Connection>, Error> {
+    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
         let client = make_client();
         let uri = format!("https://raw.githubusercontent.com/Uniswap/sybil-list/master/verified.json")
             .parse()
