@@ -1,5 +1,7 @@
 mod sybil_list;
 mod proof_client;
+mod keybase;
+
 
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
