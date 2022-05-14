@@ -40,5 +40,9 @@ async-trait = "*"
 strum_macros = "*"
 strum = "*"
 
+# GraphQL
+juniper = "0.15"
+juniper_hyper = "0.8"
+
 [dev_dependencies]
 fake = "2.4"

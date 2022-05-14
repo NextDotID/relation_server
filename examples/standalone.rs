@@ -2,20 +2,16 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{
     Body as HyperBody,
     Method,
-    Request as HyperRequest,
     Response as HyperResponse,
-    //  Error as HyperError,
     Server,
     StatusCode,
 };
-use relation_server::controller::{
-    error_response, healthz, Body, Request, Response,
-};
-use relation_server::{config::C, error::Error};
-use log::info;
+use juniper::{RootNode, EmptyMutation, EmptySubscription};
+use relation_server::controller::graphql::Context;
+use relation_server::config::C;
 use std::convert::Infallible;
-use std::future::Future;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
@@ -25,53 +21,86 @@ async fn main() {
     let addr: SocketAddr = format!("{}:{}", config.web.listen, config.web.port)
         .parse()
         .expect("Unable to parse web listen address");
+    let graphql_root_node = Arc::new(RootNode::new(
+        relation_server::controller::graphql::Query,
+        EmptyMutation::<relation_server::controller::graphql::Context>::new(),
+        EmptySubscription::<relation_server::controller::graphql::Context>::new(),
+    ));
+    let db = Arc::new(Context { pool: "TODO".into() });
 
-    let make_svc = make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(entrypoint)) });
+    let make_svc = make_service_fn(move |_| {
+        let root_node = graphql_root_node.clone();
+        let ctx = db.clone();
+
+        async {
+            Ok::<_, hyper::Error>(service_fn(move |req| {
+                let root_node = root_node.clone();
+                let ctx = ctx.clone();
+                async {
+                    Ok::<_, Infallible>(match (req.method(), req.uri().path()) {
+                        (&Method::OPTIONS, _) => {
+                            let mut res = HyperResponse::new(HyperBody::empty());
+                            *res.status_mut() = StatusCode::NO_CONTENT;
+                            res.headers_mut().insert(
+                                hyper::header::ACCESS_CONTROL_ALLOW_METHODS,
+                                hyper::header::HeaderValue::from_static("GET, POST, OPTIONS"),
+                            );
+                            res.headers_mut().insert(
+                                hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                                hyper::header::HeaderValue::from_static("*"),
+                            );
+                            res.headers_mut().insert(
+                                hyper::header::ACCESS_CONTROL_ALLOW_HEADERS,
+                                hyper::header::HeaderValue::from_static("Content-Type"),
+                            );
+                            res.headers_mut().insert(
+                                hyper::header::ACCESS_CONTROL_ALLOW_CREDENTIALS,
+                                hyper::header::HeaderValue::from_static("true"),
+                            );
+                            res.headers_mut().insert(
+                                hyper::header::ACCESS_CONTROL_MAX_AGE,
+                                hyper::header::HeaderValue::from_static("3600"),
+                            );
+                            res
+                        },
+                        (&Method::GET, "/") => juniper_hyper::graphiql("/graphql", None).await,
+                        (&Method::GET, "/graphql") | (&Method::POST, "/graphql") => {
+                            let mut res = juniper_hyper::graphql(root_node, ctx, req).await;
+                            res.headers_mut().insert(
+                                    hyper::header::ACCESS_CONTROL_ALLOW_METHODS,
+                                    hyper::header::HeaderValue::from_static("GET, POST, OPTIONS"),
+                                );
+                            res.headers_mut().insert(
+                                hyper::header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                                hyper::header::HeaderValue::from_static("*"),
+                            );
+                            res.headers_mut().insert(
+                                hyper::header::ACCESS_CONTROL_ALLOW_HEADERS,
+                                hyper::header::HeaderValue::from_static("Content-Type"),
+                            );
+                            res.headers_mut().insert(
+                                hyper::header::ACCESS_CONTROL_ALLOW_CREDENTIALS,
+                                hyper::header::HeaderValue::from_static("true"),
+                            );
+                            res.headers_mut().insert(
+                                hyper::header::ACCESS_CONTROL_MAX_AGE,
+                                hyper::header::HeaderValue::from_static("3600"),
+                            );
+                            res
+                        },
+                        _ => {
+                            let mut response = HyperResponse::new("Not Found".into());
+                            *response.status_mut() = StatusCode::NOT_FOUND;
+                            response
+                        }
+                    })
+                }
+            }))
+        }
+    });
 
     let server = Server::bind(&addr).serve(make_svc);
     if let Err(e) = server.await {
         eprintln!("server error: {}", e)
-    }
-}
-
-async fn entrypoint(req: HyperRequest<HyperBody>) -> Result<HyperResponse<HyperBody>, Infallible> {
-    info!(
-        "{} {}",
-        req.method().to_string(),
-        req.uri().path().to_string()
-    );
-
-    Ok(match (req.method(), req.uri().path()) {
-        (&Method::GET, "/healthz") => parse(req, healthz::controller).await,
-        _ => HyperResponse::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body("Not Found".into())
-            .expect("Failed to render response"),
-    })
-}
-
-async fn parse<F>(
-    req: HyperRequest<HyperBody>,
-    controller: fn(Request) -> F,
-) -> HyperResponse<HyperBody>
-where
-    F: Future<Output = Result<Response, Error>>,
-{
-    let (parts, hyper_body) = req.into_parts();
-    let full_body = hyper::body::to_bytes(hyper_body).await.unwrap();
-    let body_string: Body = String::from_utf8(full_body.to_vec()).unwrap();
-
-    let our_req = Request::from_parts(parts, body_string);
-    match controller(our_req).await {
-        Ok(resp) => {
-            let (parts, our_resp) = resp.into_parts();
-            let hyper_body = HyperBody::from(our_resp);
-            HyperResponse::from_parts(parts, hyper_body)
-        }
-        Err(err) => {
-            let (parts, our_resp) = error_response(err).into_parts();
-            let hyper_body = HyperBody::from(our_resp);
-            HyperResponse::from_parts(parts, hyper_body)
-        }
     }
 }
