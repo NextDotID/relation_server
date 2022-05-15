@@ -1,52 +1,32 @@
-use juniper::FieldResult;
-use crate::error::Error;
+use async_graphql::*;
+use crate::util::DateTimeDefault;
 
-use super::{Context, Query};
-
-#[derive(GraphQLInputObject, Debug)]
-#[graphql(description = "Query condition available for identity")]
-pub struct IdentityQuery {
-    pub platform: String,
-    pub identity: String,
-}
-
-#[derive(Debug, GraphQLObject)]
+#[derive(Default)]
 pub struct Identity {
     pub uuid: String,
     pub platform: String,
     pub identity: String,
     pub display_name: String,
-    pub created_at: chrono::DateTime<chrono::offset::Utc>
+    pub created_at: DateTimeDefault,
 }
 
+#[Object]
 impl Identity {
-    pub async fn identity(context: &Context, platform: Option<String>, identity: Option<String>) -> FieldResult<Identity> {
-        Ok(Identity {
-            uuid: "Test UUID".into(),
-            platform: platform.unwrap_or("Test Platform".into()),
-            identity: identity.unwrap_or("Test Identity".into()),
-            display_name: context.pool.clone(),
-            created_at: chrono::Utc::now()
-        })
+    // FIXME: InfiniteLoop!
+    async fn identity(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "Identity")]
+        identity: Option<String>,
+        #[graphql(desc = "Platform")]
+        platform: Option<String>,
+    ) -> Identity {
+        Identity{
+            uuid: uuid::Uuid::new_v4().to_string(),
+            platform: platform.unwrap_or("Default Platform".into()),
+            identity: identity.unwrap_or("Default Identity".into()),
+            display_name: "Display Name".into(),
+            created_at: DateTimeDefault::default(),
+        }
     }
 }
-
-// graphql_object!(super::Query: Context |&self| {
-//     field apiVersion() -> &str {
-//         super::API_VERSION
-//     }
-
-//     field identity(&executor, query: IdentityQuery) -> FieldResult<Identity> {
-//         // TODO: USE THIS
-//         // let _context = executor.context();
-//         // let identity = context.identity(&query.platform, &query.identity);
-
-//         Ok(Identity {
-//             uuid: "Test UUID".into(),
-//             platform: query.platform,
-//             identity: query.identity,
-//             display_name: "Test Display Name".into(),
-//             created_at: chrono::Utc::now()
-//         })
-//     }
-// });

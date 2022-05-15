@@ -26,6 +26,7 @@ lambda_runtime = "0.5.0"
 lambda_http = "0.5.0"
 hyper = { version = "0.14.17", features = ["full"] }
 hyper-tls = "*"
+warp = { version = "0.3" }
 
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "*"
@@ -41,8 +42,8 @@ strum_macros = "*"
 strum = "*"
 
 # GraphQL
-juniper = "0.15"
-juniper_hyper = "0.8"
+async-graphql = "3"
+async-graphql-warp = "*"
 
 [dev_dependencies]
 fake = "2.4"

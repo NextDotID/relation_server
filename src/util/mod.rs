@@ -20,7 +20,6 @@ pub fn timestamp_to_naive(ts: i64) -> NaiveDateTime {
     NaiveDateTime::from_timestamp(ts, 0)
 }
 
-
 pub fn make_client() -> Client<HttpsConnector<HttpConnector>> {
     let https = HttpsConnector::new();
     let client = Client::builder().build::<_, hyper::Body>(https);
@@ -39,4 +38,12 @@ where
     let body = std::str::from_utf8(&body_bytes).unwrap();
 
     Ok(serde_json::from_str(&body)?)
+}
+
+/// A chrono::DateTime with default
+pub struct DateTimeDefault(pub chrono::DateTime<chrono::offset::Utc>);
+impl Default for DateTimeDefault {
+    fn default() -> DateTimeDefault {
+        DateTimeDefault(chrono::Utc::now())
+    }
 }

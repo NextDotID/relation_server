@@ -1,5 +1,7 @@
-mod proof;
 mod identity;
+mod proof;
+
+use async_graphql::{EmptyMutation, EmptySubscription, Object, MergedObject};
 
 const API_VERSION: &str = "1.0";
 
@@ -8,31 +10,27 @@ pub struct Context {
     /// TODO: replace it with a real database.
     pub pool: String,
 }
-impl juniper::Context for Context {}
 
 /// Base struct of GraphQL query request.
-pub struct Query;
+#[derive(MergedObject, Default)]
+pub struct Query(DefaultQuery, identity::Identity);
 
-#[graphql_object(context = Context)]
-impl Query {
-    fn ping() -> &'static str {
+#[derive(Default)]
+pub struct DefaultQuery;
+
+#[Object]
+impl DefaultQuery {
+    async fn ping(&self) -> &'static str {
         "pong"
     }
 
-    fn api_version() -> &'static str {
+    async fn api_version(&self) -> &'static str {
         API_VERSION
     }
 
-    async fn identity(context: &Context, platform: Option<String>, identity: Option<String>) -> FieldResult<Identity> {
-        Identity::identity(context, platform, identity).await
-    }
+    // async fn identity(context: &Context, platform: Option<String>, identity: Option<String>) -> FieldResult<Identity> {
+    //     Identity::identity(context, platform, identity).await
+    // }
 }
 
-// /// Base struct of GraphQL Mutation query.
-// struct Mutation;
-
-use juniper::FieldResult;
-
-use self::identity::Identity;
-
-type Schema = juniper::RootNode<'static, Query, (), ()>;
+type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
