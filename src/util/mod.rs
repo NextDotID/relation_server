@@ -1,9 +1,10 @@
-use chrono::NaiveDateTime;
 use crate::error::Error;
+use async_graphql::{InputValueError, Value};
+use chrono::NaiveDateTime;
 use http::Response;
-use serde::Deserialize;
 use hyper::{body::HttpBody as _, client::HttpConnector, Body, Client};
 use hyper_tls::HttpsConnector;
+use serde::Deserialize;
 
 /// Returns current UNIX timestamp (unit: second).
 pub fn timestamp() -> i64 {
@@ -38,12 +39,4 @@ where
     let body = std::str::from_utf8(&body_bytes).unwrap();
 
     Ok(serde_json::from_str(&body)?)
-}
-
-/// A chrono::DateTime with default
-pub struct DateTimeDefault(pub chrono::DateTime<chrono::offset::Utc>);
-impl Default for DateTimeDefault {
-    fn default() -> DateTimeDefault {
-        DateTimeDefault(chrono::Utc::now())
-    }
 }

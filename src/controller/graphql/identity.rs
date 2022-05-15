@@ -1,32 +1,37 @@
-use async_graphql::*;
-use crate::util::DateTimeDefault;
+use async_graphql::{SimpleObject, Object, Result, Context};
+use chrono::{DateTime, Utc};
 
-#[derive(Default)]
+#[derive(SimpleObject)]
+// #[graphql(complex)]
 pub struct Identity {
-    pub uuid: String,
+    pub uuid: uuid::Uuid,
     pub platform: String,
     pub identity: String,
     pub display_name: String,
-    pub created_at: DateTimeDefault,
+    pub created_at: DateTime<Utc>,
 }
 
+// #[ComplexObject]
+// impl Identity {
+// }
+
+#[derive(Default)]
+pub struct IdentityQuery {}
+
 #[Object]
-impl Identity {
-    // FIXME: InfiniteLoop!
+impl IdentityQuery {
     async fn identity(
         &self,
-        ctx: &Context<'_>,
-        #[graphql(desc = "Identity")]
-        identity: Option<String>,
-        #[graphql(desc = "Platform")]
-        platform: Option<String>,
-    ) -> Identity {
-        Identity{
-            uuid: uuid::Uuid::new_v4().to_string(),
-            platform: platform.unwrap_or("Default Platform".into()),
-            identity: identity.unwrap_or("Default Identity".into()),
-            display_name: "Display Name".into(),
-            created_at: DateTimeDefault::default(),
-        }
+        _ctx: &Context<'_>,
+        #[graphql(desc="Platform")] platform: Option<String>,
+        #[graphql(desc="Identity")] identity: Option<String>,
+    ) -> Result<Identity> {
+        Ok(Identity {
+            uuid: uuid::Uuid::new_v4(),
+            platform: platform.unwrap_or("Default Platform".to_string()),
+            identity: identity.unwrap_or("Default Identity".to_string()),
+            display_name: "DisplayName".into(),
+            created_at: Utc::now(),
+        })
     }
 }

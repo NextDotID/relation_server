@@ -42,7 +42,7 @@ strum_macros = "*"
 strum = "*"
 
 # GraphQL
-async-graphql = "3"
+async-graphql = {version = "3", features = ["uuid", "chrono"]}
 async-graphql-warp = "*"
 
 [dev_dependencies]

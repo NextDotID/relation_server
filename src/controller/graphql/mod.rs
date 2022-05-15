@@ -13,13 +13,13 @@ pub struct Context {
 
 /// Base struct of GraphQL query request.
 #[derive(MergedObject, Default)]
-pub struct Query(DefaultQuery, identity::Identity);
+pub struct Query(GeneralQuery, identity::IdentityQuery);
 
 #[derive(Default)]
-pub struct DefaultQuery;
+pub struct GeneralQuery;
 
 #[Object]
-impl DefaultQuery {
+impl GeneralQuery {
     async fn ping(&self) -> &'static str {
         "pong"
     }
@@ -27,10 +27,6 @@ impl DefaultQuery {
     async fn api_version(&self) -> &'static str {
         API_VERSION
     }
-
-    // async fn identity(context: &Context, platform: Option<String>, identity: Option<String>) -> FieldResult<Identity> {
-    //     Identity::identity(context, platform, identity).await
-    // }
 }
 
 type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
