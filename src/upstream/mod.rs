@@ -48,6 +48,9 @@ pub enum DataSource {
 
     /// https://keybase.io/docs/api/1.0/call/user/lookup
     Keybase, // = "keybase",
+
+    /// https://docs.next.id/docs/proof-service/api
+    NextID, // = "nextID",
 }
 
 #[derive(Serialize, Deserialize)]

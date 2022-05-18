@@ -96,7 +96,7 @@ impl Fetcher for Keybase {
             ));   
         }
 
-        let person_info = body.them.pop().unwrap(); 
+        let person_info = body.them.pop().unwrap();
         let user_id = person_info.id; 
         let user_name = person_info.basics.username;
    

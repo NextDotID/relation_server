@@ -94,7 +94,7 @@ impl Fetcher for ProofClient {
 
             let pf: TempProof = TempProof {
                 uuid: Uuid::new_v4(),
-                method: DataSource::SybilList,
+                method: DataSource::NextID,
                 upstream: Some("Proof Service".to_string()),
                 record_id: Some(" ".to_string()),
                 created_at: Some(naive_now()), 

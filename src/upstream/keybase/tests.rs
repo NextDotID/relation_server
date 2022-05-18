@@ -9,7 +9,7 @@ mod tests {
             identity: "fengshanshan".to_string(),
         };
 
-        let result = kb.fetch(Some(" ".to_string())).await?;
+        let result = kb.fetch(None).await?;
 
         println!("{:?}", result.first());
         assert_ne!(result.len(), 0);
