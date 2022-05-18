@@ -2,7 +2,7 @@ mod tests;
 
 use crate::error::Error;
 use serde::Deserialize;
-use crate::util::{timestamp_to_naive, naive_now, make_client, parse_body};
+use crate::util::{naive_now, make_client, parse_body};
 use async_trait::async_trait;
 use crate::upstream::{Fetcher,TempIdentity, TempProof, Platform, DataSource, Connection};
 use uuid::Uuid;
@@ -75,9 +75,12 @@ pub struct Keybase {
 impl Fetcher for Keybase {
     async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> { 
         let client = make_client();
-        let uri = format!("https://keybase.io/_/api/1.0/user/lookup.json?{}={}&fields=proofs_summary", self.platform, self.identity)
-            .parse()
-            .unwrap();
+        let uri: http::Uri = match format!("https://keybase.io/_/api/1.0/user/lookup.json?{}={}&fields=proofs_summary", self.platform, self.identity).parse() {
+            Ok(n) => n,
+            Err(err) => return Err(Error::ParamError(
+                format!("Uri format Error: {}", err.to_string()))),
+        };
+  
         let mut resp = client.get(uri).await?;
 
         if !resp.status().is_success() {
@@ -96,18 +99,24 @@ impl Fetcher for Keybase {
             ));   
         }
 
-        let person_info = body.them.pop().unwrap();
+        let person_info = match body.them.pop() {
+            Some(i) => i,
+            None => {
+                return Err(Error::NoResult); 
+            }
+        };
         let user_id = person_info.id; 
         let user_name = person_info.basics.username;
    
         let parse_body: Vec<Connection> = person_info.proofs_summary.all
         .into_iter()
-        .filter_map(|p| -> Option<Connection> {          
+        .filter(|p| Platform::from_str(p.proof_type.as_str()).is_ok())
+        .filter_map(|p| -> Option<Connection> {        
             let from: TempIdentity = TempIdentity {
                 uuid: Uuid::new_v4(),
                 platform: Platform::Keybase,
                 identity: user_id.clone(),
-                created_at: Some(timestamp_to_naive(0)),
+                created_at: None,
                 display_name: Some(user_name.clone()),
             };
 
@@ -115,7 +124,7 @@ impl Fetcher for Keybase {
                 uuid: Uuid::new_v4(),
                 platform: Platform::from_str(p.proof_type.as_str()).unwrap(),
                 identity: p.nametag.clone(),
-                created_at: Some(timestamp_to_naive(0)),
+                created_at: None,
                 display_name: Some(p.nametag.clone()),
             };
 

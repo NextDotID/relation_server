@@ -53,10 +53,11 @@ pub struct ProofClient {
 impl Fetcher for ProofClient {
     async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> { 
         let client = make_client();
-    
-        let uri = format!("{}/v1/proof?platform=nextid&identity={}", self.base, self.persona)
-            .parse()
-            .unwrap();
+        let uri: http::Uri = match format!("{}/v1/proof?platform=nextid&identity={}", self.base, self.persona).parse() {
+            Ok(n) => n,
+            Err(err) => return Err(Error::ParamError(
+                format!("Uri format Error: {}", err.to_string()))),
+        };
         let mut resp = client.get(uri).await?;
     
         if !resp.status().is_success() {
@@ -72,8 +73,14 @@ impl Fetcher for ProofClient {
             return Err(Error::NoResult);
         }
 
-        let proofs =  body.ids.pop().unwrap().proofs;
-        let parse_body: Vec<Connection> = proofs
+        let proofs = match body.ids.pop() {
+            Some(i) => i,
+            None => {
+                return Err(Error::NoResult); 
+            }
+        };
+        
+        let parse_body: Vec<Connection> = proofs.proofs
         .into_iter()
         .filter_map(|p| -> Option<Connection> {          
             let from: TempIdentity = TempIdentity {
