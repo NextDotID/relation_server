@@ -33,16 +33,16 @@ tokio-stream = "*"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = "0.4"
-uuid = { version = "0.8", features = ["v4"] }
+uuid = { version = "1", features = ["v4"] }
 
-gremlin-client = { version = "0.8", features = ["tokio-runtime", "derive"] }
+gremlin-client = { git = "https://github.com/nextdotid/gremlin-rs.git", branch = "master", features = ["tokio-runtime", "derive"] }
 
 async-trait = "*"
 strum_macros = "*"
 strum = "*"
 
 # GraphQL
-async-graphql = {version = "3", features = ["uuid", "chrono"]}
+async-graphql = {version = "4", features = ["uuid", "chrono"]}
 async-graphql-warp = "*"
 
 [dev_dependencies]
