@@ -4,8 +4,8 @@ mod tests {
     #[tokio::test]
     async fn test_get_sybil_result() -> Result<(), Error> {
         let sy: SybilList = SybilList {};
-        let result = sy.fetch(Some(" ".to_string())).await?;
-        //println!("{:?}", result.first());
+        let result = sy.fetch(None).await?;
+        println!("{:?}", result.first());
         assert_ne!(result.len(), 0);
         Ok(())
     }

@@ -1,5 +1,7 @@
 mod sybil_list;
 mod proof_client;
+mod keybase;
+
 
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
@@ -30,6 +32,12 @@ pub enum Platform {
     /// NextID
     #[strum(serialize = "nextid")]
     NextID,
+    /// Keybase
+    #[strum(serialize = "keybase")]
+    Keybase,
+    /// Github
+    #[strum(serialize = "github")]
+    Github,
 }
 
 /// All data respource platform.
@@ -37,6 +45,12 @@ pub enum Platform {
 pub enum DataSource {
     /// https://github.com/Uniswap/sybil-list/blob/master/verified.json
     SybilList, // = "sybil_list",
+
+    /// https://keybase.io/docs/api/1.0/call/user/lookup
+    Keybase, // = "keybase",
+
+    /// https://docs.next.id/docs/proof-service/api
+    NextID, // = "nextID",
 }
 
 #[derive(Serialize, Deserialize)]

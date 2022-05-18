@@ -42,9 +42,12 @@ pub struct SybilList {}
 impl Fetcher for SybilList {
     async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
         let client = make_client();
-        let uri = format!("https://raw.githubusercontent.com/Uniswap/sybil-list/master/verified.json")
-            .parse()
-            .unwrap();
+        let uri: http::Uri = match format!("https://raw.githubusercontent.com/Uniswap/sybil-list/master/verified.json").parse() {
+            Ok(n) => n,
+            Err(err) => return Err(Error::ParamError(
+                format!("Uri format Error: {}", err.to_string()))),
+        };
+          
         let mut resp = client.get(uri).await?;
     
         if !resp.status().is_success() {
