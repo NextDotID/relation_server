@@ -41,9 +41,9 @@ checksum = "71938f30533e4d95a6d17aa530939da3842c2ab6f4f84b9dae68447e4129f74a"
 
 [[package]]
 name = "async-graphql"
-version = "4.0.0"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5527dd0b000c7d60f3635b02decca8c24aadb23df235dff4f8ecc11dd3199db"
+checksum = "19bc50aa64e3bc176fe1530a270d5efccd79bde469d6957629c590fe47558689"
 dependencies = [
  "async-graphql-derive",
  "async-graphql-parser",
@@ -73,9 +73,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-derive"
-version = "4.0.0"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dc66fdb6dd08e8b80619c0c02ffbd47c5244c3a36ca6fa8fc2fded36658734a"
+checksum = "77c3836e72f564e4d502f9ed70ef67d9ef29163901027774fec7970f2785ef27"
 dependencies = [
  "Inflector",
  "async-graphql-parser",
@@ -89,9 +89,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-parser"
-version = "4.0.0"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3aee8cd391ba025fce72b5fcc1ca901f0516fd913e40c758fc1cb6a27fca5e1"
+checksum = "09c540cdcb24755edf53571ac4228b8288b0cdc1eb6c7f9af333ed185bb8e0ed"
 dependencies = [
  "async-graphql-value",
  "pest",
@@ -101,9 +101,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-value"
-version = "4.0.0"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6744fc331b9515cc32809f5919077ea9cd7c837d104fcef81b53fd6a9499e9d2"
+checksum = "f7484b68c290bbf97e961003ffc2e781c0210e342c849bac43b5a5636101926e"
 dependencies = [
  "bytes",
  "indexmap",
@@ -113,9 +113,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-warp"
-version = "4.0.0"
+version = "4.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61449c04013a9b94d7d738dc7a571d0ab6b74aa4070ae9d2d6530c25860ea60e"
+checksum = "1a382388341e098e8cb1e261ff5b989d196e29f8ca9a5c7bc98d10de87e42f75"
 dependencies = [
  "async-graphql",
  "futures-util",
@@ -880,9 +880,9 @@ dependencies = [
 
 [[package]]
 name = "http-body"
-version = "0.4.4"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ff4f84919677303da5f147645dbea6b1881f368d03ac84e1dc09031ebd7b2c6"
+checksum = "d5f38f16d184e36f2408a55281cd658ecbd3ca05cce6d6510a176eca393e26d1"
 dependencies = [
  "bytes",
  "http",
@@ -1328,9 +1328,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.10.0"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87f3e037eac156d1775da914196f0f37741a274155e34a0b7e427c35d2a2ecb9"
+checksum = "7709cef83f0c1f58f666e746a08b21e0085f7440fa6a29cc194d68aac97a4225"
 
 [[package]]
 name = "opaque-debug"
@@ -1764,9 +1764,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.5.5"
+version = "1.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a11647b6b25ff05a515cb92c365cec08801e83423a235b51e231e1808747286"
+checksum = "d83f127d94bdbcda4c8cc2e50f6f84f4b611f69c902699ca385a39c3a75f9ff1"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -1775,9 +1775,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.6.25"
+version = "0.6.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
+checksum = "49b3de9ec5dc0a3417da371aab17d729997c15010e7fd24ff707773a33bddb64"
 
 [[package]]
 name = "relation_server"
@@ -2469,9 +2469,9 @@ checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
 
 [[package]]
 name = "uuid"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cfcd319456c4d6ea10087ed423473267e1a071f3bc0aa89f80d60997843c6f0"
+checksum = "93bbc61e655a4833cf400d0d15bf3649313422fa7572886ad6dab16d79886365"
 dependencies = [
  "getrandom",
  "serde",

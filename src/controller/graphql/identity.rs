@@ -1,4 +1,4 @@
-use async_graphql::{SimpleObject, Object, Result, Context};
+use async_graphql::{Context, Object, Result, SimpleObject};
 use chrono::{DateTime, Utc};
 
 #[derive(SimpleObject)]
@@ -23,8 +23,8 @@ impl IdentityQuery {
     async fn identity(
         &self,
         _ctx: &Context<'_>,
-        #[graphql(desc="Platform")] platform: Option<String>,
-        #[graphql(desc="Identity")] identity: Option<String>,
+        #[graphql(desc = "Platform")] platform: Option<String>,
+        #[graphql(desc = "Identity")] identity: Option<String>,
     ) -> Result<Identity> {
         Ok(Identity {
             uuid: uuid::Uuid::new_v4(),
