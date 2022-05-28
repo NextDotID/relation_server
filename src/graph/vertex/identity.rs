@@ -107,7 +107,7 @@ impl Vertex for Identity {
         }
     }
 
-    async fn neighbours(&self, db: &DatabaseConnection) -> Result<Vec<Identity>, Error> {
+    async fn neighbors(&self, db: &DatabaseConnection) -> Result<Vec<Identity>, Error> {
         todo!()
     }
 }

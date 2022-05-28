@@ -57,7 +57,6 @@ where
         uuid: Uuid,
     ) -> Result<Option<DatabaseRecord<Self>>, Error>;
 
-    /// Traverse neighbours.
-    /// TODO: wrong returning type: should be Edges.
-    async fn neighbours(&self, db: &DatabaseConnection) -> Result<Vec<Self>, Error>;
+    /// Traverse neighbors.
+    async fn neighbors(&self, db: &DatabaseConnection) -> Result<Vec<Self>, Error>;
 }
