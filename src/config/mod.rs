@@ -32,10 +32,10 @@ pub struct KVConfig {
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigDB {
     pub host: String,
-    pub port: u16,
     pub username: String,
     pub password: String,
     pub db: String,
+    pub schema_path: String,
 }
 
 #[derive(Clone, Deserialize, Default)]
@@ -78,7 +78,11 @@ pub fn parse() -> Result<KVConfig, Error> {
                 .required(false),
         )
         // runtime-ENV-based config
-        .add_source(config::Environment::with_prefix("KV").separator("__").ignore_empty(true))
+        .add_source(
+            config::Environment::with_prefix("KV")
+                .separator("__")
+                .ignore_empty(true),
+        )
         .build()?;
 
     s.try_deserialize().map_err(|e| e.into())
@@ -87,13 +91,4 @@ pub fn parse() -> Result<KVConfig, Error> {
 /// `AWS_SECRET_NAME` and `AWS_SECRET_REGION` is needed.
 pub fn from_aws_secret() -> Result<KVConfig, Error> {
     todo!()
-}
-
-impl KVConfig {
-    pub fn database_url(&self) -> String {
-        format!(
-            "postgres://{}:{}@{}:{}/{}",
-            self.db.username, self.db.password, self.db.host, self.db.port, self.db.db,
-        )
-    }
 }

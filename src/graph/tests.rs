@@ -1,10 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use crate::{error::Error, graph::create_traversal};
+    use crate::graph::new_db_connection;
 
     #[tokio::test]
-    async fn test_connect() -> Result<(), Error> {
-        create_traversal().await?;
-        Ok(())
+    async fn test_new_db_connection() {
+        assert!(new_db_connection().await.unwrap().collections_names().len() > 0)
     }
 }

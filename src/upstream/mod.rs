@@ -1,13 +1,12 @@
-mod sybil_list;
 mod proof_client;
+mod sybil_list;
 
+use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use async_trait::async_trait;
 use strum_macros::EnumString;
 
 use crate::error::Error;
-
 
 pub enum VertexType {
     Identity,
@@ -19,17 +18,20 @@ pub enum EdgeType {
     PubkeySerialize,
 }
 /// All identity platform.
-#[derive(Serialize, Deserialize, Debug, EnumString)]
+#[derive(Serialize, Deserialize, Debug, EnumString, Clone)]
 pub enum Platform {
     /// Twitter
     #[strum(serialize = "twitter")]
     Twitter,
-    /// Ethereum wallet. (0x[a-f0-9]{40})
+    /// Ethereum wallet `0x[a-f0-9]{40}`
     #[strum(serialize = "ethereum")]
     Ethereum,
     /// NextID
     #[strum(serialize = "nextid")]
     NextID,
+    /// Keybase
+    #[strum(serialize = "keybase")]
+    Keybase,
 }
 
 /// All data respource platform.
@@ -102,5 +104,3 @@ pub trait Fetcher {
     /// Fetch data from given source.
     async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error>;
 }
-
-
