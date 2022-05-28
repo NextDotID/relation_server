@@ -2,7 +2,7 @@ use crate::{error::Error, graph::Vertex, upstream::Platform, util::naive_now};
 use async_trait::async_trait;
 
 use aragog::{
-    query::{Comparison, Filter, QueryResult},
+    query::{Comparison, Filter},
     DatabaseConnection, DatabaseRecord, Record,
 };
 use chrono::NaiveDateTime;
@@ -75,23 +75,36 @@ impl Vertex for Identity {
             }
             Some(uuid) => {
                 // Find first
-                let query =
-                    Identity::query().filter(Filter::new(Comparison::field("uuid").equals(uuid)));
-                let query_result = Identity::get(query, db).await?;
-                if query_result.len() == 0 {
-                    // Not found. Create it.
-                    let mut to_be_created = self.clone();
-                    to_be_created.uuid = None;
-                    return to_be_created.create_or_update(db).await;
+                let found = Self::find_by_uuid(db, uuid).await?;
+                match found {
+                    None => {
+                        // Not found. Create it.
+                        let mut to_be_created = self.clone();
+                        to_be_created.uuid = None;
+                        to_be_created.create_or_update(db).await
+                    }
+                    Some(found) => {
+                        // Update
+                        // TODO: implement this
+                        Ok(found)
+                    }
                 }
-                let found = query_result.first().unwrap();
-                Ok(found.to_owned())
             }
         }
     }
 
-    async fn find_by_uuid(db: &DatabaseConnection, uuid: Uuid) -> Result<Option<Identity>, Error> {
-        todo!()
+    async fn find_by_uuid(
+        db: &DatabaseConnection,
+        uuid: Uuid,
+    ) -> Result<Option<DatabaseRecord<Identity>>, Error> {
+        let query =
+            Identity::query().filter(Filter::new(Comparison::field("uuid").equals_str(uuid)));
+        let query_result = Identity::get(query, db).await?;
+        if query_result.len() == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(query_result.first().unwrap().to_owned()))
+        }
     }
 
     async fn neighbours(&self, db: &DatabaseConnection) -> Result<Vec<Identity>, Error> {
@@ -115,6 +128,19 @@ mod tests {
         assert!(result.uuid.is_some());
         assert!(result.key().len() > 0);
         println!("{}", result.key()); // DEBUG
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_find() -> Result<(), Error> {
+        let identity = Identity::default();
+        let db = new_db_connection().await?;
+        let result = identity.create_or_update(&db).await?;
+        let uuid = result.uuid.unwrap();
+
+        let found = Identity::find_by_uuid(&db, uuid).await?;
+        assert_eq!(found.unwrap().uuid, result.uuid);
 
         Ok(())
     }

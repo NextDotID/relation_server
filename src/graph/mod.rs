@@ -52,7 +52,10 @@ where
     ) -> Result<DatabaseRecord<Self>, Error>;
 
     /// Find a vertex by UUID.
-    async fn find_by_uuid(db: &DatabaseConnection, uuid: Uuid) -> Result<Option<Self>, Error>;
+    async fn find_by_uuid(
+        db: &DatabaseConnection,
+        uuid: Uuid,
+    ) -> Result<Option<DatabaseRecord<Self>>, Error>;
 
     /// Traverse neighbours.
     /// TODO: wrong returning type: should be Edges.
