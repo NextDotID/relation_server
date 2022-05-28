@@ -3,8 +3,10 @@ mod tests;
 mod vertex;
 
 use crate::{config::C, error::Error};
-use aragog::{schema::DatabaseSchema, AuthMode, DatabaseConnection, OperationOptions};
+use aragog::{AuthMode, DatabaseConnection, DatabaseRecord, OperationOptions, Record};
+use async_trait::async_trait;
 use serde::Deserialize;
+use uuid::Uuid;
 
 #[derive(Deserialize, Debug)]
 pub struct CryptoIdentity {
@@ -32,4 +34,27 @@ pub async fn new_db_connection() -> Result<DatabaseConnection, Error> {
         .build()
         .await?;
     Ok(connection)
+}
+
+/// All `Vertex` records.
+#[async_trait]
+trait Vertex
+where
+    Self: Sized + Record,
+{
+    /// Returns UUID of self.
+    fn uuid(&self) -> Option<Uuid>;
+
+    /// Create or update a vertex.
+    async fn create_or_update(
+        &self,
+        db: &DatabaseConnection,
+    ) -> Result<DatabaseRecord<Self>, Error>;
+
+    /// Find a vertex by UUID.
+    async fn find_by_uuid(db: &DatabaseConnection, uuid: Uuid) -> Result<Option<Self>, Error>;
+
+    /// Traverse neighbours.
+    /// TODO: wrong returning type: should be Edges.
+    async fn neighbours(&self, db: &DatabaseConnection) -> Result<Vec<Self>, Error>;
 }
