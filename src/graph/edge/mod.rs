@@ -22,13 +22,13 @@ where
     async fn connect(
         &self,
         db: &DatabaseConnection,
-        from: &From,
-        to: &To,
-    ) -> Result<Option<DatabaseRecord<EdgeRecord<Self>>>, Error>;
+        from: &DatabaseRecord<From>,
+        to: &DatabaseRecord<To>,
+    ) -> Result<DatabaseRecord<EdgeRecord<Self>>, Error>;
 
     /// Find an edge by UUID.
     async fn find_by_uuid(
         db: &DatabaseConnection,
-        uuid: Uuid,
+        uuid: &Uuid,
     ) -> Result<Option<DatabaseRecord<EdgeRecord<Self>>>, Error>;
 }

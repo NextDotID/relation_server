@@ -42,3 +42,4 @@ strum = "*"
 
 [dev_dependencies]
 fake = { version = "2.4", features = ["uuid", "chrono"] }
+rand = "0.8"

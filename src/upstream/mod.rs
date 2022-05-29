@@ -9,7 +9,7 @@ use strum_macros::{Display, EnumString};
 use crate::error::Error;
 
 /// All identity platform.
-#[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display)]
+#[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq)]
 pub enum Platform {
     /// Twitter
     #[strum(serialize = "twitter")]
@@ -30,7 +30,7 @@ pub enum Platform {
 }
 
 /// All data respource platform.
-#[derive(Serialize, Deserialize, Debug, Clone, Display, EnumString)]
+#[derive(Serialize, Deserialize, Debug, Clone, Display, EnumString, PartialEq)]
 pub enum DataSource {
     /// https://github.com/Uniswap/sybil-list/blob/master/verified.json
     #[strum(serialize = "sybil_list")]
