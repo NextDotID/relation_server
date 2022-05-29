@@ -4,7 +4,7 @@ mod sybil_list;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use strum_macros::EnumString;
+use strum_macros::{Display, EnumString};
 
 use crate::error::Error;
 
@@ -18,19 +18,23 @@ pub enum EdgeType {
     PubkeySerialize,
 }
 /// All identity platform.
-#[derive(Serialize, Deserialize, Debug, EnumString, Clone)]
+#[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display)]
 pub enum Platform {
     /// Twitter
     #[strum(serialize = "twitter")]
+    #[serde(rename = "twitter")]
     Twitter,
     /// Ethereum wallet `0x[a-f0-9]{40}`
     #[strum(serialize = "ethereum")]
+    #[serde(rename = "ethereum")]
     Ethereum,
     /// NextID
     #[strum(serialize = "nextid")]
+    #[serde(rename = "nextid")]
     NextID,
     /// Keybase
     #[strum(serialize = "keybase")]
+    #[serde(rename = "keybase")]
     Keybase,
 }
 

@@ -41,4 +41,4 @@ strum_macros = "*"
 strum = "*"
 
 [dev_dependencies]
-fake = "2.4"
+fake = { version = "2.4", features = ["uuid", "chrono"] }

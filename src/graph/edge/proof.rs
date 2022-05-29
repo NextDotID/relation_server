@@ -1,11 +1,20 @@
-use serde::Deserialize;
+use aragog::Record;
+use chrono::NaiveDateTime;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-#[derive(Deserialize, Debug)]
+/// Edge to connect two `Identity`s.
+#[derive(Debug, Clone, Serialize, Deserialize, Record)]
+#[collection_name = "Proofs"]
 pub struct Proof {
-    pub uuid: String,
-    pub method: String,
+    pub uuid: Uuid,
+    /// Upstream which provided this connection.
+    /// TODO: enumerize this.
     pub upstream: String,
-    pub record_id: String,
-    pub created_at: u128,
-    pub last_verified_at: u128,
+    /// ID of this connection in upstream platform.
+    pub record_id: Option<String>,
+    /// Connection creation time in upstream platform.
+    pub created_at: Option<NaiveDateTime>,
+    /// When this connection is fetched by RelationService.
+    pub last_fetched_at: NaiveDateTime,
 }

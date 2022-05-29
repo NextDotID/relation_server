@@ -1,13 +1,14 @@
-mod edge;
+pub mod edge;
 mod tests;
-mod vertex;
+pub mod vertex;
 
 use crate::{config::C, error::Error};
-use aragog::{AuthMode, DatabaseConnection, DatabaseRecord, OperationOptions, Record};
-use async_trait::async_trait;
+use aragog::{AuthMode, DatabaseConnection, OperationOptions};
+pub use edge::Edge;
 use serde::Deserialize;
-use uuid::Uuid;
+pub use vertex::Vertex;
 
+// TODO: move this under `vertex/`
 #[derive(Deserialize, Debug)]
 pub struct CryptoIdentity {
     pub uuid: String,
@@ -17,6 +18,7 @@ pub struct CryptoIdentity {
     pub created_at: u128,
 }
 
+// TODO: move this under `edge/`
 #[derive(Deserialize, Debug)]
 pub struct PubKeyDerivation {
     pub uuid: String,
@@ -34,29 +36,4 @@ pub async fn new_db_connection() -> Result<DatabaseConnection, Error> {
         .build()
         .await?;
     Ok(connection)
-}
-
-/// All `Vertex` records.
-#[async_trait]
-trait Vertex
-where
-    Self: Sized + Record,
-{
-    /// Returns UUID of self.
-    fn uuid(&self) -> Option<Uuid>;
-
-    /// Create or update a vertex.
-    async fn create_or_update(
-        &self,
-        db: &DatabaseConnection,
-    ) -> Result<DatabaseRecord<Self>, Error>;
-
-    /// Find a vertex by UUID.
-    async fn find_by_uuid(
-        db: &DatabaseConnection,
-        uuid: Uuid,
-    ) -> Result<Option<DatabaseRecord<Self>>, Error>;
-
-    /// Traverse neighbors.
-    async fn neighbors(&self, db: &DatabaseConnection) -> Result<Vec<Self>, Error>;
 }

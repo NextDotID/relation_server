@@ -1,4 +1,4 @@
-use crate::{error::Error, graph::Vertex, upstream::Platform, util::naive_now};
+use crate::{error::Error, graph::vertex::Vertex, upstream::Platform, util::naive_now};
 use async_trait::async_trait;
 
 use aragog::{
@@ -52,43 +52,62 @@ impl PartialEq for Identity {
     }
 }
 
+impl Identity {
+    /// Find record by given platform and identity.
+    pub async fn find_by_platform_identity(
+        db: &DatabaseConnection,
+        platform: &Platform,
+        identity: &str,
+    ) -> Result<Option<DatabaseRecord<Self>>, Error> {
+        let query = Self::query().filter(
+            Filter::new(Comparison::field("platform").equals_str(platform))
+                .and(Comparison::field("identity").equals_str(identity)),
+        );
+        let query_result = Self::get(query, db).await?;
+
+        if query_result.len() == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(query_result.first().unwrap().to_owned()))
+        }
+    }
+}
+
 #[async_trait]
 impl Vertex for Identity {
     fn uuid(&self) -> Option<Uuid> {
         self.uuid
     }
 
-    /// Do create / update side-effect depends on whether there is `uuid`.
+    /// Do create / update side-effect.
+    /// Used by upstream crawler.
     async fn create_or_update(
         &self,
         db: &DatabaseConnection,
     ) -> Result<DatabaseRecord<Self>, Error> {
-        match self.uuid {
+        // Find first
+        let found = Self::find_by_platform_identity(db, &self.platform, &self.identity).await?;
+        match found {
             None => {
-                // Create
+                // Not found. Create it.
                 let mut to_be_created = self.clone();
-                to_be_created.uuid = Some(Uuid::new_v4());
+                to_be_created.uuid = to_be_created.uuid.or(Some(Uuid::new_v4()));
                 to_be_created.added_at = naive_now();
                 to_be_created.updated_at = naive_now();
                 let created = DatabaseRecord::create(to_be_created, db).await?;
                 Ok(created)
             }
-            Some(uuid) => {
-                // Find first
-                let found = Self::find_by_uuid(db, uuid).await?;
-                match found {
-                    None => {
-                        // Not found. Create it.
-                        let mut to_be_created = self.clone();
-                        to_be_created.uuid = None;
-                        to_be_created.create_or_update(db).await
-                    }
-                    Some(found) => {
-                        // Update
-                        // TODO: implement this
-                        Ok(found)
-                    }
-                }
+            Some(mut found) => {
+                // Found. Update it.
+                println!("UUID: {:?}", found.uuid);
+                found.display_name = self.display_name.clone();
+                found.profile_url = self.profile_url.clone();
+                found.avatar_url = self.avatar_url.clone();
+                found.created_at = self.created_at;
+                found.updated_at = naive_now();
+
+                found.save(db).await?;
+                Ok(found)
             }
         }
     }
@@ -114,10 +133,13 @@ impl Vertex for Identity {
 
 #[cfg(test)]
 mod tests {
+    use fake::{Fake, Faker};
+
     use super::Identity;
     use crate::{
         error::Error,
         graph::{new_db_connection, Vertex},
+        upstream::Platform,
     };
 
     #[tokio::test]
@@ -127,13 +149,33 @@ mod tests {
         let result = identity.create_or_update(&db).await?;
         assert!(result.uuid.is_some());
         assert!(result.key().len() > 0);
-        println!("{}", result.key()); // DEBUG
 
         Ok(())
     }
 
     #[tokio::test]
-    async fn test_find() -> Result<(), Error> {
+    async fn test_update() -> Result<(), Error> {
+        let db = new_db_connection().await?;
+
+        let mut identity = Identity::default();
+        identity.platform = Platform::Twitter;
+        identity.identity = Faker.fake();
+        let created = identity.create_or_update(&db).await?;
+
+        identity.avatar_url = Some(Faker.fake());
+        identity.profile_url = Some(Faker.fake());
+        let updated = identity.create_or_update(&db).await?;
+
+        assert_eq!(created.uuid, updated.uuid);
+        assert_eq!(created.key(), updated.key());
+        assert_ne!(created.avatar_url, updated.avatar_url);
+        assert_ne!(created.profile_url, updated.profile_url);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_find_by_uuid() -> Result<(), Error> {
         let identity = Identity::default();
         let db = new_db_connection().await?;
         let result = identity.create_or_update(&db).await?;
@@ -141,6 +183,20 @@ mod tests {
 
         let found = Identity::find_by_uuid(&db, uuid).await?;
         assert_eq!(found.unwrap().uuid, result.uuid);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_find_by_platform_identity() -> Result<(), Error> {
+        let identity = Identity::default();
+        let db = new_db_connection().await?;
+        let created = identity.create_or_update(&db).await?;
+
+        let found = Identity::find_by_platform_identity(&db, &created.platform, &created.identity)
+            .await?
+            .expect("Record not found");
+        assert_eq!(found.uuid, created.uuid);
 
         Ok(())
     }
