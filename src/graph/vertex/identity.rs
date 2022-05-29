@@ -116,8 +116,7 @@ impl Vertex for Identity {
         db: &DatabaseConnection,
         uuid: Uuid,
     ) -> Result<Option<DatabaseRecord<Identity>>, Error> {
-        let query =
-            Identity::query().filter(Filter::new(Comparison::field("uuid").equals_str(uuid)));
+        let query = Identity::query().filter(Comparison::field("uuid").equals_str(uuid).into());
         let query_result = Identity::get(query, db).await?;
         if query_result.len() == 0 {
             Ok(None)

@@ -8,15 +8,6 @@ use strum_macros::{Display, EnumString};
 
 use crate::error::Error;
 
-pub enum VertexType {
-    Identity,
-    CryptoIdentity,
-}
-
-pub enum EdgeType {
-    Proof,
-    PubkeySerialize,
-}
 /// All identity platform.
 #[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display)]
 pub enum Platform {
@@ -39,17 +30,21 @@ pub enum Platform {
 }
 
 /// All data respource platform.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Display, EnumString)]
 pub enum DataSource {
     /// https://github.com/Uniswap/sybil-list/blob/master/verified.json
-    SybilList, // = "sybil_list",
+    #[strum(serialize = "sybil_list")]
+    #[serde(rename = "sybil_list")]
+    SybilList,
 }
 
+/// All asymmetric cryptography algorithm supported by RelationService.
 #[derive(Serialize, Deserialize)]
 pub enum Algorithm {
     EllipticCurve,
 }
 
+/// All elliptic curve supported by RelationService.
 #[derive(Serialize, Deserialize)]
 pub enum Curve {
     Secp256K1,

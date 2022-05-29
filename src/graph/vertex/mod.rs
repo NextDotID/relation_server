@@ -3,6 +3,7 @@ mod identity;
 
 use aragog::{DatabaseConnection, DatabaseRecord, Record};
 use async_trait::async_trait;
+pub use identity::Identity;
 use uuid::Uuid;
 
 use crate::error::Error;
