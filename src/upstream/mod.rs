@@ -1,63 +1,65 @@
-mod sybil_list;
-mod proof_client;
 mod keybase;
+mod proof_client;
+mod sybil_list;
 
-
+use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use async_trait::async_trait;
-use strum_macros::EnumString;
+use strum_macros::{Display, EnumString};
 
 use crate::error::Error;
 
-
-pub enum VertexType {
-    Identity,
-    CryptoIdentity,
-}
-
-pub enum EdgeType {
-    Proof,
-    PubkeySerialize,
-}
 /// All identity platform.
-#[derive(Serialize, Deserialize, Debug, EnumString)]
+#[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq)]
 pub enum Platform {
     /// Twitter
     #[strum(serialize = "twitter")]
+    #[serde(rename = "twitter")]
     Twitter,
-    /// Ethereum wallet. (0x[a-f0-9]{40})
+    /// Ethereum wallet `0x[a-f0-9]{40}`
     #[strum(serialize = "ethereum")]
+    #[serde(rename = "ethereum")]
     Ethereum,
     /// NextID
     #[strum(serialize = "nextid")]
+    #[serde(rename = "nextid")]
     NextID,
     /// Keybase
     #[strum(serialize = "keybase")]
+    #[serde(rename = "keybase")]
     Keybase,
     /// Github
     #[strum(serialize = "github")]
+    #[serde(rename = "github")]
     Github,
 }
 
 /// All data respource platform.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Display, EnumString, PartialEq)]
 pub enum DataSource {
     /// https://github.com/Uniswap/sybil-list/blob/master/verified.json
-    SybilList, // = "sybil_list",
+    #[strum(serialize = "sybil_list")]
+    #[serde(rename = "sybil_list")]
+    SybilList,
 
     /// https://keybase.io/docs/api/1.0/call/user/lookup
-    Keybase, // = "keybase",
+    #[strum(serialize = "keybase")]
+    #[serde(rename = "keybase")]
+    Keybase,
 
     /// https://docs.next.id/docs/proof-service/api
+    #[strum(serialize = "nextid")]
+    #[serde(rename = "nextid")]
     NextID, // = "nextID",
 }
 
+/// All asymmetric cryptography algorithm supported by RelationService.
 #[derive(Serialize, Deserialize)]
 pub enum Algorithm {
     EllipticCurve,
 }
 
+/// All elliptic curve supported by RelationService.
 #[derive(Serialize, Deserialize)]
 pub enum Curve {
     Secp256K1,
@@ -116,5 +118,3 @@ pub trait Fetcher {
     /// Fetch data from given source.
     async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error>;
 }
-
-

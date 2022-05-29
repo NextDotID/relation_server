@@ -1,0 +1,11 @@
+# 
+# This schema file is auto generated and synchronized with the database.
+# Editing it will have no effect.
+# 
+---
+version: 1653836131574
+collections:
+  - name: Identities
+    is_edge_collection: false
+  - name: Proofs
+    is_edge_collection: true

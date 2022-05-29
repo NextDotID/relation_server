@@ -1,19 +1,14 @@
+pub mod edge;
 mod tests;
+pub mod vertex;
 
-use gremlin_client::{aio::GremlinClient, Vertex};
-use tokio_stream::StreamExt;
-use crate::error::Error;
+use crate::{config::C, error::Error};
+use aragog::{AuthMode, DatabaseConnection, OperationOptions};
+pub use edge::Edge;
 use serde::Deserialize;
+pub use vertex::Vertex;
 
-#[derive(Deserialize, Debug)]
-pub struct Identity {
-    pub uuid: String,
-    pub platform: String,
-    pub identity: String,
-    pub display_name: String,
-    pub created_at: u128,
-}
-
+// TODO: move this under `vertex/`
 #[derive(Deserialize, Debug)]
 pub struct CryptoIdentity {
     pub uuid: String,
@@ -23,31 +18,22 @@ pub struct CryptoIdentity {
     pub created_at: u128,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct Proof {
-    pub uuid: String,
-    pub method: String,
-    pub upstream: String,
-    pub record_id: String,
-    pub created_at: u128,
-    pub last_verified_at: u128,
-}
-
+// TODO: move this under `edge/`
 #[derive(Deserialize, Debug)]
 pub struct PubKeyDerivation {
     pub uuid: String,
     pub method: String,
 }
 
-// TODO: should take URL from config.
-const GREMLIN_URL: &str = "localhost";
-
-pub async fn connect() -> Result<(), Error> {
-    let client = GremlinClient::connect(GREMLIN_URL).await?;
-    let results = client.execute("g.V(param)", &[("param", &1)]).await?
-        .filter_map(Result::ok)
-        .map(|f| f.take::<Vertex>())
-        .collect::<Result<Vec<Vertex>, _>>().await?;
-    println!("{:?}", results);
-    Ok(())
+/// Create a database connection instance.
+pub async fn new_db_connection() -> Result<DatabaseConnection, Error> {
+    let connection = DatabaseConnection::builder()
+        .with_credentials(&C.db.host, &C.db.db, &C.db.username, &C.db.password)
+        .with_auth_mode(AuthMode::Basic)
+        .with_operation_options(OperationOptions::default())
+        .with_schema_path(&C.db.schema_path)
+        .apply_schema() // TODO: run it only on cold start of the server, or manually triggered it
+        .build()
+        .await?;
+    Ok(connection)
 }

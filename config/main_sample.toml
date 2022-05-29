@@ -1,9 +1,9 @@
 [db]
-host = "127.0.0.1"
-port = 5441
-username = "relation_server"
-password = "relation_server"
+host = "http://127.0.0.1:8529"
+username = "root"
+password = "ieNgoo5roong9Chu"
 db = "relation_server_development"
+schema_path = "./src/config/db/schema.yaml"
 
 [web]
 listen = "127.0.0.1"
