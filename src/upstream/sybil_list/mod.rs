@@ -9,8 +9,7 @@ use async_trait::async_trait;
 use crate::upstream::{Fetcher,TempIdentity, TempProof, Platform, DataSource, Connection};
 
 //https://raw.githubusercontent.com/Uniswap/sybil-list/master/verified.json
-//#[derive(Deserialize, Debug)]
-// type SybilListVerfiedResponse = Map<String, VerfiedItem>;
+
 
 #[derive(Deserialize, Debug)]
 pub struct SybilListItem {
@@ -20,14 +19,15 @@ pub struct SybilListItem {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct VerfiedItem {
+pub struct VerifiedItem {
     pub twitter: TwitterItem
 }
 
 #[derive(Deserialize, Debug)]
 pub struct TwitterItem {
     pub timestamp: i64,
-    pub tweetID: String,
+    #[serde(rename = "tweetID")]
+    pub tweet_id: String,
     pub handle: String,
 }
 
@@ -65,13 +65,13 @@ impl Fetcher for SybilList {
         let parse_body: Vec<Connection> = body
         .into_iter()
         .filter_map(|(eth_wallet_address, value)| -> Option<Connection> {
-            let item: VerfiedItem = serde_json::from_value(value).ok()?;
+            let item: VerifiedItem = serde_json::from_value(value).ok()?;
                         
             let from: TempIdentity = TempIdentity {
                 uuid: Uuid::new_v4(),
                 platform: Platform::Ethereum,
                 identity: eth_wallet_address.clone(),
-                created_at: Some(timestamp_to_naive(item.twitter.timestamp)),
+                created_at: None,
                 display_name: Some(eth_wallet_address.clone()),
             };
 
@@ -79,7 +79,7 @@ impl Fetcher for SybilList {
                 uuid: Uuid::new_v4(),
                 platform: Platform::Twitter,
                 identity: item.twitter.handle.clone(),
-                created_at: Some(timestamp_to_naive(item.twitter.timestamp)),
+                created_at: None,
                 display_name: Some(item.twitter.handle.clone()),
             };
 
@@ -87,9 +87,9 @@ impl Fetcher for SybilList {
                 uuid: Uuid::new_v4(),
                 method: DataSource::SybilList,
                 upstream: Some(" ".to_string()),
-                record_id: Some(" ".to_string()),
-                created_at: Some(naive_now()), 
-                last_verified_at: naive_now(),
+                record_id: Some(item.twitter.tweet_id.clone()),
+                created_at: Some(timestamp_to_naive(item.twitter.timestamp)), 
+                last_verified_at: timestamp_to_naive(item.twitter.timestamp),
             };
 
             let cnn: Connection = Connection {

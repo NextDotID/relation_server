@@ -55,13 +55,14 @@ pub struct ErrorResponse {
 pub struct Rss3 {
     pub network: String,
     pub account: String,
+    pub tags: String,
 }
 
 #[async_trait]
 impl Fetcher for Rss3 {
     async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> { 
         let client = make_client();
-        let uri: http::Uri = match format!("https://pregod.rss3.dev/v0.4.0/account:{}@{}/notes?tags=NFT", self.account, self.network).parse() {
+        let uri: http::Uri = match format!("https://pregod.rss3.dev/v0.4.0/account:{}@{}/notes?tags={}", self.account, self.network, self.tags).parse() {
             Ok(n) => n,
             Err(err) => return Err(Error::ParamError(
                 format!("Uri format Error: {}", err.to_string()))),
@@ -91,9 +92,9 @@ impl Fetcher for Rss3 {
         .filter(|p| p.metadata.to == self.account.to_lowercase())
         .filter_map(|p| -> Option<Connection> {
             let create_date_time = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
-            let create_naive_datetime = NaiveDateTime::from_timestamp(create_date_time.timestamp(), 0);
+            let create_naive_date_time = NaiveDateTime::from_timestamp(create_date_time.timestamp(), 0);
             let update_date_time = DateTime::parse_from_rfc3339(&p.date_updated).unwrap();
-            let update_naive_datetime = NaiveDateTime::from_timestamp(update_date_time.timestamp(), 0);
+            let update_naive_date_time = NaiveDateTime::from_timestamp(update_date_time.timestamp(), 0);
             
             //println!("item :   {:?}", p);
             let from: TempIdentity = TempIdentity {
@@ -108,7 +109,7 @@ impl Fetcher for Rss3 {
                 uuid: Uuid::new_v4(),
                 platform: Platform::Ethereum,
                 identity: p.metadata.collection_address.clone(),
-                created_at: Some(create_naive_datetime),
+                created_at: Some(create_naive_date_time),
                 display_name: Some(p.title.clone()),
             };
 
@@ -117,8 +118,8 @@ impl Fetcher for Rss3 {
                 method: DataSource::Rss3,
                 upstream: Some("https://rss3.io/network/api.html".to_string()),
                 record_id: Some(p.metadata.proof.clone()),
-                created_at: Some(create_naive_datetime), 
-                last_verified_at: update_naive_datetime,
+                created_at: Some(create_naive_date_time), 
+                last_verified_at: update_naive_date_time,
             };
 
             let cnn: Connection = Connection {

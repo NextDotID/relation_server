@@ -7,6 +7,7 @@ mod tests {
         let rs: Rss3 = Rss3 {
             account: "0x6875e13A6301040388F61f5DBa5045E1bE01c657".to_string(),
             network: "ethereum".to_string(),
+            tags: "NFT".to_string(),
         };
 
         let result = rs.fetch(None).await?;
