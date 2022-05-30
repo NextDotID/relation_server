@@ -1,6 +1,7 @@
 mod sybil_list;
 mod proof_client;
 mod keybase;
+mod rss3;
 
 
 use chrono::NaiveDateTime;
@@ -51,6 +52,10 @@ pub enum DataSource {
 
     /// https://docs.next.id/docs/proof-service/api
     NextID, // = "nextID",
+
+
+    /// https://rss3.io/network/api.html
+    Rss3, // = "rss3",
 }
 
 #[derive(Serialize, Deserialize)]
