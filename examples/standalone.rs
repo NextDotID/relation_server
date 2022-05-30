@@ -1,77 +1,52 @@
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{
-    Body as HyperBody,
-    Method,
-    Request as HyperRequest,
-    Response as HyperResponse,
-    //  Error as HyperError,
-    Server,
-    StatusCode,
-};
-use relation_server::controller::{
-    error_response, healthz, Body, Request, Response,
-};
-use relation_server::{config::C, error::Error};
-use log::info;
 use std::convert::Infallible;
-use std::future::Future;
-use std::net::SocketAddr;
+
+use async_graphql::{
+    http::{playground_source, GraphQLPlaygroundConfig},
+    EmptyMutation, EmptySubscription, Schema,
+};
+use async_graphql_warp::{GraphQLBadRequest, GraphQLResponse};
+use http::StatusCode;
+use relation_server::controller::graphql::Query;
+use warp::{http::Response as HttpResponse, Filter, Rejection};
 
 #[tokio::main]
 async fn main() {
-    env_logger::try_init().unwrap();
-    let config = C.clone(); // TODO
+    let schema = Schema::build(Query::default(), EmptyMutation, EmptySubscription)
+        // .data()
+        .finish();
 
-    let addr: SocketAddr = format!("{}:{}", config.web.listen, config.web.port)
-        .parse()
-        .expect("Unable to parse web listen address");
+    println!("Playground: http://localhost:8000");
 
-    let make_svc = make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(entrypoint)) });
-
-    let server = Server::bind(&addr).serve(make_svc);
-    if let Err(e) = server.await {
-        eprintln!("server error: {}", e)
-    }
-}
-
-async fn entrypoint(req: HyperRequest<HyperBody>) -> Result<HyperResponse<HyperBody>, Infallible> {
-    info!(
-        "{} {}",
-        req.method().to_string(),
-        req.uri().path().to_string()
+    let graphql_post = async_graphql_warp::graphql(schema).and_then(
+        |(schema, request): (
+            Schema<Query, EmptyMutation, EmptySubscription>,
+            async_graphql::Request,
+        )| async move {
+            Ok::<_, Infallible>(GraphQLResponse::from(schema.execute(request).await))
+        },
     );
 
-    Ok(match (req.method(), req.uri().path()) {
-        (&Method::GET, "/healthz") => parse(req, healthz::controller).await,
-        _ => HyperResponse::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body("Not Found".into())
-            .expect("Failed to render response"),
-    })
-}
+    let graphql_playground = warp::path::end().and(warp::get()).map(|| {
+        HttpResponse::builder()
+            .header("content-type", "text/html")
+            .body(playground_source(GraphQLPlaygroundConfig::new("/")))
+    });
 
-async fn parse<F>(
-    req: HyperRequest<HyperBody>,
-    controller: fn(Request) -> F,
-) -> HyperResponse<HyperBody>
-where
-    F: Future<Output = Result<Response, Error>>,
-{
-    let (parts, hyper_body) = req.into_parts();
-    let full_body = hyper::body::to_bytes(hyper_body).await.unwrap();
-    let body_string: Body = String::from_utf8(full_body.to_vec()).unwrap();
+    let routes = graphql_playground
+        .or(graphql_post)
+        .recover(|err: Rejection| async move {
+            if let Some(GraphQLBadRequest(err)) = err.find() {
+                return Ok::<_, Infallible>(warp::reply::with_status(
+                    err.to_string(),
+                    StatusCode::BAD_REQUEST,
+                ));
+            }
 
-    let our_req = Request::from_parts(parts, body_string);
-    match controller(our_req).await {
-        Ok(resp) => {
-            let (parts, our_resp) = resp.into_parts();
-            let hyper_body = HyperBody::from(our_resp);
-            HyperResponse::from_parts(parts, hyper_body)
-        }
-        Err(err) => {
-            let (parts, our_resp) = error_response(err).into_parts();
-            let hyper_body = HyperBody::from(our_resp);
-            HyperResponse::from_parts(parts, hyper_body)
-        }
-    }
+            Ok(warp::reply::with_status(
+                "INTERNAL_SERVER_ERROR".to_string(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ))
+        });
+
+    warp::serve(routes).run(([127, 0, 0, 1], 8000)).await;
 }
