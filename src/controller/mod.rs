@@ -1,4 +1,5 @@
 pub mod healthz;
+pub mod graphql;
 
 use http::StatusCode;
 use serde::{Deserialize, Serialize};

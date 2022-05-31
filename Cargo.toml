@@ -26,6 +26,7 @@ lambda_runtime = "0.5.0"
 lambda_http = "0.5.0"
 hyper = { version = "0.14.17", features = ["full"] }
 hyper-tls = "*"
+warp = { version = "0.3" }
 
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "*"
@@ -36,9 +37,14 @@ uuid = { version = "1.1", features = ["v4", "std", "serde"] }
 
 aragog = "0.16.1"
 
+
 async-trait = "*"
 strum_macros = "*"
 strum = "*"
+
+# GraphQL
+async-graphql = {version = "4", features = ["uuid", "chrono"]}
+async-graphql-warp = "*"
 
 [dev_dependencies]
 fake = { version = "2.4", features = ["uuid", "chrono"] }
