@@ -34,14 +34,19 @@ pub struct Item {
 
 #[derive(Deserialize, Debug)]
 pub struct MetaData {
+    #[serde(default)] 
     pub collection_address: String,
+    #[serde(default)] 
     pub collection_name: String,
+    #[serde(default)] 
     pub contract_type: String,
     pub from: String,
+    #[serde(default)] 
     pub log_index: String,
     pub network: String,
     pub proof: String,
     pub to: String,
+    #[serde(default)] 
     pub token_id: String,
     pub token_standard: String,
     pub token_symbol: String,
@@ -90,6 +95,7 @@ impl Fetcher for Rss3 {
         let parse_body: Vec<Connection> = body.list
         .into_iter()
         .filter(|p| p.metadata.to == self.account.to_lowercase())
+        //.filter(|p| p.metadata.from != self.account.to_lowercase())
         .filter_map(|p| -> Option<Connection> {
             let create_date_time = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
             let create_naive_date_time = NaiveDateTime::from_timestamp(create_date_time.timestamp(), 0);
