@@ -1631,6 +1631,7 @@ dependencies = [
  "config",
  "env_logger",
  "fake",
+ "futures",
  "http",
  "hyper",
  "hyper-tls",

@@ -1,3 +1,4 @@
+extern crate futures;
 mod tests;
 
 use crate::error::Error;
@@ -12,6 +13,10 @@ use async_trait::async_trait;
 use crate::upstream::{Fetcher,TempIdentity, TempProof, Platform, DataSource, Connection, ConnectionNew};
 use crate::graph::{vertex::Identity, edge::Proof, new_db_connection};
 
+//use tokio_stream::{self as stream, StreamExt};
+use futures::stream::{self, StreamExt, TryStreamExt};
+
+//use futures::future;
 //https://raw.githubusercontent.com/Uniswap/sybil-list/master/verified.json
 //#[derive(Deserialize, Debug)]
 // type SybilListVerifiedResponse = Map<String, VerifiedItem>;
@@ -133,6 +138,57 @@ async fn fetch2() -> Result<Vec<ConnectionNew>, Error> {
     //let created = Identity::create_dummy(&db).await?
 
     // parse 
+    let stream = stream::iter(body.clone()).then(|(eth_wallet_address, value)|  async move {
+        let item: VerifiedItem = serde_json::from_value(value).ok()?;
+       
+        let from: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Ethereum,
+            identity: eth_wallet_address.clone(),
+            created_at: Some(timestamp_to_naive(item.twitter.timestamp)),
+            display_name: eth_wallet_address.clone(),
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+        };
+
+        from.create_or_update(&db);
+
+        let to: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Twitter,
+            identity: item.twitter.handle.clone(),
+            created_at: Some(naive_now()),
+            display_name: item.twitter.handle.clone(),
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+        };
+        to.create_or_update(&db);
+
+        let pf: Proof = Proof {
+            uuid: Uuid::new_v4(),
+            source: DataSource::SybilList,
+            record_id: Some(" ".to_string()),
+            created_at: Some(naive_now()), 
+            last_fetched_at: naive_now(),
+        };
+
+        let cnn: ConnectionNew = ConnectionNew {
+            from: from,
+            to: to,
+            proof: pf,
+        };
+        return Some(cnn);
+    });
+
+    let res = stream.collect::<Vec<_>>().await;
+    println!("{:?}", res);
+
+
+
     let parse_body: Vec<ConnectionNew> = body
     .into_iter()
     .filter_map(|(eth_wallet_address, value)| -> Option<ConnectionNew> {
