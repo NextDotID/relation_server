@@ -15,6 +15,7 @@ use crate::graph::{vertex::Identity, edge::Proof, new_db_connection};
 
 //use tokio_stream::{self as stream, StreamExt};
 use futures::stream::{self, StreamExt, TryStreamExt};
+use futures::{executor::block_on, future::join_all};
 
 //use futures::future;
 //https://raw.githubusercontent.com/Uniswap/sybil-list/master/verified.json
@@ -113,6 +114,58 @@ impl Fetcher for SybilList {
     }
 }
 
+async fn save_item(eth_wallet_address: String, value: Value) -> Option<ConnectionNew> {
+ 
+    let db = new_db_connection().await.ok()?;
+    println!("{}", db.collections_names().len());
+
+    let item: VerifiedItem = serde_json::from_value(value).ok()?;
+
+    let from: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Ethereum,
+        identity: eth_wallet_address.clone(),
+        created_at: Some(timestamp_to_naive(item.twitter.timestamp)),
+        display_name: eth_wallet_address.clone(),
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+    };
+
+    let res = from.create_or_update(&db).await.ok()?;
+    println!("{:?}", res);
+
+    let to: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Twitter,
+        identity: item.twitter.handle.clone(),
+        created_at: Some(naive_now()),
+        display_name: item.twitter.handle.clone(),
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+    };
+    to.create_or_update(&db);
+
+    let pf: Proof = Proof {
+        uuid: Uuid::new_v4(),
+        source: DataSource::SybilList,
+        record_id: Some(" ".to_string()),
+        created_at: Some(naive_now()), 
+        last_fetched_at: naive_now(),
+    };
+
+    let cnn: ConnectionNew = ConnectionNew {
+        from: from,
+        to: to,
+        proof: pf,
+    };
+    
+    return Some(cnn);
+}
+
 async fn fetch2() -> Result<Vec<ConnectionNew>, Error> {
     let client = make_client();
     let uri: http::Uri = match format!("https://raw.githubusercontent.com/Uniswap/sybil-list/master/verified.json").parse() {
@@ -137,56 +190,16 @@ async fn fetch2() -> Result<Vec<ConnectionNew>, Error> {
     let db = new_db_connection().await?;
     //let created = Identity::create_dummy(&db).await?
 
+  
     // parse 
-    let stream = stream::iter(body.clone()).then(|(eth_wallet_address, value)|  async move {
-        let item: VerifiedItem = serde_json::from_value(value).ok()?;
-       
-        let from: Identity = Identity {
-            uuid: Some(Uuid::new_v4()),
-            platform: Platform::Ethereum,
-            identity: eth_wallet_address.clone(),
-            created_at: Some(timestamp_to_naive(item.twitter.timestamp)),
-            display_name: eth_wallet_address.clone(),
-            added_at: naive_now(),
-            avatar_url: None,
-            profile_url: None,
-            updated_at: naive_now(),
-        };
+    let futures: Vec<_> = body.iter().map(|(eth_wallet_address, value)| save_item(eth_wallet_address.to_string(), value.to_owned())).collect();
 
-        from.create_or_update(&db);
-
-        let to: Identity = Identity {
-            uuid: Some(Uuid::new_v4()),
-            platform: Platform::Twitter,
-            identity: item.twitter.handle.clone(),
-            created_at: Some(naive_now()),
-            display_name: item.twitter.handle.clone(),
-            added_at: naive_now(),
-            avatar_url: None,
-            profile_url: None,
-            updated_at: naive_now(),
-        };
-        to.create_or_update(&db);
-
-        let pf: Proof = Proof {
-            uuid: Uuid::new_v4(),
-            source: DataSource::SybilList,
-            record_id: Some(" ".to_string()),
-            created_at: Some(naive_now()), 
-            last_fetched_at: naive_now(),
-        };
-
-        let cnn: ConnectionNew = ConnectionNew {
-            from: from,
-            to: to,
-            proof: pf,
-        };
-        return Some(cnn);
+    block_on(async {
+        let results = join_all(futures).await;
+        println!("Got Results {:?}", results);
     });
 
-    let res = stream.collect::<Vec<_>>().await;
-    println!("{:?}", res);
-
+ 
 
 
     let parse_body: Vec<ConnectionNew> = body
@@ -206,7 +219,7 @@ async fn fetch2() -> Result<Vec<ConnectionNew>, Error> {
             updated_at: naive_now(),
         };
 
-       from.create_or_update(&db);
+       //from.create_or_update(&db);
 
         let to: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
@@ -219,7 +232,7 @@ async fn fetch2() -> Result<Vec<ConnectionNew>, Error> {
             profile_url: None,
             updated_at: naive_now(),
         };
-        to.create_or_update(&db);
+        //to.create_or_update(&db);
 
         let pf: Proof = Proof {
             uuid: Uuid::new_v4(),
