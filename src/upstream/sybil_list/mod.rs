@@ -2,7 +2,7 @@ extern crate futures;
 mod tests;
 
 use crate::error::Error;
-use crate::graph::Vertex;
+use crate::graph::{Vertex, Edge};
 use async_graphql::futures_util::TryFutureExt;
 use serde::Deserialize;
 use serde_json::{Value, Map};
@@ -115,10 +115,8 @@ impl Fetcher for SybilList {
 }
 
 async fn save_item(eth_wallet_address: String, value: Value) -> Option<ConnectionNew> {
- 
     let db = new_db_connection().await.ok()?;
-    //println!("{}", db.collections_names().len());
-
+    
     let item: VerifiedItem = serde_json::from_value(value).ok()?;
 
     let from: Identity = Identity {
@@ -132,9 +130,7 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connectio
         profile_url: None,
         updated_at: naive_now(),
     };
-
-    
-    from.create_or_update(&db).await.ok()?;
+    let from_idn = from.create_or_update(&db).await.ok()?;
 
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -147,8 +143,7 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connectio
         profile_url: None,
         updated_at: naive_now(),
     };
-
-    to.create_or_update(&db).await.ok()?;
+    let to_idn = to.create_or_update(&db).await.ok()?;
 
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
@@ -157,6 +152,8 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connectio
         created_at: Some(naive_now()), 
         last_fetched_at: naive_now(),
     };
+
+    pf.connect(&db, &from_idn, &to_idn).await.ok()?;
 
     let cnn: ConnectionNew = ConnectionNew {
         from: from,
@@ -187,17 +184,10 @@ async fn fetch2() -> Result<Vec<ConnectionNew>, Error> {
 
     // all records in sybil list
     let body: Map<String, Value> = parse_body(&mut resp).await?;
-
-    let db = new_db_connection().await?;
-    //let created = Identity::create_dummy(&db).await?
-
-  
-    //let hellos = urls.iter().map(|u| hello(u));
+    
     // parse 
     let futures :Vec<_> = body.into_iter().map(|(eth_wallet_address, value)| save_item(eth_wallet_address.to_string(), value.to_owned())).collect();
-
     let results = join_all(futures).await;
-
     let parse_body: Vec<ConnectionNew> = results.into_iter().filter_map(|i|i).collect();
     Ok(parse_body)
 }
