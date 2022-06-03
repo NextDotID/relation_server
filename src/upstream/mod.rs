@@ -65,55 +65,15 @@ pub enum Curve {
     Secp256K1,
 }
 
-/// TODO: use DB-defined struct instead.
-/// VertexType: Identity
-#[derive(Debug)]
-pub struct TempIdentity {
-    pub uuid: uuid::Uuid,
-    pub platform: Platform,
-    pub identity: String,
-    pub created_at: Option<NaiveDateTime>,
-    pub display_name: Option<String>,
-}
-
-/// TODO: use DB-defined struct instead.
-/// VertexType: CryptoIdentity
-pub struct TempCryptoIdentity {
-    pub uuid: uuid::Uuid,
-    /// 0xHEXSTRING, no compression.
-    pub public_key: String,
-    pub algorithm: Algorithm,
-    pub curve: Curve,
-}
-
-/// EdgeType: Proof
-#[derive(Debug)]
-pub struct TempProof {
-    pub uuid: uuid::Uuid,
-    pub method: DataSource,
-    /// 通常为 URL，同一个 fetcher 可以对接不同上游的场景
-    pub upstream: Option<String>,
-    pub record_id: Option<String>,
-    pub created_at: Option<NaiveDateTime>,
-    pub last_verified_at: NaiveDateTime,
-}
-
 /// EdgeType: PubkeySerialize
 #[derive(Debug)]
 pub struct TempPubkeySerialize {
     pub uuid: uuid::Uuid,
 }
 
-/// Info of a complete binding.
-#[derive(Debug)]
-pub struct Connection {
-    pub from: TempIdentity,
-    pub to: TempIdentity,
-    pub proof: TempProof,
-}
 
 #[derive(Debug)]
-pub struct ConnectionNew {
+pub struct Connection {
     pub from: Identity,
     pub to: Identity,
     pub proof: Proof,
