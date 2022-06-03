@@ -136,50 +136,6 @@ impl Fetcher for ProofClient {
                 return Err(Error::NoResult); 
             }
         };
-        
-        // let parse_body: Vec<Connection> = proofs.proofs
-        // .into_iter()
-        // .filter_map(|p| -> Option<Connection> {          
-            
-        //     let from: Identity = Identity {
-        //         uuid: Some(Uuid::new_v4()),
-        //         platform: Platform::NextID,
-        //         identity: p.identity.clone(),
-        //         created_at: Some(timestamp_to_naive(p.created_at.to_string().parse().unwrap())),
-        //         display_name: p.identity.clone(),
-        //         added_at: naive_now(),
-        //         avatar_url: None,
-        //         profile_url: None,
-        //         updated_at: naive_now(),
-        //     };
-
-        //     let to: Identity = Identity {
-        //         uuid: Some(Uuid::new_v4()),
-        //         platform: Platform::from_str(p.platform.as_str()).unwrap(),
-        //         identity: p.identity.to_string(),
-        //         created_at: Some(timestamp_to_naive(p.created_at.to_string().parse().unwrap())),
-        //         display_name: p.identity.clone(),
-        //         added_at: naive_now(),
-        //         avatar_url: None,
-        //         profile_url: None,
-        //         updated_at: naive_now(),
-        //     };
-
-        //     let pf: Proof = Proof {
-        //         uuid: Uuid::new_v4(),
-        //         source: DataSource::NextID,
-        //         record_id: Some(" ".to_string()),
-        //         created_at: Some(naive_now()), 
-        //         last_fetched_at: naive_now(),
-        //     };
-
-        //     let cnn: Connection = Connection {
-        //         from: from,
-        //         to: to,
-        //         proof: pf,
-        //     };
-        //     return Some(cnn);
-        // }).collect();
 
         // parse 
         let futures :Vec<_> = proofs.proofs.into_iter().map(|p| save_item(p)).collect();
