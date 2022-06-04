@@ -9,6 +9,13 @@
 This lambda function / standalone server provides relation
 aggregation store / search of web3 / web2.0.
 
+* Develop
+
+1. Install [[https://github.com/casey/just][just]] and [[https://docs.docker.com/compose/][docker-compose]] first.
+2. =just migrate=
+3. =just test=
+4. Code!
+
 * Goal [0/1]
 :PROPERTIES:
 :ID:       5f4d4828-bf69-4119-a519-a4edd2aa8c36

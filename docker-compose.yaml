@@ -1,11 +1,16 @@
 version: "3.8"
 services:
-  arangodb:
-    # !!!!!FOR M1 MAC USER ONLY!!!!!!
-    # image: arangodb/arangodb:3.9.1-noavx
+  arangodb_x86_64:
     image: arangodb/arangodb:3.9.1
     ports:
     - 127.0.0.1:8529:8529
     environment:
-      # ARANGO_NO_AUTH: 1
+      ARANGO_ROOT_PASSWORD: ieNgoo5roong9Chu
+
+  # !!!!!FOR M1 MAC USER ONLY!!!!!!
+  arangodb_arm64:
+    image: arangodb/arangodb:3.9.1-noavx
+    ports:
+    - 127.0.0.1:8529:8529
+    environment:
       ARANGO_ROOT_PASSWORD: ieNgoo5roong9Chu
