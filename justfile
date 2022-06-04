@@ -9,7 +9,7 @@ prepare:
 	rustup override set stable
 	docker-compose pull arangodb_{{arch}}
 	cp config/main.sample.toml config/main.toml
-	echo '[db]\ndb = "relation_server_test"' > config/test.toml
+	echo '[db]\ndb = "relation_server_test"' > config/testing.toml
 
 # Do database migration
 migrate:
@@ -19,7 +19,7 @@ migrate:
 
 # Run test
 test:
-	env RUST_BACKTRACE=1 RUST_LOG=debug cargo test -- --nocapture --test-threads=1
+	env RUST_BACKTRACE=1 RUST_LOG=debug RELATION_SERVER_ENV=testing cargo test -- --nocapture --test-threads=1
 
 # Clean dev environment (incl. build cache and database)
 clean:

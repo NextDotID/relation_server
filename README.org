@@ -12,9 +12,10 @@ aggregation store / search of web3 / web2.0.
 * Develop
 
 1. Install [[https://github.com/casey/just][just]] and [[https://docs.docker.com/compose/][docker-compose]] first.
-2. =just migrate=
-3. =just test=
-4. Code!
+2. =just prepare=
+3. =just migrate=
+4. =just test=
+5. Code!
 
 * Goal [0/1]
 :PROPERTIES:
