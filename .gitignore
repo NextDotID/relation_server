@@ -4,4 +4,4 @@
 .vscode
 
 /config/*.toml
-!/config/main_sample.toml
+!/config/main.sample.toml
