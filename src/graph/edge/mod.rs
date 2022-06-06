@@ -6,7 +6,6 @@ pub use proof::{Proof, ProofRecord};
 use aragog::{DatabaseConnection, DatabaseRecord, EdgeRecord, Record};
 use async_trait::async_trait;
 use uuid::Uuid;
-pub use proof::Proof;
 
 use crate::error::Error;
 
