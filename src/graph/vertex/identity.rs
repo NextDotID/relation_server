@@ -163,6 +163,18 @@ impl From<DatabaseRecord<Identity>> for IdentityRecord {
     }
 }
 
+impl Default for IdentityRecord {
+    fn default() -> Self {
+        IdentityRecord(DatabaseRecord {
+            key: "".into(),
+            id: "".into(),
+            rev: "".into(),
+            record: Identity::default(),
+        })
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use aragog::DatabaseConnection;

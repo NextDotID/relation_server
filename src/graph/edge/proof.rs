@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{
     error::Error,
     graph::{vertex::Identity, Edge},
-    upstream::DataSource,
+    upstream::DataSource, util::naive_now,
 };
 
 /// Edge to connect two `Identity`s.
@@ -28,6 +28,18 @@ pub struct Proof {
     pub created_at: Option<NaiveDateTime>,
     /// When this connection is fetched by us RelationService.
     pub last_fetched_at: NaiveDateTime,
+}
+
+impl Default for Proof {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::new_v4(),
+            source: DataSource::NextID,
+            record_id: None,
+            created_at: None,
+            last_fetched_at: naive_now(),
+        }
+    }
 }
 
 impl Proof {
@@ -110,6 +122,21 @@ impl std::ops::Deref for ProofRecord {
 impl From<DatabaseRecord<EdgeRecord<Proof>>> for ProofRecord {
     fn from(record: DatabaseRecord<EdgeRecord<Proof>>) -> Self {
         ProofRecord(record)
+    }
+}
+
+impl Default for ProofRecord {
+    fn default() -> Self {
+        ProofRecord(DatabaseRecord {
+            key: "".into(),
+            id: "".into(),
+            rev: "".into(),
+            record: EdgeRecord {
+                from: "".into(),
+                to: "".into(),
+                data: Proof::default(),
+            },
+        })
     }
 }
 
