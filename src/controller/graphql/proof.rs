@@ -1,9 +1,9 @@
 use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
 
-use crate::error::{Result, Error};
+use crate::error::{Error, Result};
 use crate::graph::vertex::IdentityRecord;
-use crate::graph::{edge::proof::ProofRecord, new_db_connection, vertex::Identity};
+use crate::graph::{edge::proof::ProofRecord, vertex::Identity};
 
 #[Object]
 impl ProofRecord {

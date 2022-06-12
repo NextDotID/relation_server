@@ -52,7 +52,7 @@ impl IdentityRecord {
     ) -> Result<Option<IdentityRecord>> {
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let platform = platform.parse()?;
-        let found = Identity::find_by_platform_identity(db, &platform, &identity).await?;
+        let found = Identity::find_by_platform_identity(&db, &platform, &identity).await?;
 
         Ok(found)
     }

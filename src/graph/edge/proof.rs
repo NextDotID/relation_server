@@ -9,7 +9,8 @@ use uuid::Uuid;
 use crate::{
     error::Error,
     graph::{vertex::Identity, Edge},
-    upstream::DataSource, util::naive_now,
+    upstream::DataSource,
+    util::naive_now,
 };
 
 /// Edge to connect two `Identity`s.
@@ -108,7 +109,7 @@ impl Edge<Identity, Identity, ProofRecord> for Proof {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Default)]
 pub struct ProofRecord(DatabaseRecord<EdgeRecord<Proof>>);
 
 impl std::ops::Deref for ProofRecord {
@@ -122,21 +123,6 @@ impl std::ops::Deref for ProofRecord {
 impl From<DatabaseRecord<EdgeRecord<Proof>>> for ProofRecord {
     fn from(record: DatabaseRecord<EdgeRecord<Proof>>) -> Self {
         ProofRecord(record)
-    }
-}
-
-impl Default for ProofRecord {
-    fn default() -> Self {
-        ProofRecord(DatabaseRecord {
-            key: "".into(),
-            id: "".into(),
-            rev: "".into(),
-            record: EdgeRecord {
-                from: "".into(),
-                to: "".into(),
-                data: Proof::default(),
-            },
-        })
     }
 }
 
