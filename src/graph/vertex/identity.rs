@@ -74,7 +74,7 @@ impl Identity {
             Filter::new(Comparison::field("platform").equals_str(platform))
                 .and(Comparison::field("identity").equals_str(identity)),
         );
-        let query_result = Self::get(query, db).await?;
+        let query_result = Self::get(&query, db).await?;
 
         if query_result.len() == 0 {
             Ok(None)
@@ -125,7 +125,7 @@ impl Vertex<IdentityRecord> for Identity {
         uuid: Uuid,
     ) -> Result<Option<IdentityRecord>, Error> {
         let query = Identity::query().filter(Comparison::field("uuid").equals_str(uuid).into());
-        let query_result = Identity::get(query, db).await?;
+        let query_result = Identity::get(&query, db).await?;
         if query_result.len() == 0 {
             Ok(None)
         } else {
@@ -140,7 +140,7 @@ impl Vertex<IdentityRecord> for Identity {
 
 /// Result struct queried from graph database.
 /// Useful by GraphQL side to wrap more function / traits.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Default, Debug)]
 pub struct IdentityRecord(DatabaseRecord<Identity>);
 
 impl std::ops::Deref for IdentityRecord {

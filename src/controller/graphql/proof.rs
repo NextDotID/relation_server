@@ -1,8 +1,9 @@
+use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::graph::vertex::IdentityRecord;
-use crate::graph::{edge::proof::ProofRecord, new_db_connection, vertex::Identity};
+use crate::graph::{edge::proof::ProofRecord, vertex::Identity};
 
 #[Object]
 impl ProofRecord {
@@ -26,11 +27,9 @@ impl ProofRecord {
         self.last_fetched_at.timestamp()
     }
 
-    async fn from(&self, _ctx: &Context<'_>) -> Result<IdentityRecord> {
-        // TODO: connect me to context
-        let db = new_db_connection().await?;
-
-        let from_record: aragog::DatabaseRecord<Identity> = self.from_record(&db).await?;
+    async fn from(&self, ctx: &Context<'_>) -> Result<IdentityRecord> {
+        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        let from_record: aragog::DatabaseRecord<Identity> = self.from_record(db).await?;
 
         Ok(from_record.into())
     }

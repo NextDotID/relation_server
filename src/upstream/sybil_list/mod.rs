@@ -57,42 +57,42 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connectio
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: eth_wallet_address.clone(),
-        created_at: Some(timestamp_to_naive(item.twitter.timestamp)),
+        created_at: None,
         display_name: eth_wallet_address.clone(),
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
     };
-    let from_idn = from.create_or_update(&db).await.ok()?;
+    let from_record = from.create_or_update(&db).await.ok()?;
 
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Twitter,
         identity: item.twitter.handle.clone(),
-        created_at: Some(naive_now()),
+        created_at: None,
         display_name: item.twitter.handle.clone(),
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
     };
-    let to_idn = to.create_or_update(&db).await.ok()?;
+    let to_record = to.create_or_update(&db).await.ok()?;
 
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
         source: DataSource::SybilList,
         record_id: Some(" ".to_string()),
-        created_at: Some(naive_now()), 
+        created_at: Some(timestamp_to_naive(item.twitter.timestamp)), 
         last_fetched_at: naive_now(),
     };
 
-    pf.connect(&db, &from_idn, &to_idn).await.ok()?;
+    let proof_record = pf.connect(&db, &from_record, &to_record).await.ok()?;
 
     let cnn: Connection = Connection {
-        from: from,
-        to: to,
-        proof: pf,
+        from: from_record,
+        to: to_record,
+        proof: proof_record,
     };
     
     return Some(cnn);

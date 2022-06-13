@@ -91,16 +91,16 @@ async fn save_item (p: ProofRecord) -> Option<Connection> {
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
         source: DataSource::NextID,
-        record_id: Some(" ".to_string()),
-        created_at: Some(naive_now()), 
+        record_id: None,
+        created_at: Some(timestamp_to_naive(p.created_at.to_string().parse().unwrap())), 
         last_fetched_at: naive_now(),
     };
-    pf.connect(&db, &from_record, &to_record).await.ok()?;
+    let proof_record = pf.connect(&db, &from_record, &to_record).await.ok()?;
 
     let cnn: Connection = Connection {
-        from: from,
-        to: to,
-        proof: pf,
+        from: from_record,
+        to: to_record,
+        proof: proof_record,
     };
 
     return Some(cnn);

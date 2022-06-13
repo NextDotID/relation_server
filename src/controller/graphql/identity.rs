@@ -1,11 +1,9 @@
+use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::graph::edge::ProofRecord;
-use crate::graph::{
-    new_db_connection,
-    vertex::{Identity, IdentityRecord},
-};
+use crate::graph::vertex::{Identity, IdentityRecord};
 
 #[Object]
 impl IdentityRecord {
@@ -48,12 +46,11 @@ impl IdentityRecord {
     /// Query an `identity` by given `platform` and `identity`.
     async fn identity_from(
         &self,
-        _ctx: &Context<'_>,
+        ctx: &Context<'_>,
         #[graphql(desc = "Platform to query")] platform: String,
         #[graphql(desc = "Identity on target Platform")] identity: String,
     ) -> Result<Option<IdentityRecord>> {
-        // TODO: connect me with DB.
-        let db = new_db_connection().await?;
+        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let platform = platform.parse()?;
         let found = Identity::find_by_platform_identity(&db, &platform, &identity).await?;
 

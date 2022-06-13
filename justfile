@@ -9,7 +9,7 @@ prepare:
 	rustup override set stable
 	docker-compose pull arangodb_{{arch}}
 	cp config/main.sample.toml config/main.toml
-	echo '[db]\ndb = "relation_server_test"' > config/testing.toml
+	printf "[db]\ndb = \"relation_server_test\"" > config/testing.toml
 
 # Do database migration
 migrate:

@@ -29,6 +29,8 @@ pub enum Error {
     ArangoDBError(#[from] aragog::Error),
     #[error("Parse error: {0}")]
     EnumParseError(#[from] strum::ParseError),
+    #[error("GraphQL error: {0}")]
+    GraphQLError(String),
 }
 
 impl Error {
@@ -46,6 +48,7 @@ impl Error {
             Error::SignatureValidationError(_) => StatusCode::BAD_REQUEST,
             Error::ArangoDBError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::EnumParseError(_) => StatusCode::BAD_REQUEST,
+            Error::GraphQLError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

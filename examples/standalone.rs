@@ -6,13 +6,16 @@ use async_graphql::{
 };
 use async_graphql_warp::{GraphQLBadRequest, GraphQLResponse};
 use http::StatusCode;
-use relation_server::controller::graphql::Query;
+use relation_server::{controller::graphql::Query, graph, error::Result};
 use warp::{http::Response as HttpResponse, Filter, Rejection};
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
+    // TODO: not sure if sharing one DB connection instance
+    let db = graph::new_db_connection().await?;
+
     let schema = Schema::build(Query::default(), EmptyMutation, EmptySubscription)
-        // .data()
+        .data(db)
         .finish();
 
     println!("Playground: http://localhost:8000");
@@ -49,4 +52,7 @@ async fn main() {
         });
 
     warp::serve(routes).run(([127, 0, 0, 1], 8000)).await;
+
+    println!("Shutting down...");
+    Ok(())
 }

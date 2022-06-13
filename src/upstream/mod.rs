@@ -7,7 +7,7 @@ use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
-use crate::{error::Error, graph::vertex::Identity, graph::edge::Proof};
+use crate::{error::Error, graph::{vertex::Identity, edge::ProofRecord}, graph::{edge::Proof, vertex::IdentityRecord}};
 
 /// All identity platform.
 #[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq)]
@@ -71,12 +71,11 @@ pub struct TempPubkeySerialize {
     pub uuid: uuid::Uuid,
 }
 
-
-#[derive(Debug)]
+#[derive(Clone, Deserialize, Serialize, Default)]
 pub struct Connection {
-    pub from: Identity,
-    pub to: Identity,
-    pub proof: Proof,
+    pub from: IdentityRecord,
+    pub to: IdentityRecord,
+    pub proof: ProofRecord,
 }
 
 /// Fetcher defines how to fetch data from upstream.

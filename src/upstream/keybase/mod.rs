@@ -151,11 +151,12 @@ impl Fetcher for Keybase {
                 created_at: Some(naive_now()), 
                 last_fetched_at: naive_now(),
             };
-            pf.connect(&db, &from_record, &to_record).await?;
+            let proof_record = pf.connect(&db, &from_record, &to_record).await?;
+            
             let cnn: Connection = Connection {
-                from: from,
-                to: to,
-                proof: pf,
+                from: from_record,
+                to: to_record,
+                proof: proof_record,
             };
             res.push(cnn);    
         }
