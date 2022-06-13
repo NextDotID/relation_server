@@ -82,7 +82,7 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connectio
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
         source: DataSource::SybilList,
-        record_id: Some(" ".to_string()),
+        record_id: None,
         created_at: Some(timestamp_to_naive(item.twitter.timestamp)), 
         last_fetched_at: naive_now(),
     };

@@ -148,7 +148,7 @@ impl Fetcher for Keybase {
                 uuid: Uuid::new_v4(),
                 source: DataSource::Keybase,
                 record_id: Some(p.proof_id.clone()),
-                created_at: Some(naive_now()), 
+                created_at: None, 
                 last_fetched_at: naive_now(),
             };
             let proof_record = pf.connect(&db, &from_record, &to_record).await?;
