@@ -5,7 +5,6 @@ use crate::error::Error;
 use crate::graph::{Vertex, Edge};
 use serde::Deserialize;
 use serde_json::{Value, Map};
-use warp::redirect::found;
 use crate::util::{timestamp_to_naive, naive_now, make_client, parse_body};
 use uuid::Uuid;
 use async_trait::async_trait;
@@ -13,9 +12,7 @@ use crate::upstream::{Fetcher, Platform, DataSource, Connection};
 use crate::graph::{vertex::Identity, edge::Proof, new_db_connection};
 use std::str::FromStr;
 
-//use tokio_stream::{self as stream, StreamExt};
-use futures::stream::{self, StreamExt, TryStreamExt};
-use futures::{executor::block_on, future::join_all};
+use futures::{future::join_all};
 
 /// https://github.com/nextdotid/proof-server/blob/master/docs/api.apib
 #[derive(Deserialize, Debug)]

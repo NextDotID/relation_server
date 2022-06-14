@@ -1,6 +1,7 @@
 mod keybase;
 mod proof_client;
 mod sybil_list;
+mod aggregation;
 
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
@@ -17,7 +18,7 @@ pub enum Platform {
     #[serde(rename = "twitter")]
     Twitter,
     /// Ethereum wallet `0x[a-f0-9]{40}`
-    #[strum(serialize = "ethereum")]
+    #[strum(serialize = "ethereum", serialize="eth")]
     #[serde(rename = "ethereum")]
     Ethereum,
     /// NextID
@@ -32,14 +33,19 @@ pub enum Platform {
     #[strum(serialize = "github")]
     #[serde(rename = "github")]
     Github,
+
+    /// Unknow
+    #[strum(serialize = "unknow")]
+    #[serde(rename = "unknow")]
+    Unknow,
 }
 
 /// All data respource platform.
 #[derive(Serialize, Deserialize, Debug, Clone, Display, EnumString, PartialEq)]
 pub enum DataSource {
     /// https://github.com/Uniswap/sybil-list/blob/master/verified.json
-    #[strum(serialize = "sybil_list")]
-    #[serde(rename = "sybil_list")]
+    #[strum(serialize = "sybil")]
+    #[serde(rename = "sybil")]
     SybilList,
 
     /// https://keybase.io/docs/api/1.0/call/user/lookup
@@ -51,6 +57,19 @@ pub enum DataSource {
     #[strum(serialize = "nextid")]
     #[serde(rename = "nextid")]
     NextID, // = "nextID",
+
+    #[strum(serialize = "cyberconnect")]
+    #[serde(rename = "cyberconnect")]
+    CyberConnect,
+
+    #[strum(serialize = "ethLeaderboard")]
+    #[serde(rename = "ethLeaderboard")]
+    EthLeaderboard,
+    
+    /// Unknow
+    #[strum(serialize = "unknow")]
+    #[serde(rename = "unknow")]
+    Unknow,
 }
 
 /// All asymmetric cryptography algorithm supported by RelationService.
