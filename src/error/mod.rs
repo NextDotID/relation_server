@@ -16,7 +16,7 @@ pub enum Error {
     #[error("JSON parse error")]
     NoResult,
     #[error("No result")]
-    ParseError(#[from] serde_json::error::Error),
+    JSONParseError(#[from] serde_json::error::Error),
     #[error("HTTP general error")]
     HttpError(#[from] lambda_http::http::Error),
     #[error("Config error: {0}")]
@@ -27,6 +27,10 @@ pub enum Error {
     HttpClientError(#[from] hyper::Error),
     #[error("ArangoDB error: {0}")]
     ArangoDBError(#[from] aragog::Error),
+    #[error("Parse error: {0}")]
+    EnumParseError(#[from] strum::ParseError),
+    #[error("GraphQL error: {0}")]
+    GraphQLError(String),
 }
 
 impl Error {
@@ -36,13 +40,20 @@ impl Error {
             Error::ParamMissing(_) => StatusCode::BAD_REQUEST,
             Error::ParamError(_) => StatusCode::BAD_REQUEST,
             Error::BodyMissing => StatusCode::BAD_REQUEST,
-            Error::ParseError(_) => StatusCode::BAD_REQUEST,
+            Error::JSONParseError(_) => StatusCode::BAD_REQUEST,
             Error::NoResult => StatusCode::BAD_REQUEST,
             Error::HttpError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::ConfigError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::HttpClientError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::SignatureValidationError(_) => StatusCode::BAD_REQUEST,
             Error::ArangoDBError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::EnumParseError(_) => StatusCode::BAD_REQUEST,
+            Error::GraphQLError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
+
+unsafe impl Sync for Error {}
+unsafe impl Send for Error {}
+
+pub type Result<T> = std::result::Result<T, Error>;

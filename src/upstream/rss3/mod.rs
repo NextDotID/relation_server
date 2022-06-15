@@ -1,15 +1,15 @@
 mod tests;
 
-use crate::error::Error;
-use hyper::body;
+use crate::{error::Error, graph::{new_db_connection, vertex::Identity, edge::Proof}};
+use crate::graph::{Vertex, Edge};
 use serde::Deserialize;
-use tokio::sync::futures::Notified;
 use crate::util::{naive_now, timestamp_to_naive, make_client, parse_body};
 use async_trait::async_trait;
-use crate::upstream::{Fetcher,TempIdentity, TempProof, Platform, DataSource, Connection};
+use crate::upstream::{Fetcher, Platform, DataSource, Connection};
 use uuid::Uuid;
 use std::str::FromStr;
 use chrono::{DateTime, NaiveDateTime};
+use futures::{future::join_all};
 
 
 #[derive(Deserialize, Debug)]
@@ -63,6 +63,62 @@ pub struct Rss3 {
     pub tags: String,
 }
 
+async fn save_item(p: Item) -> Option<Connection> {
+    
+    let create_date_time = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
+    let create_naive_date_time = NaiveDateTime::from_timestamp(create_date_time.timestamp(), 0);
+    let update_date_time = DateTime::parse_from_rfc3339(&p.date_updated).unwrap();
+    let update_naive_date_time = NaiveDateTime::from_timestamp(update_date_time.timestamp(), 0);
+
+    let db = new_db_connection().await.ok()?;
+
+    let from: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Ethereum,
+        identity: p.metadata.to.clone(),
+        created_at: None,
+        display_name: p.metadata.to.clone(),
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+    };
+
+    let from_record = from.create_or_update(&db).await.ok()?;
+
+    let to: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Ethereum,
+        identity: p.metadata.collection_address.clone(),
+        created_at: Some(create_naive_date_time),
+        display_name: p.metadata.collection_address.clone(),
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+    };
+    let to_record = to.create_or_update(&db).await.ok()?;
+
+
+    let pf: Proof = Proof {
+        uuid: Uuid::new_v4(),
+        source: DataSource::Rss3,
+        record_id: Some(p.metadata.proof.clone()),
+        created_at: Some(create_naive_date_time), 
+        last_fetched_at: update_naive_date_time,
+    };
+
+    let proof_record = pf.connect(&db, &from_record, &to_record).await.ok()?;
+
+    let cnn: Connection = Connection {
+        from: from_record,
+        to: to_record,
+        proof: proof_record,
+    };
+    
+    return Some(cnn);
+}
+
 #[async_trait]
 impl Fetcher for Rss3 {
     async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> { 
@@ -92,50 +148,10 @@ impl Fetcher for Rss3 {
             )); 
         }
 
-        let parse_body: Vec<Connection> = body.list
-        .into_iter()
-        .filter(|p| p.metadata.to == self.account.to_lowercase())
-        //.filter(|p| p.metadata.from != self.account.to_lowercase())
-        .filter_map(|p| -> Option<Connection> {
-            let create_date_time = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
-            let create_naive_date_time = NaiveDateTime::from_timestamp(create_date_time.timestamp(), 0);
-            let update_date_time = DateTime::parse_from_rfc3339(&p.date_updated).unwrap();
-            let update_naive_date_time = NaiveDateTime::from_timestamp(update_date_time.timestamp(), 0);
-            
-            //println!("item :   {:?}", p);
-            let from: TempIdentity = TempIdentity {
-                uuid: Uuid::new_v4(),
-                platform: Platform::Ethereum,
-                identity: self.account.clone(),
-                created_at: None,
-                display_name: Some(self.account.clone()),
-            };
-
-            let to: TempIdentity = TempIdentity {
-                uuid: Uuid::new_v4(),
-                platform: Platform::Ethereum,
-                identity: p.metadata.collection_address.clone(),
-                created_at: Some(create_naive_date_time),
-                display_name: Some(p.title.clone()),
-            };
-
-            let pf: TempProof = TempProof {
-                uuid: Uuid::new_v4(),
-                method: DataSource::Rss3,
-                upstream: Some("https://rss3.io/network/api.html".to_string()),
-                record_id: Some(p.metadata.proof.clone()),
-                created_at: Some(create_naive_date_time), 
-                last_verified_at: update_naive_date_time,
-            };
-
-            let cnn: Connection = Connection {
-                from: from,
-                to: to,
-                proof: pf,
-            };
-            return Some(cnn);
-        }).collect();
-        println!("res count = {}\n", parse_body.len());
+        // parse 
+        let futures :Vec<_> = body.list.into_iter().filter(|p| p.metadata.to == self.account.to_lowercase()).map(|p| save_item(p)).collect();
+        let results = join_all(futures).await;
+        let parse_body: Vec<Connection> = results.into_iter().filter_map(|i|i).collect();
 
         Ok(parse_body)
     }

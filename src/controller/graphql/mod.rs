@@ -1,7 +1,9 @@
 mod identity;
 mod proof;
 
-use async_graphql::{EmptyMutation, EmptySubscription, Object, MergedObject};
+use async_graphql::{EmptyMutation, EmptySubscription, MergedObject, Object};
+
+use crate::graph::{vertex::IdentityRecord, edge::ProofRecord};
 
 const API_VERSION: &str = "1.0";
 
@@ -13,7 +15,7 @@ pub struct Context {
 
 /// Base struct of GraphQL query request.
 #[derive(MergedObject, Default)]
-pub struct Query(GeneralQuery, identity::IdentityQuery);
+pub struct Query(GeneralQuery, IdentityRecord, ProofRecord);
 
 #[derive(Default)]
 pub struct GeneralQuery;

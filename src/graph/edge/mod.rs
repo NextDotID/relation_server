@@ -1,5 +1,7 @@
-mod proof;
+pub mod proof;
 // mod pubkey_derivation;
+
+pub use proof::{Proof, ProofRecord};
 
 use aragog::{DatabaseConnection, DatabaseRecord, EdgeRecord, Record};
 use async_trait::async_trait;
@@ -9,7 +11,7 @@ use crate::error::Error;
 
 /// All `Edge` records.
 #[async_trait]
-pub trait Edge<From, To>
+pub trait Edge<From, To, RecordType>
 where
     Self: Sized + Record,
     From: Sized + Record,
@@ -24,11 +26,11 @@ where
         db: &DatabaseConnection,
         from: &DatabaseRecord<From>,
         to: &DatabaseRecord<To>,
-    ) -> Result<DatabaseRecord<EdgeRecord<Self>>, Error>;
+    ) -> Result<RecordType, Error>;
 
     /// Find an edge by UUID.
     async fn find_by_uuid(
         db: &DatabaseConnection,
         uuid: &Uuid,
-    ) -> Result<Option<DatabaseRecord<EdgeRecord<Self>>>, Error>;
+    ) -> Result<Option<RecordType>, Error>;
 }

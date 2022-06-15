@@ -9,7 +9,7 @@ mod tests {
         };
         let result = pf.fetch(None).await?;
 
-        println!("{:?}", result.first());
+        //println!("{:?}", result.first());
         assert_ne!(result.len(), 0);
         Ok(())
     }

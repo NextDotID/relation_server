@@ -1,10 +1,13 @@
 mod tests;
 
 use crate::error::Error;
+use crate::graph::{Vertex, Edge};
 use serde::Deserialize;
 use crate::util::{naive_now, make_client, parse_body};
 use async_trait::async_trait;
-use crate::upstream::{Fetcher,TempIdentity, TempProof, Platform, DataSource, Connection};
+use crate::upstream::{Fetcher, Platform, DataSource, Connection};
+use crate::graph::{vertex::Identity, edge::Proof, new_db_connection};
+
 use uuid::Uuid;
 use std::str::FromStr;
 
@@ -107,44 +110,57 @@ impl Fetcher for Keybase {
         };
         let user_id = person_info.id; 
         let user_name = person_info.basics.username;
-   
-        let parse_body: Vec<Connection> = person_info.proofs_summary.all
-        .into_iter()
-        .filter(|p| Platform::from_str(p.proof_type.as_str()).is_ok())
-        .filter_map(|p| -> Option<Connection> {        
-            let from: TempIdentity = TempIdentity {
-                uuid: Uuid::new_v4(),
+
+        let db = new_db_connection().await?;
+
+        let mut res = Vec::new();
+        for p in person_info.proofs_summary.all.into_iter() {
+            let from: Identity = Identity {
+                uuid: Some(Uuid::new_v4()),
                 platform: Platform::Keybase,
                 identity: user_id.clone(),
                 created_at: None,
-                display_name: Some(user_name.clone()),
+                display_name: user_name.clone(),
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: None,
+                updated_at: naive_now(),
             };
+            let from_record = from.create_or_update(&db).await?;
 
-            let to: TempIdentity = TempIdentity {
-                uuid: Uuid::new_v4(),
+            if Platform::from_str(p.proof_type.as_str()).is_err() {
+                continue;
+            }
+            let to: Identity = Identity {
+                uuid: Some(Uuid::new_v4()),
                 platform: Platform::from_str(p.proof_type.as_str()).unwrap(),
                 identity: p.nametag.clone(),
                 created_at: None,
-                display_name: Some(p.nametag.clone()),
+                display_name: p.nametag.clone(),
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: None,
+                updated_at: naive_now(),
             };
+            let to_record = to.create_or_update(&db).await?;
 
-            let pf: TempProof = TempProof {
+            let pf: Proof = Proof {
                 uuid: Uuid::new_v4(),
-                method: DataSource::Keybase,
-                upstream: Some("https://keybase.io/docs/api/1.0/call/user/lookup".to_string()),
+                source: DataSource::Keybase,
                 record_id: Some(p.proof_id.clone()),
-                created_at: Some(naive_now()), 
-                last_verified_at: naive_now(),
+                created_at: None, 
+                last_fetched_at: naive_now(),
             };
-
+            let proof_record = pf.connect(&db, &from_record, &to_record).await?;
+            
             let cnn: Connection = Connection {
-                from: from,
-                to: to,
-                proof: pf,
+                from: from_record,
+                to: to_record,
+                proof: proof_record,
             };
-            return Some(cnn);
-        }).collect();
+            res.push(cnn);    
+        }
 
-        Ok(parse_body)
+        Ok(res)
     }
 }

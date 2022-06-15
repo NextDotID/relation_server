@@ -12,7 +12,7 @@ mod tests {
 
         let result = rs.fetch(None).await?;
 
-        println!("{:?}", result);
+       // print!(result);
         assert_ne!(result.len(), 0);
      
         Ok(())
@@ -29,7 +29,7 @@ mod tests {
 
         let result = rs.fetch(None).await?;
 
-        println!("{:?}", result);
+        //println!("{}", result);
         assert_ne!(result.len(), 0);
      
         Ok(())

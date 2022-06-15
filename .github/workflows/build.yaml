@@ -11,11 +11,34 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v1
+      - name: Cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Install latest rust toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           default: true
           override: true
+
       - name: Build
-        run: cargo build --examples --release && strip target/release/examples/lambda && strip target/release/examples/standalone
+        run: |
+          cargo build --examples --release
+          strip target/release/examples/lambda
+          strip target/release/examples/standalone
+
+      - name: Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: release
+          path: |
+            target/release/examples/lambda
+            target/release/examples/standalone
