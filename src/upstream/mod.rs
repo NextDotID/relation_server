@@ -8,7 +8,7 @@ use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
-use crate::{error::Error, graph::{vertex::Identity, edge::ProofRecord}, graph::{edge::Proof, vertex::IdentityRecord}};
+use crate::{error::Error, graph::{edge::ProofRecord}, graph::{vertex::IdentityRecord}};
 
 /// All identity platform.
 #[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq)]

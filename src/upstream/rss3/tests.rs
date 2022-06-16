@@ -2,7 +2,7 @@ mod tests {
     use crate::{error::Error, upstream::rss3::Rss3, upstream::Fetcher};
 
     #[tokio::test]
-    async fn test_smoke_NFT_rss3() -> Result<(), Error> {
+    async fn test_smoke_nft_rss3() -> Result<(), Error> {
 
         let rs: Rss3 = Rss3 {
             account: "0x6875e13A6301040388F61f5DBa5045E1bE01c657".to_string(),
@@ -19,7 +19,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_smoke_Token_rss3() -> Result<(), Error> {
+    async fn test_smoke_token_rss3() -> Result<(), Error> {
 
         let rs: Rss3 = Rss3 {
             account: "0x6875e13A6301040388F61f5DBa5045E1bE01c657".to_string(),

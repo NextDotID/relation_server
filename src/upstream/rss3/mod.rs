@@ -3,7 +3,7 @@ mod tests;
 use crate::{error::Error, graph::{new_db_connection, vertex::Identity, edge::Proof}};
 use crate::graph::{Vertex, Edge};
 use serde::Deserialize;
-use crate::util::{naive_now, timestamp_to_naive, make_client, parse_body};
+use crate::util::{naive_now, make_client, parse_body};
 use async_trait::async_trait;
 use crate::upstream::{Fetcher, Platform, DataSource, Connection};
 use uuid::Uuid;
@@ -88,38 +88,7 @@ async fn save_item(p: Item) -> Option<Connection> {
 
     let from_record = from.create_or_update(&db).await.ok()?;
 
-    /**
-     * token
-     * 
-     * "identifier": "rss3://note:0x450d0264e886951e09059908dffff0f781e8177ee0487fadd10f45e75ebf816c-0@ethereum",
-      "date_created": "2022-05-20T08:16:04.000Z",
-      "date_updated": "2022-05-20T08:16:04.000Z",
-      "related_urls": [
-        "https://etherscan.io/tx/0x450d0264e886951e09059908dffff0f781e8177ee0487fadd10f45e75ebf816c"
-      ],
-      "links": "rss3://note:0x450d0264e886951e09059908dffff0f781e8177ee0487fadd10f45e75ebf816c-0@ethereum/links",
-      "backlinks": "rss3://note:0x450d0264e886951e09059908dffff0f781e8177ee0487fadd10f45e75ebf816c-0@ethereum/backlinks",
-      "tags": [
-        "Token"
-      ],
-      "authors": [
-        "rss3://account:0x6875e13a6301040388f61f5dba5045e1be01c657@ethereum"
-      ],
-      "source": "Ethereum ERC20",
-      "metadata": {
-        "amount": "83733225665549653333",
-        "decimal": 18,
-        "from": "0x86f079d66ce3f0a871f325fefbaa19ca1eecd081",
-        "network": "ethereum",
-        "proof": "0x450d0264e886951e09059908dffff0f781e8177ee0487fadd10f45e75ebf816c-0",
-        "to": "0x6875e13a6301040388f61f5dba5045e1be01c657",
-        "token_address": "0x45dd18c5e0fa701abff449f6542aa53e258710b4",
-        "token_standard": "ERC20",
-        "token_symbol": "SO",
-        "transaction_hash": "0x450d0264e886951e09059908dffff0f781e8177ee0487fadd10f45e75ebf816c"
-     */
-
-    let to: Identity;
+    let to;
     if p.tags.first() == Some(&"Token".to_string()) {
         to = Identity {
             uuid: Some(Uuid::new_v4()),
