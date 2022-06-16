@@ -7,7 +7,6 @@ use crate::util::{naive_now, timestamp_to_naive, make_client, parse_body};
 use async_trait::async_trait;
 use crate::upstream::{Fetcher, Platform, DataSource, Connection};
 use uuid::Uuid;
-use std::str::FromStr;
 use chrono::{DateTime, NaiveDateTime};
 use futures::{future::join_all};
 
@@ -26,6 +25,7 @@ pub struct Item {
     pub date_created: String,
     pub date_updated: String,
     pub related_urls: Vec<String>,
+    pub tags: Vec<String>,
     #[serde(default)] 
     pub title: String,
     pub source: String,
@@ -48,6 +48,8 @@ pub struct MetaData {
     pub to: String,
     #[serde(default)] 
     pub token_id: String,
+    #[serde(default)]
+    pub token_address: String,
     pub token_standard: String,
     pub token_symbol: String,
 }
@@ -86,19 +88,65 @@ async fn save_item(p: Item) -> Option<Connection> {
 
     let from_record = from.create_or_update(&db).await.ok()?;
 
-    let to: Identity = Identity {
-        uuid: Some(Uuid::new_v4()),
-        platform: Platform::Ethereum,
-        identity: p.metadata.collection_address.clone(),
-        created_at: Some(create_naive_date_time),
-        display_name: p.metadata.collection_address.clone(),
-        added_at: naive_now(),
-        avatar_url: None,
-        profile_url: None,
-        updated_at: naive_now(),
-    };
-    let to_record = to.create_or_update(&db).await.ok()?;
+    /**
+     * token
+     * 
+     * "identifier": "rss3://note:0x450d0264e886951e09059908dffff0f781e8177ee0487fadd10f45e75ebf816c-0@ethereum",
+      "date_created": "2022-05-20T08:16:04.000Z",
+      "date_updated": "2022-05-20T08:16:04.000Z",
+      "related_urls": [
+        "https://etherscan.io/tx/0x450d0264e886951e09059908dffff0f781e8177ee0487fadd10f45e75ebf816c"
+      ],
+      "links": "rss3://note:0x450d0264e886951e09059908dffff0f781e8177ee0487fadd10f45e75ebf816c-0@ethereum/links",
+      "backlinks": "rss3://note:0x450d0264e886951e09059908dffff0f781e8177ee0487fadd10f45e75ebf816c-0@ethereum/backlinks",
+      "tags": [
+        "Token"
+      ],
+      "authors": [
+        "rss3://account:0x6875e13a6301040388f61f5dba5045e1be01c657@ethereum"
+      ],
+      "source": "Ethereum ERC20",
+      "metadata": {
+        "amount": "83733225665549653333",
+        "decimal": 18,
+        "from": "0x86f079d66ce3f0a871f325fefbaa19ca1eecd081",
+        "network": "ethereum",
+        "proof": "0x450d0264e886951e09059908dffff0f781e8177ee0487fadd10f45e75ebf816c-0",
+        "to": "0x6875e13a6301040388f61f5dba5045e1be01c657",
+        "token_address": "0x45dd18c5e0fa701abff449f6542aa53e258710b4",
+        "token_standard": "ERC20",
+        "token_symbol": "SO",
+        "transaction_hash": "0x450d0264e886951e09059908dffff0f781e8177ee0487fadd10f45e75ebf816c"
+     */
 
+    let to: Identity;
+    if p.tags.first() == Some(&"Token".to_string()) {
+        to = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Ethereum,
+            identity: p.metadata.token_address.clone(),
+            created_at: None,
+            display_name: p.metadata.token_symbol.clone(),
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+        };
+    } else {
+        to = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Ethereum,
+            identity: p.metadata.collection_address.clone(),
+            created_at: None,
+            display_name: p.metadata.collection_address.clone(),
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+        };  
+    }
+
+    let to_record = to.create_or_update(&db).await.ok()?;
 
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
