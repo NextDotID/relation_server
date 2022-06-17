@@ -35,7 +35,8 @@ pub struct VerifiedItem {
 #[derive(Deserialize, Debug)]
 pub struct TwitterItem {
     pub timestamp: i64,
-    pub tweetID: String,
+    #[serde(rename = "tweetID")]
+    pub tweet_id: String,
     pub handle: String,
 }
 
@@ -80,7 +81,7 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connectio
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
         source: DataSource::SybilList,
-        record_id: None,
+        record_id: Some(item.twitter.tweet_id.clone()),
         created_at: Some(timestamp_to_naive(item.twitter.timestamp)),
         last_fetched_at: naive_now(),
     };
@@ -100,19 +101,8 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connectio
 impl Fetcher for SybilList {
     async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
         let client = make_client();
-        let uri: http::Uri = match (
-             C.sybil_service.url
-        )
-        .parse()
-        {
-            Ok(n) => n,
-            Err(err) => {
-                return Err(Error::ParamError(format!(
-                    "Uri format Error: {}",
-                    err.to_string()
-                )))
-            }
-        };
+        let uri: http::Uri = (C.upstream.sybil_service.url).parse().unwrap();
+        
 
         let mut resp = client.get(uri).await?;
 

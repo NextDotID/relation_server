@@ -116,7 +116,7 @@ impl Fetcher for ProofClient {
         let client = make_client();
         let uri: http::Uri = match format!(
             "{}/v1/proof?platform=nextid&identity={}",
-            C.proof_service.url, self.persona
+            C.upstream.proof_service.url, self.persona
         )
         .parse()
         {

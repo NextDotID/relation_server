@@ -26,9 +26,14 @@ lazy_static! {
 pub struct KVConfig {
     pub db: ConfigDB,
     pub web: ConfigWeb,
+    pub upstream: Upstream,
+}
+
+#[derive(Clone, Deserialize, Default)]
+pub struct Upstream {
     pub proof_service: ConfigProofService,
     pub aggregation_service: ConfigAggregationService,
-    pub sybil_service: ConfigSybilService,
+    pub sybil_service: ConfigSybilService,  
     pub keybase_service: ConfigKeybaseService,
 }
 

@@ -9,15 +9,15 @@ schema_path = "./src/config/db/schema.yaml"
 listen = "127.0.0.1"
 port = 3722
 
-[proof_service]
+[upstream.proof_service]
 url = "https://proof-service.next.id"
 
-[aggregation_service]
+[upstream.aggregation_service]
 url = "https://7x16bogxfb.execute-api.us-east-1.amazonaws.com/v1/identity/search"
 
-[sybil_service]
+[upstream.sybil_service]
 url = "https://raw.githubusercontent.com/Uniswap/sybil-list/master/verified.json"
 
-[keybase_service]
+[upstream.keybase_service]
 url = "https://keybase.io/_/api/1.0/user/lookup.json"
 

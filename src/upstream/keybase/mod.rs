@@ -80,7 +80,7 @@ impl Fetcher for Keybase {
         let client = make_client();
         let uri: http::Uri = match format!(
             "{}?{}={}&fields=proofs_summary",
-            C.keybase_service.url, self.platform, self.identity
+            C.upstream.keybase_service.url, self.platform, self.identity
         )
         .parse()
         {
