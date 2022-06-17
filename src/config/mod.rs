@@ -27,6 +27,9 @@ pub struct KVConfig {
     pub db: ConfigDB,
     pub web: ConfigWeb,
     pub proof_service: ConfigProofService,
+    pub aggregation_service: ConfigAggregationService,
+    pub sybil_service: ConfigSybilService,
+    pub keybase_service: ConfigKeybaseService,
 }
 
 #[derive(Clone, Deserialize, Default)]
@@ -46,6 +49,21 @@ pub struct ConfigWeb {
 
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigProofService {
+    pub url: String,
+}
+
+#[derive(Clone, Deserialize, Default)]
+pub struct ConfigKeybaseService {
+    pub url: String,
+}
+
+#[derive(Clone, Deserialize, Default)]
+pub struct ConfigAggregationService {
+    pub url: String,
+}
+
+#[derive(Clone, Deserialize, Default)]
+pub struct ConfigSybilService {
     pub url: String,
 }
 

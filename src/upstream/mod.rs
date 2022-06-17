@@ -1,14 +1,18 @@
+mod aggregation;
 mod keybase;
 mod proof_client;
 mod sybil_list;
-mod aggregation;
 
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
-use crate::{error::Error, graph::{vertex::Identity, edge::ProofRecord}, graph::{edge::Proof, vertex::IdentityRecord}};
+use crate::{
+    error::Error,
+    graph::{edge::Proof, vertex::IdentityRecord},
+    graph::{edge::ProofRecord, vertex::Identity},
+};
 
 /// All identity platform.
 #[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq)]
@@ -18,7 +22,7 @@ pub enum Platform {
     #[serde(rename = "twitter")]
     Twitter,
     /// Ethereum wallet `0x[a-f0-9]{40}`
-    #[strum(serialize = "ethereum", serialize="eth")]
+    #[strum(serialize = "ethereum", serialize = "eth")]
     #[serde(rename = "ethereum")]
     Ethereum,
     /// NextID
@@ -34,10 +38,10 @@ pub enum Platform {
     #[serde(rename = "github")]
     Github,
 
-    /// Unknow
-    #[strum(serialize = "unknow")]
-    #[serde(rename = "unknow")]
-    Unknow,
+    /// Unknown
+    #[strum(serialize = "unknown")]
+    #[serde(rename = "unknown")]
+    Unknown,
 }
 
 /// All data respource platform.
@@ -65,11 +69,11 @@ pub enum DataSource {
     #[strum(serialize = "ethLeaderboard")]
     #[serde(rename = "ethLeaderboard")]
     EthLeaderboard,
-    
+
     /// Unknow
-    #[strum(serialize = "unknow")]
-    #[serde(rename = "unknow")]
-    Unknow,
+    #[strum(serialize = "unknown")]
+    #[serde(rename = "unknown")]
+    Unknown,
 }
 
 /// All asymmetric cryptography algorithm supported by RelationService.

@@ -1,18 +1,18 @@
 mod tests;
 
 use crate::error::Error;
-use crate::graph::{Vertex, Edge, new_db_connection};
-use crate::graph::{vertex::Identity, edge::Proof};
-use crate::upstream::{Platform, DataSource, Connection};
-use serde::Deserialize;
+use crate::graph::{edge::Proof, vertex::Identity};
+use crate::graph::{new_db_connection, Edge, Vertex};
+use crate::upstream::{Connection, DataSource, Platform};
+use crate::{config::C};
 use async_trait::async_trait;
+use serde::Deserialize;
 
-use crate::upstream::{Fetcher};
-use crate::util::{make_client, parse_body, naive_now, timestamp_to_naive};
-use futures::{future::join_all};
-use uuid::Uuid;
+use crate::upstream::Fetcher;
+use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
+use futures::future::join_all;
 use std::str::FromStr;
-
+use uuid::Uuid;
 
 #[derive(Deserialize, Debug)]
 pub struct Pagination {
@@ -43,12 +43,12 @@ pub struct Aggregation {
     pub identity: String,
 }
 
-async fn save_item (p: Record) -> Option<Connection> {
+async fn save_item(p: Record) -> Option<Connection> {
     let db = new_db_connection().await.ok()?;
 
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
-        platform: Platform::from_str(p.sns_platform.as_str()).unwrap_or(Platform::Unknow),
+        platform: Platform::from_str(p.sns_platform.as_str()).unwrap_or(Platform::Unknown),
         identity: p.sns_handle.clone(),
         created_at: None,
         display_name: p.sns_handle.clone(),
@@ -57,7 +57,7 @@ async fn save_item (p: Record) -> Option<Connection> {
         profile_url: None,
         updated_at: naive_now(),
     };
-  
+
     let from_record = from.create_or_update(&db).await.ok()?;
 
     let to: Identity = Identity {
@@ -75,9 +75,9 @@ async fn save_item (p: Record) -> Option<Connection> {
 
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
-        source: DataSource::from_str(p.source.as_str()).unwrap_or(DataSource::Unknow),
+        source: DataSource::from_str(p.source.as_str()).unwrap_or(DataSource::Unknown),
         record_id: Some(p.id.clone()),
-        created_at: Some(timestamp_to_naive(p.create_timestamp.parse().unwrap())), 
+        created_at: Some(timestamp_to_naive(p.create_timestamp.parse().unwrap())),
         last_fetched_at: timestamp_to_naive(p.modify_timestamp.parse().unwrap()),
     };
     let proof_record = pf.connect(&db, &from_record, &to_record).await.ok()?;
@@ -93,43 +93,41 @@ async fn save_item (p: Record) -> Option<Connection> {
 
 #[async_trait]
 impl Fetcher for Aggregation {
-    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> { 
+    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
         let client = make_client();
         let mut page = 1;
-   
+
         let mut res = Vec::new();
 
         loop {
-            let uri: http::Uri = match format!("https://7x16bogxfb.execute-api.us-east-1.amazonaws.com/v1/identity/search?platform={}&identity={}&page={}&size=100", self.platform, self.identity, page).parse() {
+            let uri: http::Uri = match format!("{}?platform={}&identity={}&page={}&size=100", C.aggregation_service.url, self.platform, self.identity, page).parse() {
                 Ok(n) => n,
                 Err(err) => return Err(Error::ParamError(
                     format!("Uri format Error: {}", err.to_string()))),
             };
-      
+
             let mut resp = client.get(uri).await?;
             if !resp.status().is_success() {
                 break;
             }
-    
-            let body: Response = parse_body(&mut resp).await?;  
+
+            let body: Response = parse_body(&mut resp).await?;
             if body.records.len() == 0 {
                 break;
             }
-    
-            // parse 
-            let futures :Vec<_> = body.records.into_iter().map(|p| save_item(p)).collect();
+
+            // parse
+            let futures: Vec<_> = body.records.into_iter().map(|p| save_item(p)).collect();
             let results = join_all(futures).await;
-            let cons:Vec<Connection> = results.into_iter().filter_map(|i|i).collect();
+            let cons: Vec<Connection> = results.into_iter().filter_map(|i| i).collect();
             res.extend(cons);
 
-            if  body.pagination.current == body.pagination.next {
+            if body.pagination.current == body.pagination.next {
                 break;
-            } 
-            page = body.pagination.next;   
+            }
+            page = body.pagination.next;
         }
 
         Ok(res)
-        
     }
 }
-

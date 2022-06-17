@@ -1,20 +1,19 @@
 extern crate futures;
 mod tests;
 
+use crate::config::C;
 use crate::error::Error;
-use crate::graph::{Vertex, Edge};
-use serde::Deserialize;
-use serde_json::{Value, Map};
-use warp::redirect::found;
-use crate::util::{timestamp_to_naive, naive_now, make_client, parse_body};
-use uuid::Uuid;
+use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
+use crate::graph::{Edge, Vertex};
+use crate::upstream::{Connection, DataSource, Fetcher, Platform};
+use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use async_trait::async_trait;
-use crate::upstream::{Fetcher, Platform, DataSource, Connection};
-use crate::graph::{vertex::Identity, edge::Proof, new_db_connection};
+use serde::Deserialize;
+use serde_json::{Map, Value};
+use uuid::Uuid;
+use warp::redirect::found;
 
-//use tokio_stream::{self as stream, StreamExt};
-use futures::stream::{self, StreamExt, TryStreamExt};
-use futures::{executor::block_on, future::join_all};
+use futures::{future::join_all};
 
 //use futures::future;
 //https://raw.githubusercontent.com/Uniswap/sybil-list/master/verified.json
@@ -30,7 +29,7 @@ pub struct SybilListItem {
 
 #[derive(Deserialize, Debug)]
 pub struct VerifiedItem {
-    pub twitter: TwitterItem
+    pub twitter: TwitterItem,
 }
 
 #[derive(Deserialize, Debug)]
@@ -47,10 +46,9 @@ pub struct ErrorResponse {
 
 pub struct SybilList {}
 
-
 async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connection> {
     let db = new_db_connection().await.ok()?;
-    
+
     let item: VerifiedItem = serde_json::from_value(value).ok()?;
 
     let from: Identity = Identity {
@@ -83,7 +81,7 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connectio
         uuid: Uuid::new_v4(),
         source: DataSource::SybilList,
         record_id: None,
-        created_at: Some(timestamp_to_naive(item.twitter.timestamp)), 
+        created_at: Some(timestamp_to_naive(item.twitter.timestamp)),
         last_fetched_at: naive_now(),
     };
 
@@ -94,7 +92,7 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connectio
         to: to_record,
         proof: proof_record,
     };
-    
+
     return Some(cnn);
 }
 
@@ -102,12 +100,20 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connectio
 impl Fetcher for SybilList {
     async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
         let client = make_client();
-        let uri: http::Uri = match format!("https://raw.githubusercontent.com/Uniswap/sybil-list/master/verified.json").parse() {
+        let uri: http::Uri = match (
+             C.sybil_service.url
+        )
+        .parse()
+        {
             Ok(n) => n,
-            Err(err) => return Err(Error::ParamError(
-                format!("Uri format Error: {}", err.to_string()))),
+            Err(err) => {
+                return Err(Error::ParamError(format!(
+                    "Uri format Error: {}",
+                    err.to_string()
+                )))
+            }
         };
-        
+
         let mut resp = client.get(uri).await?;
 
         if !resp.status().is_success() {
@@ -121,11 +127,15 @@ impl Fetcher for SybilList {
         // all records in sybil list
         let body: Map<String, Value> = parse_body(&mut resp).await?;
 
-        // parse 
-        let futures :Vec<_> = body.into_iter().map(|(eth_wallet_address, value)| save_item(eth_wallet_address.to_string(), value.to_owned())).collect();
+        // parse
+        let futures: Vec<_> = body
+            .into_iter()
+            .map(|(eth_wallet_address, value)| {
+                save_item(eth_wallet_address.to_string(), value.to_owned())
+            })
+            .collect();
         let results = join_all(futures).await;
-        let parse_body: Vec<Connection> = results.into_iter().filter_map(|i|i).collect();
+        let parse_body: Vec<Connection> = results.into_iter().filter_map(|i| i).collect();
         Ok(parse_body)
     }
 }
-
