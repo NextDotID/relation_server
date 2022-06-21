@@ -1,14 +1,19 @@
+mod aggregation;
 mod keybase;
 mod proof_client;
-mod sybil_list;
 mod rss3;
+mod sybil_list;
 
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
-use crate::{error::Error, graph::{edge::ProofRecord}, graph::{vertex::IdentityRecord}};
+use crate::{
+    error::Error,
+    graph::{edge::Proof, vertex::IdentityRecord},
+    graph::{edge::ProofRecord, vertex::Identity},
+};
 
 /// All identity platform.
 #[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq)]
@@ -18,7 +23,7 @@ pub enum Platform {
     #[serde(rename = "twitter")]
     Twitter,
     /// Ethereum wallet `0x[a-f0-9]{40}`
-    #[strum(serialize = "ethereum")]
+    #[strum(serialize = "ethereum", serialize = "eth")]
     #[serde(rename = "ethereum")]
     Ethereum,
     /// NextID
@@ -33,14 +38,19 @@ pub enum Platform {
     #[strum(serialize = "github")]
     #[serde(rename = "github")]
     Github,
+
+    /// Unknown
+    #[strum(serialize = "unknown")]
+    #[serde(rename = "unknown")]
+    Unknown,
 }
 
 /// All data respource platform.
 #[derive(Serialize, Deserialize, Debug, Clone, Display, EnumString, PartialEq)]
 pub enum DataSource {
     /// https://github.com/Uniswap/sybil-list/blob/master/verified.json
-    #[strum(serialize = "sybil_list")]
-    #[serde(rename = "sybil_list")]
+    #[strum(serialize = "sybil")]
+    #[serde(rename = "sybil")]
     SybilList,
 
     /// https://keybase.io/docs/api/1.0/call/user/lookup
@@ -53,9 +63,23 @@ pub enum DataSource {
     #[serde(rename = "nextid")]
     NextID, // = "nextID",
 
-
     /// https://rss3.io/network/api.html
+    #[strum(serialize = "rss3")]
+    #[serde(rename = "rss3")]
     Rss3, // = "rss3",
+
+    #[strum(serialize = "cyberconnect")]
+    #[serde(rename = "cyberconnect")]
+    CyberConnect,
+
+    #[strum(serialize = "ethLeaderboard")]
+    #[serde(rename = "ethLeaderboard")]
+    EthLeaderboard,
+
+    /// Unknow
+    #[strum(serialize = "unknown")]
+    #[serde(rename = "unknown")]
+    Unknown,
 }
 
 /// All asymmetric cryptography algorithm supported by RelationService.

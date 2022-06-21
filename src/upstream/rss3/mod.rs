@@ -1,15 +1,17 @@
 mod tests;
 
-use crate::{error::Error, graph::{new_db_connection, vertex::Identity, edge::Proof}};
-use crate::graph::{Vertex, Edge};
-use serde::Deserialize;
-use crate::util::{naive_now, make_client, parse_body};
+use crate::graph::{Edge, Vertex};
+use crate::upstream::{Connection, DataSource, Fetcher, Platform};
+use crate::util::{make_client, naive_now, parse_body};
+use crate::{
+    error::Error,
+    graph::{edge::Proof, new_db_connection, vertex::Identity},
+};
 use async_trait::async_trait;
-use crate::upstream::{Fetcher, Platform, DataSource, Connection};
-use uuid::Uuid;
 use chrono::{DateTime, NaiveDateTime};
-use futures::{future::join_all};
-
+use futures::future::join_all;
+use serde::Deserialize;
+use uuid::Uuid;
 
 #[derive(Deserialize, Debug)]
 pub struct Rss3Response {
@@ -26,7 +28,7 @@ pub struct Item {
     pub date_updated: String,
     pub related_urls: Vec<String>,
     pub tags: Vec<String>,
-    #[serde(default)] 
+    #[serde(default)]
     pub title: String,
     pub source: String,
     pub metadata: MetaData,
@@ -34,19 +36,19 @@ pub struct Item {
 
 #[derive(Deserialize, Debug)]
 pub struct MetaData {
-    #[serde(default)] 
+    #[serde(default)]
     pub collection_address: String,
-    #[serde(default)] 
+    #[serde(default)]
     pub collection_name: String,
-    #[serde(default)] 
+    #[serde(default)]
     pub contract_type: String,
     pub from: String,
-    #[serde(default)] 
+    #[serde(default)]
     pub log_index: String,
     pub network: String,
     pub proof: String,
     pub to: String,
-    #[serde(default)] 
+    #[serde(default)]
     pub token_id: String,
     #[serde(default)]
     pub token_address: String,
@@ -66,7 +68,6 @@ pub struct Rss3 {
 }
 
 async fn save_item(p: Item) -> Option<Connection> {
-    
     let create_date_time = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
     let create_naive_date_time = NaiveDateTime::from_timestamp(create_date_time.timestamp(), 0);
     let update_date_time = DateTime::parse_from_rfc3339(&p.date_updated).unwrap();
@@ -112,7 +113,7 @@ async fn save_item(p: Item) -> Option<Connection> {
             avatar_url: None,
             profile_url: None,
             updated_at: naive_now(),
-        };  
+        };
     }
 
     let to_record = to.create_or_update(&db).await.ok()?;
@@ -121,7 +122,7 @@ async fn save_item(p: Item) -> Option<Connection> {
         uuid: Uuid::new_v4(),
         source: DataSource::Rss3,
         record_id: Some(p.metadata.proof.clone()),
-        created_at: Some(create_naive_date_time), 
+        created_at: Some(create_naive_date_time),
         last_fetched_at: update_naive_date_time,
     };
 
@@ -132,20 +133,29 @@ async fn save_item(p: Item) -> Option<Connection> {
         to: to_record,
         proof: proof_record,
     };
-    
+
     return Some(cnn);
 }
 
 #[async_trait]
 impl Fetcher for Rss3 {
-    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> { 
+    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
         let client = make_client();
-        let uri: http::Uri = match format!("https://pregod.rss3.dev/v0.4.0/account:{}@{}/notes?tags={}", self.account, self.network, self.tags).parse() {
+        let uri: http::Uri = match format!(
+            "https://pregod.rss3.dev/v0.4.0/account:{}@{}/notes?tags={}",
+            self.account, self.network, self.tags
+        )
+        .parse()
+        {
             Ok(n) => n,
-            Err(err) => return Err(Error::ParamError(
-                format!("Uri format Error: {}", err.to_string()))),
+            Err(err) => {
+                return Err(Error::ParamError(format!(
+                    "Uri format Error: {}",
+                    err.to_string()
+                )))
+            }
         };
-  
+
         let mut resp = client.get(uri).await?;
 
         if !resp.status().is_success() {
@@ -156,19 +166,24 @@ impl Fetcher for Rss3 {
             ));
         }
 
-        let body: Rss3Response = parse_body(&mut resp).await?;  
-       
+        let body: Rss3Response = parse_body(&mut resp).await?;
+
         if body.total == 0 {
             return Err(Error::General(
                 format!("rss3 Result Get Error"),
                 resp.status(),
-            )); 
+            ));
         }
 
-        // parse 
-        let futures :Vec<_> = body.list.into_iter().filter(|p| p.metadata.to == self.account.to_lowercase()).map(|p| save_item(p)).collect();
+        // parse
+        let futures: Vec<_> = body
+            .list
+            .into_iter()
+            .filter(|p| p.metadata.to == self.account.to_lowercase())
+            .map(|p| save_item(p))
+            .collect();
         let results = join_all(futures).await;
-        let parse_body: Vec<Connection> = results.into_iter().filter_map(|i|i).collect();
+        let parse_body: Vec<Connection> = results.into_iter().filter_map(|i| i).collect();
 
         Ok(parse_body)
     }
