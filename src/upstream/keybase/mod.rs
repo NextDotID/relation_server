@@ -1,16 +1,16 @@
 mod tests;
 
 use crate::error::Error;
-use crate::graph::{Vertex, Edge};
-use serde::Deserialize;
-use crate::util::{naive_now, make_client, parse_body};
+use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
+use crate::graph::{Edge, Vertex};
+use crate::upstream::{Connection, DataSource, Fetcher, Platform};
+use crate::util::{make_client, naive_now, parse_body};
+use crate::config::C;
 use async_trait::async_trait;
-use crate::upstream::{Fetcher, Platform, DataSource, Connection};
-use crate::graph::{vertex::Identity, edge::Proof, new_db_connection};
+use serde::Deserialize;
 
-use uuid::Uuid;
 use std::str::FromStr;
-
+use uuid::Uuid;
 
 #[derive(Deserialize, Debug)]
 pub struct KeybaseResponse {
@@ -26,7 +26,7 @@ pub struct PersonInfo {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct  Status {
+pub struct Status {
     pub code: i32,
     pub name: String,
 }
@@ -76,14 +76,23 @@ pub struct Keybase {
 
 #[async_trait]
 impl Fetcher for Keybase {
-    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> { 
+    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
         let client = make_client();
-        let uri: http::Uri = match format!("https://keybase.io/_/api/1.0/user/lookup.json?{}={}&fields=proofs_summary", self.platform, self.identity).parse() {
+        let uri: http::Uri = match format!(
+            "{}?{}={}&fields=proofs_summary",
+            C.upstream.keybase_service.url, self.platform, self.identity
+        )
+        .parse()
+        {
             Ok(n) => n,
-            Err(err) => return Err(Error::ParamError(
-                format!("Uri format Error: {}", err.to_string()))),
+            Err(err) => {
+                return Err(Error::ParamError(format!(
+                    "Uri format Error: {}",
+                    err.to_string()
+                )))
+            }
         };
-  
+
         let mut resp = client.get(uri).await?;
 
         if !resp.status().is_success() {
@@ -94,21 +103,21 @@ impl Fetcher for Keybase {
             ));
         }
 
-        let mut body: KeybaseResponse = parse_body(&mut resp).await?;  
+        let mut body: KeybaseResponse = parse_body(&mut resp).await?;
         if body.status.code != 0 {
             return Err(Error::General(
                 format!("Keybase Result Get Error: {}", body.status.name),
                 resp.status(),
-            ));   
+            ));
         }
 
         let person_info = match body.them.pop() {
             Some(i) => i,
             None => {
-                return Err(Error::NoResult); 
+                return Err(Error::NoResult);
             }
         };
-        let user_id = person_info.id; 
+        let user_id = person_info.id;
         let user_name = person_info.basics.username;
 
         let db = new_db_connection().await?;
@@ -148,17 +157,17 @@ impl Fetcher for Keybase {
                 uuid: Uuid::new_v4(),
                 source: DataSource::Keybase,
                 record_id: Some(p.proof_id.clone()),
-                created_at: None, 
+                created_at: None,
                 last_fetched_at: naive_now(),
             };
             let proof_record = pf.connect(&db, &from_record, &to_record).await?;
-            
+
             let cnn: Connection = Connection {
                 from: from_record,
                 to: to_record,
                 proof: proof_record,
             };
-            res.push(cnn);    
+            res.push(cnn);
         }
 
         Ok(res)

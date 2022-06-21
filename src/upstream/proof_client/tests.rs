@@ -4,8 +4,8 @@ mod tests {
     #[tokio::test]
     async fn test_smoke() -> Result<(), Error> {
         let pf: ProofClient = ProofClient {
-            base: "http://localhost:9800".to_string(),
-            persona: "0x03666b700aeb6a6429f13cbb263e1bc566cd975a118b61bc796204109c1b351d19".to_string()
+            persona: "0x02d7c5e01bedf1c993f40ec302d9bf162620daea93a7155cd9a8019ae3a2c2a476"
+                .to_string(),
         };
         let result = pf.fetch(None).await?;
 
