@@ -1,11 +1,11 @@
 mod tests;
 
+use crate::config::C;
 use crate::error::Error;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
 use crate::upstream::{Connection, DataSource, Fetcher, Platform};
 use crate::util::{make_client, naive_now, parse_body};
-use crate::config::C;
 use async_trait::async_trait;
 use serde::Deserialize;
 

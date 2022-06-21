@@ -9,16 +9,13 @@ use crate::upstream::{Connection, DataSource, Fetcher, Platform};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use async_trait::async_trait;
 use serde::Deserialize;
+
 use serde_json::{Map, Value};
+
 use uuid::Uuid;
 use warp::redirect::found;
 
-use futures::{future::join_all};
-
-//use futures::future;
-//https://raw.githubusercontent.com/Uniswap/sybil-list/master/verified.json
-//#[derive(Deserialize, Debug)]
-// type SybilListVerifiedResponse = Map<String, VerifiedItem>;
+use futures::future::join_all;
 
 #[derive(Deserialize, Debug)]
 pub struct SybilListItem {
@@ -102,7 +99,6 @@ impl Fetcher for SybilList {
     async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
         let client = make_client();
         let uri: http::Uri = (C.upstream.sybil_service.url).parse().unwrap();
-        
 
         let mut resp = client.get(uri).await?;
 

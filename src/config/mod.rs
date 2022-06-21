@@ -33,7 +33,7 @@ pub struct KVConfig {
 pub struct Upstream {
     pub proof_service: ConfigProofService,
     pub aggregation_service: ConfigAggregationService,
-    pub sybil_service: ConfigSybilService,  
+    pub sybil_service: ConfigSybilService,
     pub keybase_service: ConfigKeybaseService,
 }
 

@@ -1,6 +1,7 @@
 mod aggregation;
 mod keybase;
 mod proof_client;
+mod rss3;
 mod sybil_list;
 
 use async_trait::async_trait;
@@ -61,6 +62,11 @@ pub enum DataSource {
     #[strum(serialize = "nextid")]
     #[serde(rename = "nextid")]
     NextID, // = "nextID",
+
+    /// https://rss3.io/network/api.html
+    #[strum(serialize = "rss3")]
+    #[serde(rename = "rss3")]
+    Rss3, // = "rss3",
 
     #[strum(serialize = "cyberconnect")]
     #[serde(rename = "cyberconnect")]

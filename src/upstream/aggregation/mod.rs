@@ -1,10 +1,10 @@
 mod tests;
 
+use crate::config::C;
 use crate::error::Error;
 use crate::graph::{edge::Proof, vertex::Identity};
 use crate::graph::{new_db_connection, Edge, Vertex};
 use crate::upstream::{Connection, DataSource, Platform};
-use crate::{config::C};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -100,10 +100,19 @@ impl Fetcher for Aggregation {
         let mut res = Vec::new();
 
         loop {
-            let uri: http::Uri = match format!("{}?platform={}&identity={}&page={}&size=100", C.upstream.aggregation_service.url, self.platform, self.identity, page).parse() {
+            let uri: http::Uri = match format!(
+                "{}?platform={}&identity={}&page={}&size=100",
+                C.upstream.aggregation_service.url, self.platform, self.identity, page
+            )
+            .parse()
+            {
                 Ok(n) => n,
-                Err(err) => return Err(Error::ParamError(
-                    format!("Uri format Error: {}", err.to_string()))),
+                Err(err) => {
+                    return Err(Error::ParamError(format!(
+                        "Uri format Error: {}",
+                        err.to_string()
+                    )))
+                }
             };
 
             let mut resp = client.get(uri).await?;

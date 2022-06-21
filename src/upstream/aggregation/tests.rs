@@ -15,7 +15,6 @@ mod tests {
             "Greeting did not contain name, value was `{}`",
             first.from.identity
         );
-        
 
         Ok(())
     }

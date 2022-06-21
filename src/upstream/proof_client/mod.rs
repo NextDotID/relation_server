@@ -1,20 +1,19 @@
 extern crate futures;
 mod tests;
 
+use crate::config::C;
 use crate::error::Error;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
 use crate::upstream::{Connection, DataSource, Fetcher, Platform};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
-use crate::{config::C};
+
 use async_trait::async_trait;
+use futures::future::join_all;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::str::FromStr;
 use uuid::Uuid;
-
-
-use futures::future::join_all;
 
 /// https://github.com/nextdotid/proof-server/blob/master/docs/api.apib
 #[derive(Deserialize, Debug)]
