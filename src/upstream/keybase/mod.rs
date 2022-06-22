@@ -172,4 +172,13 @@ impl Fetcher for Keybase {
 
         Ok(res)
     }
+
+    fn ability() -> Vec<(Platform, Vec<Platform>)> {
+        let x: (Platform, Vec<Platform>) = (Platform::Twitter, vec![Platform::Github, Platform::Keybase]);
+        let y: (Platform, Vec<Platform>) = (Platform::Keybase, vec![Platform::Github, Platform::Twitter]);
+        let mut vec = Vec::new();
+        vec.push(x);
+        vec.push(y);
+        return vec;
+    }
 }

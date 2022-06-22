@@ -139,4 +139,11 @@ impl Fetcher for Aggregation {
 
         Ok(res)
     }
+
+    fn ability() -> Vec<(Platform, Vec<Platform>)> {
+        let x: (Platform, Vec<Platform>) = (Platform::Twitter, vec![Platform::Ethereum]);
+        let mut vec = Vec::new();
+        vec.push(x);
+        return vec;
+    }
 }

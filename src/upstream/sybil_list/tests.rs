@@ -8,4 +8,13 @@ mod tests {
         assert_ne!(result.len(), 0);
         Ok(())
     }
+
+
+    #[tokio::test]
+    async fn test_sybil_ability() -> Result<(), Error> {
+        let result = SybilList::ability();
+        println!("{:?}", result);
+        assert_ne!(result.len(), 0);
+        Ok(())
+    }
 }

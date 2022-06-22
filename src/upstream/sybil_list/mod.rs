@@ -13,7 +13,6 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use uuid::Uuid;
-use warp::redirect::found;
 
 use futures::future::join_all;
 
@@ -123,5 +122,12 @@ impl Fetcher for SybilList {
         let results = join_all(futures).await;
         let parse_body: Vec<Connection> = results.into_iter().filter_map(|i| i).collect();
         Ok(parse_body)
+    }
+
+    fn ability() -> Vec<(Platform, Vec<Platform>)> {
+        let addr_connections: (Platform, Vec<Platform>) = (Platform::Ethereum, vec![Platform::Twitter]);
+        let mut vec = Vec::new();
+        vec.push(addr_connections);
+        return vec;
     }
 }
