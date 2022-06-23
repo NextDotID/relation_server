@@ -114,5 +114,5 @@ pub trait Fetcher {
     async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error>;
 
     /// return support platform vec
-    fn ability() -> Vec<(Platform, Vec<Platform>)>;
+    fn ability() -> Vec<(Vec<Platform>, Vec<Platform>)>;
 }

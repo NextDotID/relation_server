@@ -156,11 +156,7 @@ impl Fetcher for ProofClient {
         Ok(parse_body)
     }
 
-    fn ability() -> Vec<(Platform, Vec<Platform>)> {
-        let x: (Platform, Vec<Platform>) = (Platform::NextID, vec![Platform::Twitter, Platform::Ethereum, Platform::Github]);
-        //let y: (Platform, Vec<Platform>) = (Platform::Twitter, vec![Platform::Twitter, Platform::Ethereum, Platform::Github]);
-        let mut vec = Vec::new();
-        vec.push(x);
-        return vec;
+    fn ability() -> Vec<(Vec<Platform>, Vec<Platform>)> {
+        return vec![(vec![Platform::Ethereum, Platform::Twitter, Platform::NextID, Platform::Github], vec![Platform::Ethereum, Platform::Twitter, Platform::NextID, Platform::Github])];
     }
 }
