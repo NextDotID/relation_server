@@ -21,3 +21,6 @@ url = "https://raw.githubusercontent.com/Uniswap/sybil-list/master/verified.json
 [upstream.keybase_service]
 url = "https://keybase.io/_/api/1.0/user/lookup.json"
 
+[upstream.knn3_service]
+url = "https://mw.graphql.knn3.xyz/"
+

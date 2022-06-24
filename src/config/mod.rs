@@ -35,6 +35,7 @@ pub struct Upstream {
     pub aggregation_service: ConfigAggregationService,
     pub sybil_service: ConfigSybilService,
     pub keybase_service: ConfigKeybaseService,
+    pub knn3_service: ConfigKnn3Service,
 }
 
 #[derive(Clone, Deserialize, Default)]
@@ -69,6 +70,11 @@ pub struct ConfigAggregationService {
 
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigSybilService {
+    pub url: String,
+}
+
+#[derive(Clone, Deserialize, Default)]
+pub struct ConfigKnn3Service {
     pub url: String,
 }
 

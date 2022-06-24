@@ -3,6 +3,7 @@ mod keybase;
 mod proof_client;
 mod rss3;
 mod sybil_list;
+mod knn3;
 
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
@@ -22,22 +23,31 @@ pub enum Platform {
     #[strum(serialize = "twitter")]
     #[serde(rename = "twitter")]
     Twitter,
+
     /// Ethereum wallet `0x[a-f0-9]{40}`
     #[strum(serialize = "ethereum", serialize = "eth")]
     #[serde(rename = "ethereum")]
     Ethereum,
+
     /// NextID
     #[strum(serialize = "nextid")]
     #[serde(rename = "nextid")]
     NextID,
+
     /// Keybase
     #[strum(serialize = "keybase")]
     #[serde(rename = "keybase")]
     Keybase,
+
     /// Github
     #[strum(serialize = "github")]
     #[serde(rename = "github")]
     Github,
+    
+    /// ENS
+    #[strum(serialize = "ens")]
+    #[serde(rename = "ens")]
+    Ens,
 
     /// Unknown
     #[strum(serialize = "unknown")]
