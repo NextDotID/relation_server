@@ -1,11 +1,11 @@
-use aragog::{DatabaseRecord, Record, DatabaseConnection};
+use aragog::{DatabaseConnection, DatabaseRecord, Record};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{graph::Vertex, error::Error};
+use crate::{error::Error, graph::Vertex, util::naive_now};
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum Chain {
     Ethereum,
     Rinkeby,
@@ -27,7 +27,7 @@ impl Default for Chain {
 }
 
 /// Internal chain implementation / framework.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum ChainType {
     /// EVM (with chain ID)
     EVM(u128),
@@ -58,7 +58,7 @@ impl Chain {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum NFTCategory {
     ENS,
 }
@@ -69,7 +69,8 @@ impl Default for NFTCategory {
 }
 
 /// NFT
-#[derive(Clone, Serialize, Deserialize, Record)]
+#[derive(Clone, Serialize, Deserialize, Record, Debug)]
+#[collection_name = "NFTs"]
 pub struct NFT {
     /// UUID of this record
     pub uuid: Uuid,
@@ -87,6 +88,20 @@ pub struct NFT {
     pub fetched_at: NaiveDateTime,
 }
 
+impl Default for NFT {
+    fn default() -> Self {
+        Self {
+            uuid: Default::default(),
+            category: Default::default(),
+            contract: Default::default(),
+            id: Default::default(),
+            chain: Default::default(),
+            symbol: Default::default(),
+            fetched_at: naive_now(),
+        }
+    }
+}
+
 // impl Default for NFT {
 // }
 
@@ -102,10 +117,7 @@ impl Vertex<NFTRecord> for NFT {
     }
 
     /// Find an NFT by UUID.
-    async fn find_by_uuid(
-        db: &DatabaseConnection,
-        uuid: Uuid,
-    ) -> Result<Option<NFTRecord>, Error> {
+    async fn find_by_uuid(db: &DatabaseConnection, uuid: Uuid) -> Result<Option<NFTRecord>, Error> {
         todo!()
     }
 
@@ -115,4 +127,5 @@ impl Vertex<NFTRecord> for NFT {
     }
 }
 
-pub type NFTRecord = DatabaseRecord<NFT>;
+#[derive(Clone, Deserialize, Serialize, Default, Debug)]
+pub struct NFTRecord(DatabaseRecord<NFT>);

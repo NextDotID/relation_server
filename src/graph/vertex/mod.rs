@@ -5,6 +5,7 @@ mod nft;
 use aragog::{DatabaseConnection, Record};
 use async_trait::async_trait;
 pub use identity::{Identity, IdentityRecord};
+pub use nft::{NFT, NFTRecord};
 use uuid::Uuid;
 
 use crate::error::Error;
