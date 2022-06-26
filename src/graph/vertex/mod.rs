@@ -1,5 +1,5 @@
 mod identity;
-mod nft;
+pub mod nft;
 // mod crypto_identity;
 
 use aragog::{DatabaseConnection, Record};
