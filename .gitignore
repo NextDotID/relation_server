@@ -5,3 +5,4 @@
 
 /config/*.toml
 !/config/main.sample.toml
+.env

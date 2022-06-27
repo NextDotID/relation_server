@@ -5,15 +5,10 @@ pub mod rss3;
 pub mod sybil_list;
 
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
-use crate::{
-    error::Error,
-    graph::{edge::Proof, vertex::IdentityRecord},
-    graph::{edge::ProofRecord, vertex::Identity},
-};
+use crate::{error::Error, graph::edge::ProofRecord, graph::vertex::IdentityRecord};
 
 /// All identity platform.
 #[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq)]
@@ -80,6 +75,12 @@ pub enum DataSource {
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
     Unknown,
+}
+
+impl Default for DataSource {
+    fn default() -> Self {
+        DataSource::NextID
+    }
 }
 
 /// All asymmetric cryptography algorithm supported by RelationService.

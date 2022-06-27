@@ -2,23 +2,33 @@
 # mode: justfile
 # End:
 
+set dotenv-load
+set export
+
 arch := `uname -m`
 
-# Development environment preparation
-prepare:
-	rustup override set stable
-	docker-compose pull arangodb_{{arch}}
-	cp config/main.sample.toml config/main.toml
-	printf "[db]\ndb = \"relation_server_test\"" > config/testing.toml
-
-# Do database migration
-migrate:
+# Start peripherals of this server
+peri:
 	docker-compose up -d arangodb_{{arch}}
-	aragog --db-host http://127.0.0.1:8529 --db-user root --db-password ieNgoo5roong9Chu --db-name relation_server_development migrate
-	aragog --db-host http://127.0.0.1:8529 --db-user root --db-password ieNgoo5roong9Chu --db-name relation_server_test migrate
+
+# Development environment preparation.
+prepare: peri
+	@rustup override set stable
+	@if [ ! -f .env ]; then cp .env.example .env; fi
+	@if [ ! -f config/main.toml ]; then cp config/main.sample.toml config/main.toml; fi
+	@if [ ! -f config/testing.toml ]; then printf "[db]\ndb = \"relation_server_test\"" > config/testing.toml; fi
+
+# Do database migration.
+migrate: peri
+	aragog --db-name relation_server_development migrate
+	aragog --db-name relation_server_test migrate
+
+# Do aragog CLI command (with .env loaded).
+@aragog subcommand subsubcommand:
+	aragog $subcommand $subsubcommand
 
 # Run test
-test:
+test: peri
 	env RUST_BACKTRACE=1 RUST_LOG=debug RELATION_SERVER_ENV=testing cargo test -- --nocapture --test-threads=1
 
 # Clean dev environment (incl. build cache and database)
