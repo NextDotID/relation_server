@@ -32,25 +32,21 @@ async fn fetcher(platform: String, identity: String) -> Result<Vec<Connection>, 
    
     let mut data_fetch: Box<dyn Fetcher>;
     let mut ability: Vec<(Vec<Platform>, Vec<Platform>)>;
-    
+    let mut result = Vec::new();
+
     for source in upstreamVec.into_iter() {
-        println!("{:?}", &source);
         data_fetch = upstreamFactory::new_fetcher(&source, platform.clone(), identity.clone());
-    
         ability = data_fetch.ability();
-        for ab in ability.into_iter() {
-            let (platforms, _) = ab;
-            if platforms.iter().any(|p| p.to_string() == platform) {
-                println!("Yes");
-                // let res = fetch.fetcher();
-                // println!("{:?}", res);
+        for (support_platforms, _) in ability.into_iter() {
+            if support_platforms.iter().any(|p| p.to_string() == platform) {
+                let mut res = data_fetch.fetch(None).await;
+                if res.is_ok() {
+                    result.append(& mut res.unwrap());
+                } else {
+                    continue;
+                }             
             }
-        
-            println!("{:?}", platforms);
         }
-
     }
-
-    let ve = Vec::new();
-    return Ok(ve);
+    return Ok(result);
 }
