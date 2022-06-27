@@ -112,7 +112,7 @@ pub struct Connection {
 #[async_trait]
 pub trait Fetcher {
     /// Fetch data from given source.
-    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error>;
+    async fn fetch(&self) -> Result<Vec<Connection>, Error>;
 
     /// return support platform vec
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)>;

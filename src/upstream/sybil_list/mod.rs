@@ -95,7 +95,7 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connectio
 
 #[async_trait]
 impl Fetcher for SybilList {
-    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
+    async fn fetch(&self) -> Result<Vec<Connection>, Error> {
         let client = make_client();
         let uri: http::Uri = (C.upstream.sybil_service.url).parse().unwrap();
 

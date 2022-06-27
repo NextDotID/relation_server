@@ -7,7 +7,7 @@ mod tests {
             platform: "twitter".to_string(),
             identity: "0000".to_string(),
         };
-        let result = ag.fetch(None).await?;
+        let result = ag.fetch().await?;
         assert_ne!(result.len(), 0);
         let first = result.first().unwrap();
         assert!(

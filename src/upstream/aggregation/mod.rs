@@ -93,7 +93,7 @@ async fn save_item(p: Record) -> Option<Connection> {
 
 #[async_trait]
 impl Fetcher for Aggregation {
-    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
+    async fn fetch(&self) -> Result<Vec<Connection>, Error> {
         let client = make_client();
         let mut page = 1;
 

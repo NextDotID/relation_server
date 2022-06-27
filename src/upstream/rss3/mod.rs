@@ -139,7 +139,7 @@ async fn save_item(p: Item) -> Option<Connection> {
 
 #[async_trait]
 impl Fetcher for Rss3 {
-    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
+    async fn fetch(&self) -> Result<Vec<Connection>, Error> {
         let client = make_client();
         let uri: http::Uri = match format!(
             "https://pregod.rss3.dev/v0.4.0/account:{}@{}/notes?tags={}",

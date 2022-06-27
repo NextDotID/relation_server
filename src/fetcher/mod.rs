@@ -39,7 +39,7 @@ async fn fetcher(platform: String, identity: String) -> Result<Vec<Connection>, 
         ability = data_fetch.ability();
         for (support_platforms, _) in ability.into_iter() {
             if support_platforms.iter().any(|p| p.to_string() == platform) {
-                let mut res = data_fetch.fetch(None).await;
+                let mut res = data_fetch.fetch().await;
                 if res.is_ok() {
                     result.append(& mut res.unwrap());
                 } else {

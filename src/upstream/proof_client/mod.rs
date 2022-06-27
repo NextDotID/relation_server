@@ -111,7 +111,7 @@ async fn save_item(p: ProofRecord) -> Option<Connection> {
 
 #[async_trait]
 impl Fetcher for ProofClient {
-    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
+    async fn fetch(&self) -> Result<Vec<Connection>, Error> {
         let client = make_client();
         let uri: http::Uri = match format!(
             "{}/v1/proof?platform=nextid&identity={}",

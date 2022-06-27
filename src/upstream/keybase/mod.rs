@@ -76,7 +76,7 @@ pub struct Keybase {
 
 #[async_trait]
 impl Fetcher for Keybase {
-    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
+    async fn fetch(&self) -> Result<Vec<Connection>, Error> {
         let client = make_client();
         let uri: http::Uri = match format!(
             "{}?{}={}&fields=proofs_summary",

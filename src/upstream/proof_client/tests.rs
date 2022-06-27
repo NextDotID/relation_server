@@ -7,7 +7,7 @@ mod tests {
             persona: "0x02d7c5e01bedf1c993f40ec302d9bf162620daea93a7155cd9a8019ae3a2c2a476"
                 .to_string(),
         };
-        let result = pf.fetch(None).await?;
+        let result = pf.fetch().await?;
 
         //println!("{:?}", result.first());
         assert_ne!(result.len(), 0);
