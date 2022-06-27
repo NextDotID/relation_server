@@ -156,7 +156,7 @@ impl Fetcher for ProofClient {
         Ok(parse_body)
     }
 
-    fn ability() -> Vec<(Vec<Platform>, Vec<Platform>)> {
+    fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
         return vec![(vec![Platform::Ethereum, Platform::Twitter, Platform::NextID, Platform::Github], vec![Platform::Ethereum, Platform::Twitter, Platform::NextID, Platform::Github])];
     }
 }

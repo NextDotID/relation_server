@@ -124,7 +124,7 @@ impl Fetcher for SybilList {
         Ok(parse_body)
     }
 
-    fn ability() -> Vec<(Vec<Platform>, Vec<Platform>)> {
+    fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
         return vec![(vec![Platform::Ethereum, Platform::Twitter], vec![Platform::Twitter, Platform::Ethereum])];
     }
 }

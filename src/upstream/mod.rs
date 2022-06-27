@@ -1,8 +1,8 @@
-mod aggregation;
-mod keybase;
-mod proof_client;
-mod rss3;
-mod sybil_list;
+pub mod aggregation;
+pub mod keybase;
+pub mod proof_client;
+pub mod rss3;
+pub mod sybil_list;
 
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
@@ -114,5 +114,5 @@ pub trait Fetcher {
     async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error>;
 
     /// return support platform vec
-    fn ability() -> Vec<(Vec<Platform>, Vec<Platform>)>;
+    fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)>;
 }

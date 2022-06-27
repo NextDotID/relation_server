@@ -6,5 +6,6 @@ pub mod controller;
 pub mod error;
 pub mod graph;
 pub mod util;
+pub mod fetcher;
 
 mod upstream;
