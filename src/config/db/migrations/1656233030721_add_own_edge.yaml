@@ -1,0 +1,11 @@
+# The migration files contain two sections:
+# - up: The commands to execute on migration
+# - down: The commands to execute on rollback (optional)
+# check https://docs.rs/aragog_cli for complete documentation and examples
+---
+up:
+  - create_edge_collection:
+      name: Owns
+down:
+  - delete_edge_collection:
+      name: Owns

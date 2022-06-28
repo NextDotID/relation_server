@@ -6,15 +6,10 @@ mod sybil_list;
 mod knn3;
 
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
-use crate::{
-    error::Error,
-    graph::{edge::Proof, vertex::IdentityRecord},
-    graph::{edge::ProofRecord, vertex::Identity},
-};
+use crate::{error::Error, graph::edge::ProofRecord, graph::vertex::IdentityRecord};
 
 /// All identity platform.
 #[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq)]
@@ -92,6 +87,12 @@ pub enum DataSource {
     Unknown,
 }
 
+impl Default for DataSource {
+    fn default() -> Self {
+        DataSource::NextID
+    }
+}
+
 /// All asymmetric cryptography algorithm supported by RelationService.
 #[derive(Serialize, Deserialize)]
 pub enum Algorithm {
@@ -124,5 +125,5 @@ pub trait Fetcher {
     async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error>;
 
     /// return support platform vec
-    fn ability() -> Vec<(Platform, Vec<Platform>)>;
+    fn ability() -> Vec<(Vec<Platform>, Vec<Platform>)>;
 }
