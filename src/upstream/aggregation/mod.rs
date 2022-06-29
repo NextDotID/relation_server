@@ -43,8 +43,8 @@ pub struct Aggregation {
     pub identity: String,
 }
 
-async fn save_item(p: Record) -> Option<()> {
-    let db = new_db_connection().await.ok()?;
+async fn save_item(p: Record) -> Result<(), Error> {
+    let db = new_db_connection().await?;
 
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -58,7 +58,7 @@ async fn save_item(p: Record) -> Option<()> {
         updated_at: naive_now(),
     };
 
-    let from_record = from.create_or_update(&db).await.ok()?;
+    let from_record = from.create_or_update(&db).await?;
 
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -71,7 +71,7 @@ async fn save_item(p: Record) -> Option<()> {
         profile_url: None,
         updated_at: naive_now(),
     };
-    let to_record = to.create_or_update(&db).await.ok()?;
+    let to_record = to.create_or_update(&db).await?;
 
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
@@ -80,9 +80,9 @@ async fn save_item(p: Record) -> Option<()> {
         created_at: Some(timestamp_to_naive(p.create_timestamp.parse().unwrap())),
         last_fetched_at: timestamp_to_naive(p.modify_timestamp.parse().unwrap()),
     };
-    pf.connect(&db, &from_record, &to_record).await.ok()?;
+    pf.connect(&db, &from_record, &to_record).await?;
 
-    return Some(());
+    Ok(())
 }
 
 #[async_trait]

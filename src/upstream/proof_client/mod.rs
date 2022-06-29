@@ -56,8 +56,8 @@ pub struct ProofClient {
     pub identity: String,
 }
 
-async fn save_item(p: ProofRecord) -> Option<()> {
-    let db = new_db_connection().await.ok()?;
+async fn save_item(p: ProofRecord) -> Result<(), Error> {
+    let db = new_db_connection().await?;
 
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -73,7 +73,7 @@ async fn save_item(p: ProofRecord) -> Option<()> {
         updated_at: naive_now(),
     };
 
-    let from_record = from.create_or_update(&db).await.ok()?;
+    let from_record = from.create_or_update(&db).await?;
 
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -88,7 +88,7 @@ async fn save_item(p: ProofRecord) -> Option<()> {
         profile_url: None,
         updated_at: naive_now(),
     };
-    let to_record = to.create_or_update(&db).await.ok()?;
+    let to_record = to.create_or_update(&db).await?;
 
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
@@ -99,9 +99,9 @@ async fn save_item(p: ProofRecord) -> Option<()> {
         )),
         last_fetched_at: naive_now(),
     };
-    pf.connect(&db, &from_record, &to_record).await.ok()?;
+    pf.connect(&db, &from_record, &to_record).await?;
 
-    return Some(());
+    Ok(())
 }
 
 #[async_trait]

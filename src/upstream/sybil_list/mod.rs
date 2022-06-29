@@ -43,10 +43,10 @@ pub struct ErrorResponse {
 
 pub struct SybilList {}
 
-async fn save_item(eth_wallet_address: String, value: Value) -> Option<()> {
-    let db = new_db_connection().await.ok()?;
+async fn save_item(eth_wallet_address: String, value: Value) -> Result<(), Error> {
+    let db = new_db_connection().await?;
 
-    let item: VerifiedItem = serde_json::from_value(value).ok()?;
+    let item: VerifiedItem = serde_json::from_value(value)?;
 
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -59,7 +59,7 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<()> {
         profile_url: None,
         updated_at: naive_now(),
     };
-    let from_record = from.create_or_update(&db).await.ok()?;
+    let from_record = from.create_or_update(&db).await?;
 
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -72,7 +72,7 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<()> {
         profile_url: None,
         updated_at: naive_now(),
     };
-    let to_record = to.create_or_update(&db).await.ok()?;
+    let to_record = to.create_or_update(&db).await?;
 
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
@@ -82,8 +82,8 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<()> {
         last_fetched_at: naive_now(),
     };
 
-    pf.connect(&db, &from_record, &to_record).await.ok()?;
-    return Some(());
+    pf.connect(&db, &from_record, &to_record).await?;
+    Ok(())
 }
 
 #[async_trait]

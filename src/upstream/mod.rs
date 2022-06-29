@@ -11,6 +11,8 @@ use crate::upstream::sybil_list::SybilList;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 use crate::{error::Error, graph::edge::ProofRecord, graph::vertex::IdentityRecord};
 
@@ -115,7 +117,7 @@ pub trait Fetcher {
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)>;
 }
 
-#[derive(Debug)]
+#[derive(EnumIter, Debug, PartialEq)]
 enum Upstream {
     Keybase,
     NextID,
@@ -123,12 +125,6 @@ enum Upstream {
     Aggregation,
 }
 
-const FETCH_UPSTREAMS: [Upstream; 4] = [
-    Upstream::NextID,
-    Upstream::Keybase,
-    Upstream::SybilList,
-    Upstream::Aggregation,
-];
 struct upstreamFactory;
 
 impl upstreamFactory {
@@ -151,12 +147,13 @@ impl upstreamFactory {
     }
 }
 
+///fetch data from all supported upstream
 async fn fetch_all(platform: String, identity: String) -> Result<(), Error> {
     let mut data_fetch: Box<dyn Fetcher>;
     let mut ability: Vec<(Vec<Platform>, Vec<Platform>)>;
     //let mut result = Vec::new();
 
-    for source in FETCH_UPSTREAMS.into_iter() {
+    for source in Upstream::iter() {
         data_fetch = upstreamFactory::new_fetcher(&source, platform.clone(), identity.clone());
         ability = data_fetch.ability();
         for (support_platforms, _) in ability.into_iter() {

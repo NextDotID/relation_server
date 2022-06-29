@@ -122,7 +122,6 @@ impl Fetcher for Keybase {
 
         let db = new_db_connection().await?;
 
-        //let mut res = Vec::new();
         for p in person_info.proofs_summary.all.into_iter() {
             let from: Identity = Identity {
                 uuid: Some(Uuid::new_v4()),
