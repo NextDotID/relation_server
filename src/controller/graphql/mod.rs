@@ -1,5 +1,6 @@
 mod identity;
 mod proof;
+mod nft;
 
 use async_graphql::{EmptyMutation, EmptySubscription, MergedObject, Object};
 

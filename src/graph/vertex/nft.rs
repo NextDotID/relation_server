@@ -1,15 +1,21 @@
+use crate::{
+    error::Error,
+    graph::{
+        vertex::identity::{Identity, IdentityRecord},
+        Vertex,
+    },
+    util::naive_now,
+};
 use aragog::{
-    query::{Comparison, Filter},
+    query::{Comparison, Filter, QueryResult},
     DatabaseConnection, DatabaseRecord, Record,
 };
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use strum_macros::{Display, EnumString};
+use strum_macros::{Display, EnumString, EnumIter};
 use uuid::Uuid;
 
-use crate::{error::Error, graph::Vertex, util::naive_now};
-
-#[derive(Clone, Serialize, Deserialize, Debug, Display, PartialEq, EnumString)]
+#[derive(Clone, Serialize, Deserialize, Debug, Display, PartialEq, EnumString, EnumIter)]
 pub enum Chain {
     #[strum(serialize = "ethereum")]
     #[serde(rename = "ethereum")]
@@ -77,8 +83,13 @@ impl Chain {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, EnumString, Display)]
 pub enum NFTCategory {
+    #[serde(rename = "unknown")]
+    #[strum(serialize = "unknown")]
+    Unknown,
+    #[serde(rename = "ens")]
+    #[strum(serialize = "ens")]
     ENS,
 }
 impl Default for NFTCategory {
@@ -122,7 +133,7 @@ impl Default for NFT {
 }
 
 impl NFT {
-    async fn find_by_chain_contract_id(
+    pub async fn find_by_chain_contract_id(
         db: &DatabaseConnection,
         chain: &Chain,
         contract: &String,
@@ -186,7 +197,7 @@ impl Vertex<NFTRecord> for NFT {
 }
 
 #[derive(Clone, Deserialize, Serialize, Default, Debug)]
-pub struct NFTRecord(DatabaseRecord<NFT>);
+pub struct NFTRecord(pub DatabaseRecord<NFT>);
 
 impl std::ops::Deref for NFTRecord {
     type Target = DatabaseRecord<NFT>;
@@ -205,5 +216,19 @@ impl std::ops::DerefMut for NFTRecord {
 impl From<DatabaseRecord<NFT>> for NFTRecord {
     fn from(record: DatabaseRecord<NFT>) -> Self {
         Self(record)
+    }
+}
+
+impl NFTRecord {
+    /// Which wallet (`Identity`) does this NFT belong to?
+    pub async fn belongs_to(&self, db: &DatabaseConnection) -> Result<Option<IdentityRecord>, Error> {
+        let query = self.inbound_query(1, 1, "Owns");
+
+        let result: QueryResult<Identity> = Identity::get(&query, db).await?;
+        if result.len() == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(result.first().unwrap().to_owned().into()))
+        }
     }
 }
