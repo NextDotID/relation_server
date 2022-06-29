@@ -7,6 +7,10 @@ pub mod sybil_list;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
+use crate::upstream::keybase::Keybase;
+use crate::upstream::sybil_list::SybilList;
+use crate::upstream::proof_client::ProofClient;
+use crate::upstream::aggregation::Aggregation;
 
 use crate::{error::Error, graph::edge::ProofRecord, graph::vertex::IdentityRecord};
 
@@ -116,4 +120,59 @@ pub trait Fetcher {
 
     /// return support platform vec
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)>;
+}
+
+#[derive(Debug)] 
+enum Upstream {
+    Keybase,
+    NextID,
+    SybilList,
+    Aggregation,
+}
+
+const FETCH_UPSTREAMS: [Upstream; 4] = [Upstream::NextID, Upstream::Keybase, Upstream::SybilList, Upstream::Aggregation];
+struct upstreamFactory;
+
+impl upstreamFactory {
+    fn new_fetcher(u: &Upstream, platform: String, identity: String) -> Box<dyn Fetcher> {
+        match u {
+            Upstream::Keybase => Box::new(Keybase {platform:platform.clone(), identity:identity.clone()}),
+            Upstream::NextID => Box::new(ProofClient {persona:identity.clone()}),
+            Upstream::SybilList => Box::new(SybilList {}),
+            Upstream::Aggregation => Box::new(Aggregation {platform: platform.clone(), identity:identity.clone()}),
+        }
+    }
+}
+
+async fn fetch_all(platform: String, identity: String) -> Result<(), Error> { 
+    let mut data_fetch: Box<dyn Fetcher>;
+    let mut ability: Vec<(Vec<Platform>, Vec<Platform>)>;
+    //let mut result = Vec::new();
+
+    for source in FETCH_UPSTREAMS.into_iter() {
+        data_fetch = upstreamFactory::new_fetcher(&source, platform.clone(), identity.clone());
+        ability = data_fetch.ability();
+        for (support_platforms, _) in ability.into_iter() {
+            if support_platforms.iter().any(|p| p.to_string() == platform) {
+                let res = data_fetch.fetch().await;
+                if res.is_err() {
+                    continue;
+                }             
+            }
+        }
+    }
+    return Ok(());
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::error::Error;
+    use crate::upstream::fetch_all;
+
+    #[tokio::test]
+    async fn test_fetcher_result() -> Result<(), Error> {
+        let result = fetch_all("github".to_string(), "fengshanshan".to_string()).await?;
+        assert_eq!(result, ());
+        Ok(())
+    }
 }
