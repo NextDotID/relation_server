@@ -141,6 +141,9 @@ impl Fetcher for Aggregation {
     }
 
     fn ability() -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(vec![Platform::Ethereum, Platform::Twitter], vec![Platform::Ethereum, Platform::Twitter])];
+        return vec![(
+            vec![Platform::Ethereum, Platform::Twitter],
+            vec![Platform::Ethereum, Platform::Twitter],
+        )];
     }
 }

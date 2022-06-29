@@ -9,7 +9,6 @@ mod tests {
         Ok(())
     }
 
-
     #[tokio::test]
     async fn test_sybil_ability() -> Result<(), Error> {
         let result = SybilList::ability();

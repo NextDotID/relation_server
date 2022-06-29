@@ -1,15 +1,22 @@
 mod aggregation;
 mod keybase;
+mod knn3;
 mod proof_client;
 mod rss3;
 mod sybil_list;
-mod knn3;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 
-use crate::{error::Error, graph::edge::ProofRecord, graph::vertex::IdentityRecord};
+use crate::{
+    error::Error,
+    graph::vertex::IdentityRecord,
+    graph::{
+        edge::{Own, ProofRecord},
+        vertex::NFTRecord,
+    },
+};
 
 /// All identity platform.
 #[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq)]
@@ -38,7 +45,7 @@ pub enum Platform {
     #[strum(serialize = "github")]
     #[serde(rename = "github")]
     Github,
-    
+
     /// ENS
     #[strum(serialize = "ens")]
     #[serde(rename = "ens")]
@@ -116,6 +123,13 @@ pub struct Connection {
     pub from: IdentityRecord,
     pub to: IdentityRecord,
     pub proof: ProofRecord,
+}
+
+#[derive(Clone, Deserialize, Serialize, Default)]
+pub struct Owned {
+    pub from: IdentityRecord,
+    pub to: NFTRecord,
+    pub proof: Own,
 }
 
 /// Fetcher defines how to fetch data from upstream.

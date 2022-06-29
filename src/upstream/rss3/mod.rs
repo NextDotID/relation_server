@@ -187,8 +187,11 @@ impl Fetcher for Rss3 {
 
         Ok(parse_body)
     }
-    
+
     fn ability() -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(vec![Platform::Ethereum, Platform::Twitter], vec![Platform::Twitter, Platform::Ethereum])];
+        return vec![(
+            vec![Platform::Ethereum, Platform::Twitter],
+            vec![Platform::Twitter, Platform::Ethereum],
+        )];
     }
 }

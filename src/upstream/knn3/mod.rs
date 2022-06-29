@@ -11,9 +11,9 @@ use crate::{
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime};
 use futures::future::join_all;
-use uuid::Uuid;
 use gql_client::Client;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 pub struct Knn3 {
     pub account: String,
@@ -21,22 +21,22 @@ pub struct Knn3 {
 
 #[derive(Deserialize, Debug)]
 pub struct Ens {
-   ens: Vec<String>
+    ens: Vec<String>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Data {
-   addrs: Vec<Ens>
+    addrs: Vec<Ens>,
 }
 
 #[derive(Serialize)]
 pub struct Vars {
-   addr: String
+    addr: String,
 }
 
 #[async_trait]
 impl Fetcher for Knn3 {
-    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> { 
+    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
         let query = r#"
                 query EnsByAddressQuery($addr: String!){
                     addrs(where: { address: $addr }) {
@@ -45,21 +45,26 @@ impl Fetcher for Knn3 {
             }
         "#;
 
-        let client = Client::new(C.upstream.knn3_service.url);
-        let vars = Vars { addr: "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".to_string() };
-        let data = client.query_with_vars::<Data, Vars>(query2, vars).await.unwrap();
+        let client = Client::new(C.upstream.knn3_service.url.clone());
+        let vars = Vars {
+            addr: "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".to_string(),
+        };
+        let data = client
+            .query_with_vars::<Data, Vars>(query, vars)
+            .await
+            .unwrap();
         let res = data.unwrap();
         //let data = res.unwrap();
         println!("{:?}", res.addrs.first().unwrap().ens.first().unwrap());
-       
+
         let parse_body = Vec::new();
         Ok(parse_body)
     }
-    
-    fn ability() -> Vec<(Platform, Vec<Platform>)> {
-        let x: (Platform, Vec<Platform>) = (Platform::Ethereum, vec![Platform::Twitter]);
-        let mut vec = Vec::new();
-        vec.push(x);
-        return vec;
+
+    fn ability() -> Vec<(Vec<Platform>, Vec<Platform>)> {
+        return vec![(
+            vec![Platform::Ethereum],
+            vec![Platform::Twitter, Platform::Ethereum],
+        )];
     }
 }

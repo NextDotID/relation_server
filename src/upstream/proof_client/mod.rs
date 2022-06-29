@@ -157,6 +157,19 @@ impl Fetcher for ProofClient {
     }
 
     fn ability() -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(vec![Platform::Ethereum, Platform::Twitter, Platform::NextID, Platform::Github], vec![Platform::Ethereum, Platform::Twitter, Platform::NextID, Platform::Github])];
+        return vec![(
+            vec![
+                Platform::Ethereum,
+                Platform::Twitter,
+                Platform::NextID,
+                Platform::Github,
+            ],
+            vec![
+                Platform::Ethereum,
+                Platform::Twitter,
+                Platform::NextID,
+                Platform::Github,
+            ],
+        )];
     }
 }
