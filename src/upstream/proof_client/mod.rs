@@ -5,7 +5,7 @@ use crate::config::C;
 use crate::error::Error;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{Connection, DataSource, Fetcher, Platform};
+use crate::upstream::{DataSource, Fetcher, Platform};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 
 use async_trait::async_trait;
@@ -52,10 +52,11 @@ pub struct ErrorResponse {
 }
 
 pub struct ProofClient {
-    pub persona: String,
+    pub platform: String,
+    pub identity: String,
 }
 
-async fn save_item(p: ProofRecord) -> Option<Connection> {
+async fn save_item(p: ProofRecord) -> Option<()> {
     let db = new_db_connection().await.ok()?;
 
     let from: Identity = Identity {
@@ -98,24 +99,18 @@ async fn save_item(p: ProofRecord) -> Option<Connection> {
         )),
         last_fetched_at: naive_now(),
     };
-    let proof_record = pf.connect(&db, &from_record, &to_record).await.ok()?;
+    pf.connect(&db, &from_record, &to_record).await.ok()?;
 
-    let cnn: Connection = Connection {
-        from: from_record,
-        to: to_record,
-        proof: proof_record,
-    };
-
-    return Some(cnn);
+    return Some(());
 }
 
 #[async_trait]
 impl Fetcher for ProofClient {
-    async fn fetch(&self) -> Result<Vec<Connection>, Error> {
+    async fn fetch(&self) -> Result<(), Error> {
         let client = make_client();
         let uri: http::Uri = match format!(
-            "{}/v1/proof?platform=nextid&identity={}",
-            C.upstream.proof_service.url, self.persona
+            "{}/v1/proof?platform={}&identity={}",
+            C.upstream.proof_service.url, self.platform, self.identity
         )
         .parse()
         {
@@ -151,12 +146,25 @@ impl Fetcher for ProofClient {
 
         // parse
         let futures: Vec<_> = proofs.proofs.into_iter().map(|p| save_item(p)).collect();
-        let results = join_all(futures).await;
-        let parse_body: Vec<Connection> = results.into_iter().filter_map(|i| i).collect();
-        Ok(parse_body)
+        join_all(futures).await;
+
+        Ok(())
     }
 
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(vec![Platform::Ethereum, Platform::Twitter, Platform::NextID, Platform::Github], vec![Platform::Ethereum, Platform::Twitter, Platform::NextID, Platform::Github])];
+        return vec![(
+            vec![
+                Platform::Ethereum,
+                Platform::Twitter,
+                Platform::NextID,
+                Platform::Github,
+            ],
+            vec![
+                Platform::Ethereum,
+                Platform::Twitter,
+                Platform::NextID,
+                Platform::Github,
+            ],
+        )];
     }
 }

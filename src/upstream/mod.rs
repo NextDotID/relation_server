@@ -4,13 +4,13 @@ pub mod proof_client;
 pub mod rss3;
 pub mod sybil_list;
 
+use crate::upstream::aggregation::Aggregation;
+use crate::upstream::keybase::Keybase;
+use crate::upstream::proof_client::ProofClient;
+use crate::upstream::sybil_list::SybilList;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
-use crate::upstream::keybase::Keybase;
-use crate::upstream::sybil_list::SybilList;
-use crate::upstream::proof_client::ProofClient;
-use crate::upstream::aggregation::Aggregation;
 
 use crate::{error::Error, graph::edge::ProofRecord, graph::vertex::IdentityRecord};
 
@@ -105,24 +105,17 @@ pub struct TempPubkeySerialize {
     pub uuid: uuid::Uuid,
 }
 
-#[derive(Clone, Deserialize, Serialize, Default)]
-pub struct Connection {
-    pub from: IdentityRecord,
-    pub to: IdentityRecord,
-    pub proof: ProofRecord,
-}
-
 /// Fetcher defines how to fetch data from upstream.
 #[async_trait]
 pub trait Fetcher {
     /// Fetch data from given source.
-    async fn fetch(&self) -> Result<Vec<Connection>, Error>;
+    async fn fetch(&self) -> Result<(), Error>;
 
     /// return support platform vec
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)>;
 }
 
-#[derive(Debug)] 
+#[derive(Debug)]
 enum Upstream {
     Keybase,
     NextID,
@@ -130,21 +123,35 @@ enum Upstream {
     Aggregation,
 }
 
-const FETCH_UPSTREAMS: [Upstream; 4] = [Upstream::NextID, Upstream::Keybase, Upstream::SybilList, Upstream::Aggregation];
+const FETCH_UPSTREAMS: [Upstream; 4] = [
+    Upstream::NextID,
+    Upstream::Keybase,
+    Upstream::SybilList,
+    Upstream::Aggregation,
+];
 struct upstreamFactory;
 
 impl upstreamFactory {
     fn new_fetcher(u: &Upstream, platform: String, identity: String) -> Box<dyn Fetcher> {
         match u {
-            Upstream::Keybase => Box::new(Keybase {platform:platform.clone(), identity:identity.clone()}),
-            Upstream::NextID => Box::new(ProofClient {persona:identity.clone()}),
+            Upstream::Keybase => Box::new(Keybase {
+                platform: platform.clone(),
+                identity: identity.clone(),
+            }),
+            Upstream::NextID => Box::new(ProofClient {
+                platform: platform.clone(),
+                identity: identity.clone(),
+            }),
             Upstream::SybilList => Box::new(SybilList {}),
-            Upstream::Aggregation => Box::new(Aggregation {platform: platform.clone(), identity:identity.clone()}),
+            Upstream::Aggregation => Box::new(Aggregation {
+                platform: platform.clone(),
+                identity: identity.clone(),
+            }),
         }
     }
 }
 
-async fn fetch_all(platform: String, identity: String) -> Result<(), Error> { 
+async fn fetch_all(platform: String, identity: String) -> Result<(), Error> {
     let mut data_fetch: Box<dyn Fetcher>;
     let mut ability: Vec<(Vec<Platform>, Vec<Platform>)>;
     //let mut result = Vec::new();
@@ -157,7 +164,7 @@ async fn fetch_all(platform: String, identity: String) -> Result<(), Error> {
                 let res = data_fetch.fetch().await;
                 if res.is_err() {
                     continue;
-                }             
+                }
             }
         }
     }
