@@ -130,7 +130,6 @@ impl Fetcher for Aggregation {
         Ok(())
     }
 
-
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
         return vec![(
             vec![Platform::Ethereum, Platform::Twitter],

@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 mod aggregation;
 mod keybase;
 mod knn3;
@@ -6,23 +5,16 @@ mod proof_client;
 mod rss3;
 mod sybil_list;
 
-=======
-pub mod aggregation;
-pub mod keybase;
-pub mod proof_client;
-pub mod rss3;
-pub mod sybil_list;
-
 use crate::upstream::aggregation::Aggregation;
 use crate::upstream::keybase::Keybase;
 use crate::upstream::proof_client::ProofClient;
 use crate::upstream::sybil_list::SybilList;
->>>>>>> 78e305a2b365901e86fbd0f70a72b93a470df603
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use strum_macros::{Display, EnumString};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+use strum_macros::{Display, EnumString};
 
 use crate::{
     error::Error,
@@ -61,11 +53,6 @@ pub enum Platform {
     #[serde(rename = "github")]
     Github,
 
-    /// ENS
-    #[strum(serialize = "ens")]
-    #[serde(rename = "ens")]
-    Ens,
-
     /// Unknown
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
@@ -94,6 +81,11 @@ pub enum DataSource {
     #[strum(serialize = "rss3")]
     #[serde(rename = "rss3")]
     Rss3, // = "rss3",
+
+    /// https://docs.knn3.xyz/graphql/
+    #[strum(serialize = "knn3")]
+    #[serde(rename = "knn3")]
+    Knn3, // = "rss3",
 
     #[strum(serialize = "cyberconnect")]
     #[serde(rename = "cyberconnect")]

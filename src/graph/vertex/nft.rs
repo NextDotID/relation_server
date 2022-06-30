@@ -1,3 +1,4 @@
+use crate::{error::Error, graph::Vertex, util::naive_now};
 use aragog::{
     query::{Comparison, Filter},
     DatabaseConnection, DatabaseRecord, Record,
@@ -6,8 +7,6 @@ use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumString};
 use uuid::Uuid;
-
-use crate::{error::Error, graph::Vertex, util::naive_now};
 
 #[derive(Clone, Serialize, Deserialize, Debug, Display, PartialEq, EnumString)]
 pub enum Chain {
@@ -77,9 +76,23 @@ impl Chain {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, EnumString, Display, Debug)]
 pub enum NFTCategory {
+    #[strum(serialize = "ENS")]
+    #[serde(rename = "ENS")]
     ENS,
+
+    #[strum(serialize = "ERC721")]
+    #[serde(rename = "ERC721")]
+    ERC721,
+
+    #[strum(serialize = "ERC1155")]
+    #[serde(rename = "ERC1155")]
+    ERC1155,
+
+    #[strum(serialize = "POAP")]
+    #[serde(rename = "POAP")]
+    POAP,
 }
 impl Default for NFTCategory {
     fn default() -> Self {

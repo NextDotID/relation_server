@@ -165,7 +165,6 @@ impl Fetcher for Keybase {
         Ok(())
     }
 
-
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
         return vec![(
             vec![Platform::Twitter, Platform::Github],

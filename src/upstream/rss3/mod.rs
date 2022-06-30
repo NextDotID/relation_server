@@ -1,11 +1,14 @@
 mod tests;
 
+use std::str::FromStr;
+
+use crate::graph::vertex::{nft::Chain, nft::NFTCategory, Identity, NFT};
 use crate::graph::{Edge, Vertex};
 use crate::upstream::{DataSource, Fetcher, Platform};
 use crate::util::{make_client, naive_now, parse_body};
 use crate::{
     error::Error,
-    graph::{edge::Proof, new_db_connection, vertex::Identity},
+    graph::{edge::Own, edge::Proof, new_db_connection},
 };
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime};
@@ -67,13 +70,13 @@ pub struct Rss3 {
     pub tags: String,
 }
 
-async fn save_item(p: Item) -> Option<()> {
+async fn save_item(p: Item) -> Result<(), Error> {
     let create_date_time = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
     let create_naive_date_time = NaiveDateTime::from_timestamp(create_date_time.timestamp(), 0);
     let update_date_time = DateTime::parse_from_rfc3339(&p.date_updated).unwrap();
     let update_naive_date_time = NaiveDateTime::from_timestamp(update_date_time.timestamp(), 0);
 
-    let db = new_db_connection().await.ok()?;
+    let db = new_db_connection().await?;
 
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -87,48 +90,30 @@ async fn save_item(p: Item) -> Option<()> {
         updated_at: naive_now(),
     };
 
-    let from_record = from.create_or_update(&db).await.ok()?;
+    let from_record = from.create_or_update(&db).await?;
 
-    let to;
-    if p.tags.first() == Some(&"Token".to_string()) {
-        to = Identity {
-            uuid: Some(Uuid::new_v4()),
-            platform: Platform::Ethereum,
-            identity: p.metadata.token_address.clone(),
-            created_at: None,
-            display_name: p.metadata.token_symbol.clone(),
-            added_at: naive_now(),
-            avatar_url: None,
-            profile_url: None,
-            updated_at: naive_now(),
-        };
-    } else {
-        to = Identity {
-            uuid: Some(Uuid::new_v4()),
-            platform: Platform::Ethereum,
-            identity: p.metadata.collection_address.clone(),
-            created_at: None,
-            display_name: p.metadata.collection_address.clone(),
-            added_at: naive_now(),
-            avatar_url: None,
-            profile_url: None,
-            updated_at: naive_now(),
-        };
-    }
-
-    let to_record = to.create_or_update(&db).await.ok()?;
-
-    let pf: Proof = Proof {
+    let to: NFT = NFT {
         uuid: Uuid::new_v4(),
-        source: DataSource::Rss3,
-        record_id: Some(p.metadata.proof.clone()),
-        created_at: Some(create_naive_date_time),
-        last_fetched_at: update_naive_date_time,
+        category: NFTCategory::from_str(p.metadata.contract_type.as_str()).unwrap(),
+        contract: p.metadata.collection_address.clone(),
+        id: p.metadata.token_id.clone(),
+        chain: Chain::from_str(p.metadata.network.as_str()).unwrap(),
+        symbol: Some(p.metadata.token_symbol.clone()),
+        fetched_at: naive_now(),
     };
 
-    let proof_record = pf.connect(&db, &from_record, &to_record).await.ok()?;
+    let to_record = to.create_or_update(&db).await?;
 
-    return Some(());
+    let owner_ship: Own = Own {
+        uuid: Uuid::new_v4(),
+        source: DataSource::Rss3,
+        chain: Chain::from_str(p.metadata.network.as_str()).unwrap(),
+        transaction: Some(p.metadata.proof.clone()),
+    };
+
+    owner_ship.connect(&db, &from_record, &to_record).await?;
+
+    Ok(())
 }
 
 #[async_trait]
@@ -182,11 +167,10 @@ impl Fetcher for Rss3 {
         Ok(())
     }
 
-
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
         return vec![(
-            vec![Platform::Ethereum, Platform::Twitter],
-            vec![Platform::Twitter, Platform::Ethereum],
+            vec![Platform::Ethereum],
+            vec![],
         )];
     }
 }

@@ -151,7 +151,6 @@ impl Fetcher for ProofClient {
         Ok(())
     }
 
-
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
         return vec![(
             vec![

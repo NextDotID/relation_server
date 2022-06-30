@@ -17,15 +17,8 @@ mod tests {
             .await?
             .expect("Record not found");
 
-<<<<<<< HEAD
-    #[tokio::test]
-    async fn test_sybil_ability() -> Result<(), Error> {
-        let result = SybilList::ability();
-        println!("{:?}", result);
-        assert_ne!(result.len(), 0);
-=======
         assert_eq!(found.updated_at.timestamp(), naive_now().timestamp());
->>>>>>> 78e305a2b365901e86fbd0f70a72b93a470df603
+
         Ok(())
     }
 }
