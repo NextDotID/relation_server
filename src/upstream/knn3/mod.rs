@@ -98,7 +98,7 @@ impl Fetcher for Knn3 {
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
         return vec![(
             vec![Platform::Ethereum],
-            vec![Platform::Twitter, Platform::Ethereum],
+            vec![],
         )];
     }
 }
