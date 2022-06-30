@@ -1,9 +1,9 @@
-pub mod proof;
 pub mod own;
+pub mod proof;
 // mod pubkey_derivation;
 
-pub use proof::{Proof, ProofRecord};
 pub use own::{Own, OwnRecord};
+pub use proof::{Proof, ProofRecord};
 
 use aragog::{DatabaseConnection, DatabaseRecord, Record};
 use async_trait::async_trait;

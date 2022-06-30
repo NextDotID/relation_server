@@ -4,7 +4,7 @@ use crate::config::C;
 use crate::error::Error;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{Connection, DataSource, Fetcher, Platform};
+use crate::upstream::{DataSource, Fetcher, Platform};
 use crate::util::{make_client, naive_now, parse_body};
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -76,7 +76,7 @@ pub struct Keybase {
 
 #[async_trait]
 impl Fetcher for Keybase {
-    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
+    async fn fetch(&self) -> Result<(), Error> {
         let client = make_client();
         let uri: http::Uri = match format!(
             "{}?{}={}&fields=proofs_summary",
@@ -122,7 +122,6 @@ impl Fetcher for Keybase {
 
         let db = new_db_connection().await?;
 
-        let mut res = Vec::new();
         for p in person_info.proofs_summary.all.into_iter() {
             let from: Identity = Identity {
                 uuid: Some(Uuid::new_v4()),
@@ -160,20 +159,14 @@ impl Fetcher for Keybase {
                 created_at: None,
                 last_fetched_at: naive_now(),
             };
-            let proof_record = pf.connect(&db, &from_record, &to_record).await?;
-
-            let cnn: Connection = Connection {
-                from: from_record,
-                to: to_record,
-                proof: proof_record,
-            };
-            res.push(cnn);
+            pf.connect(&db, &from_record, &to_record).await?;
         }
 
-        Ok(res)
+        Ok(())
     }
 
-    fn ability() -> Vec<(Vec<Platform>, Vec<Platform>)> {
+
+    fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
         return vec![(
             vec![Platform::Twitter, Platform::Github],
             vec![Platform::Keybase, Platform::Twitter, Platform::Github],
