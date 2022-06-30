@@ -4,7 +4,7 @@ use crate::config::C;
 use crate::error::Error;
 use crate::graph::{edge::Proof, vertex::Identity};
 use crate::graph::{new_db_connection, Edge, Vertex};
-use crate::upstream::{Connection, DataSource, Platform};
+use crate::upstream::{DataSource, Platform};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -43,8 +43,8 @@ pub struct Aggregation {
     pub identity: String,
 }
 
-async fn save_item(p: Record) -> Option<Connection> {
-    let db = new_db_connection().await.ok()?;
+async fn save_item(p: Record) -> Result<(), Error> {
+    let db = new_db_connection().await?;
 
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -58,7 +58,7 @@ async fn save_item(p: Record) -> Option<Connection> {
         updated_at: naive_now(),
     };
 
-    let from_record = from.create_or_update(&db).await.ok()?;
+    let from_record = from.create_or_update(&db).await?;
 
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -71,7 +71,7 @@ async fn save_item(p: Record) -> Option<Connection> {
         profile_url: None,
         updated_at: naive_now(),
     };
-    let to_record = to.create_or_update(&db).await.ok()?;
+    let to_record = to.create_or_update(&db).await?;
 
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
@@ -80,24 +80,16 @@ async fn save_item(p: Record) -> Option<Connection> {
         created_at: Some(timestamp_to_naive(p.create_timestamp.parse().unwrap())),
         last_fetched_at: timestamp_to_naive(p.modify_timestamp.parse().unwrap()),
     };
-    let proof_record = pf.connect(&db, &from_record, &to_record).await.ok()?;
+    pf.connect(&db, &from_record, &to_record).await?;
 
-    let cnn: Connection = Connection {
-        from: from_record,
-        to: to_record,
-        proof: proof_record,
-    };
-
-    return Some(cnn);
+    Ok(())
 }
 
 #[async_trait]
 impl Fetcher for Aggregation {
-    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
+    async fn fetch(&self) -> Result<(), Error> {
         let client = make_client();
         let mut page = 1;
-
-        let mut res = Vec::new();
 
         loop {
             let uri: http::Uri = match format!(
@@ -127,9 +119,7 @@ impl Fetcher for Aggregation {
 
             // parse
             let futures: Vec<_> = body.records.into_iter().map(|p| save_item(p)).collect();
-            let results = join_all(futures).await;
-            let cons: Vec<Connection> = results.into_iter().filter_map(|i| i).collect();
-            res.extend(cons);
+            join_all(futures).await;
 
             if body.pagination.current == body.pagination.next {
                 break;
@@ -137,10 +127,13 @@ impl Fetcher for Aggregation {
             page = body.pagination.next;
         }
 
-        Ok(res)
+        Ok(())
     }
 
-    fn ability() -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(vec![Platform::Ethereum, Platform::Twitter], vec![Platform::Ethereum, Platform::Twitter])];
+    fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
+        return vec![(
+            vec![Platform::Ethereum, Platform::Twitter],
+            vec![Platform::Ethereum, Platform::Twitter],
+        )];
     }
 }

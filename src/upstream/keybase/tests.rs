@@ -1,8 +1,11 @@
 mod tests {
     use crate::{
         error::Error,
+        graph::new_db_connection,
+        graph::vertex::Identity,
         upstream::keybase::Keybase,
         upstream::{Fetcher, Platform},
+        util::naive_now,
     };
 
     #[tokio::test]
@@ -11,16 +14,17 @@ mod tests {
             platform: "github".to_string(),
             identity: "fengshanshan".to_string(),
         };
+        kb.fetch().await?;
+        let db = new_db_connection().await?;
+        let found = Identity::find_by_platform_identity(
+            &db,
+            &Platform::Github,
+            &"fengshanshan".to_string(),
+        )
+        .await?
+        .expect("Record not found");
 
-        let result = kb.fetch(None).await?;
-
-        //println!("{:?}", result.first());
-        assert_ne!(result.len(), 0);
-        let item = result
-            .iter()
-            .find(|c| &&c.to.identity == &&"fengshanshan".to_string())
-            .unwrap();
-        assert_eq!(item.to.platform, Platform::Github);
+        assert_eq!(found.updated_at.timestamp(), naive_now().timestamp());
 
         Ok(())
     }

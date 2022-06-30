@@ -5,7 +5,7 @@ use crate::config::C;
 use crate::error::Error;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{Connection, DataSource, Fetcher, Platform};
+use crate::upstream::{DataSource, Fetcher, Platform};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 
 use async_trait::async_trait;
@@ -52,11 +52,12 @@ pub struct ErrorResponse {
 }
 
 pub struct ProofClient {
-    pub persona: String,
+    pub platform: String,
+    pub identity: String,
 }
 
-async fn save_item(p: ProofRecord) -> Option<Connection> {
-    let db = new_db_connection().await.ok()?;
+async fn save_item(p: ProofRecord) -> Result<(), Error> {
+    let db = new_db_connection().await?;
 
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -72,7 +73,7 @@ async fn save_item(p: ProofRecord) -> Option<Connection> {
         updated_at: naive_now(),
     };
 
-    let from_record = from.create_or_update(&db).await.ok()?;
+    let from_record = from.create_or_update(&db).await?;
 
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -87,7 +88,7 @@ async fn save_item(p: ProofRecord) -> Option<Connection> {
         profile_url: None,
         updated_at: naive_now(),
     };
-    let to_record = to.create_or_update(&db).await.ok()?;
+    let to_record = to.create_or_update(&db).await?;
 
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
@@ -98,24 +99,18 @@ async fn save_item(p: ProofRecord) -> Option<Connection> {
         )),
         last_fetched_at: naive_now(),
     };
-    let proof_record = pf.connect(&db, &from_record, &to_record).await.ok()?;
+    pf.connect(&db, &from_record, &to_record).await?;
 
-    let cnn: Connection = Connection {
-        from: from_record,
-        to: to_record,
-        proof: proof_record,
-    };
-
-    return Some(cnn);
+    Ok(())
 }
 
 #[async_trait]
 impl Fetcher for ProofClient {
-    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
+    async fn fetch(&self) -> Result<(), Error> {
         let client = make_client();
         let uri: http::Uri = match format!(
-            "{}/v1/proof?platform=nextid&identity={}",
-            C.upstream.proof_service.url, self.persona
+            "{}/v1/proof?platform={}&identity={}",
+            C.upstream.proof_service.url, self.platform, self.identity
         )
         .parse()
         {
@@ -151,12 +146,25 @@ impl Fetcher for ProofClient {
 
         // parse
         let futures: Vec<_> = proofs.proofs.into_iter().map(|p| save_item(p)).collect();
-        let results = join_all(futures).await;
-        let parse_body: Vec<Connection> = results.into_iter().filter_map(|i| i).collect();
-        Ok(parse_body)
+        join_all(futures).await;
+
+        Ok(())
     }
 
-    fn ability() -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(vec![Platform::Ethereum, Platform::Twitter, Platform::NextID, Platform::Github], vec![Platform::Ethereum, Platform::Twitter, Platform::NextID, Platform::Github])];
+    fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
+        return vec![(
+            vec![
+                Platform::Ethereum,
+                Platform::Twitter,
+                Platform::NextID,
+                Platform::Github,
+            ],
+            vec![
+                Platform::Ethereum,
+                Platform::Twitter,
+                Platform::NextID,
+                Platform::Github,
+            ],
+        )];
     }
 }

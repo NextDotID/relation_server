@@ -5,7 +5,7 @@ use crate::config::C;
 use crate::error::Error;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{Connection, DataSource, Fetcher, Platform};
+use crate::upstream::{DataSource, Fetcher, Platform};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -43,10 +43,10 @@ pub struct ErrorResponse {
 
 pub struct SybilList {}
 
-async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connection> {
-    let db = new_db_connection().await.ok()?;
+async fn save_item(eth_wallet_address: String, value: Value) -> Result<(), Error> {
+    let db = new_db_connection().await?;
 
-    let item: VerifiedItem = serde_json::from_value(value).ok()?;
+    let item: VerifiedItem = serde_json::from_value(value)?;
 
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -59,7 +59,7 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connectio
         profile_url: None,
         updated_at: naive_now(),
     };
-    let from_record = from.create_or_update(&db).await.ok()?;
+    let from_record = from.create_or_update(&db).await?;
 
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -72,7 +72,7 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connectio
         profile_url: None,
         updated_at: naive_now(),
     };
-    let to_record = to.create_or_update(&db).await.ok()?;
+    let to_record = to.create_or_update(&db).await?;
 
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
@@ -82,20 +82,13 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Option<Connectio
         last_fetched_at: naive_now(),
     };
 
-    let proof_record = pf.connect(&db, &from_record, &to_record).await.ok()?;
-
-    let cnn: Connection = Connection {
-        from: from_record,
-        to: to_record,
-        proof: proof_record,
-    };
-
-    return Some(cnn);
+    pf.connect(&db, &from_record, &to_record).await?;
+    Ok(())
 }
 
 #[async_trait]
 impl Fetcher for SybilList {
-    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
+    async fn fetch(&self) -> Result<(), Error> {
         let client = make_client();
         let uri: http::Uri = (C.upstream.sybil_service.url).parse().unwrap();
 
@@ -119,12 +112,15 @@ impl Fetcher for SybilList {
                 save_item(eth_wallet_address.to_string(), value.to_owned())
             })
             .collect();
-        let results = join_all(futures).await;
-        let parse_body: Vec<Connection> = results.into_iter().filter_map(|i| i).collect();
-        Ok(parse_body)
+        join_all(futures).await;
+
+        Ok(())
     }
 
-    fn ability() -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(vec![Platform::Ethereum, Platform::Twitter], vec![Platform::Twitter, Platform::Ethereum])];
+    fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
+        return vec![(
+            vec![Platform::Ethereum, Platform::Twitter],
+            vec![Platform::Twitter, Platform::Ethereum],
+        )];
     }
 }

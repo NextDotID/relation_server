@@ -1,7 +1,7 @@
 mod tests;
 
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{Connection, DataSource, Fetcher, Platform};
+use crate::upstream::{DataSource, Fetcher, Platform};
 use crate::util::{make_client, naive_now, parse_body};
 use crate::{
     error::Error,
@@ -67,7 +67,7 @@ pub struct Rss3 {
     pub tags: String,
 }
 
-async fn save_item(p: Item) -> Option<Connection> {
+async fn save_item(p: Item) -> Option<()> {
     let create_date_time = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
     let create_naive_date_time = NaiveDateTime::from_timestamp(create_date_time.timestamp(), 0);
     let update_date_time = DateTime::parse_from_rfc3339(&p.date_updated).unwrap();
@@ -128,18 +128,12 @@ async fn save_item(p: Item) -> Option<Connection> {
 
     let proof_record = pf.connect(&db, &from_record, &to_record).await.ok()?;
 
-    let cnn: Connection = Connection {
-        from: from_record,
-        to: to_record,
-        proof: proof_record,
-    };
-
-    return Some(cnn);
+    return Some(());
 }
 
 #[async_trait]
 impl Fetcher for Rss3 {
-    async fn fetch(&self, _url: Option<String>) -> Result<Vec<Connection>, Error> {
+    async fn fetch(&self) -> Result<(), Error> {
         let client = make_client();
         let uri: http::Uri = match format!(
             "https://pregod.rss3.dev/v0.4.0/account:{}@{}/notes?tags={}",
@@ -183,12 +177,15 @@ impl Fetcher for Rss3 {
             .map(|p| save_item(p))
             .collect();
         let results = join_all(futures).await;
-        let parse_body: Vec<Connection> = results.into_iter().filter_map(|i| i).collect();
+        //let parse_body: Vec<Connection> = results.into_iter().filter_map(|i| i).collect();
 
-        Ok(parse_body)
+        Ok(())
     }
-    
-    fn ability() -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(vec![Platform::Ethereum, Platform::Twitter], vec![Platform::Twitter, Platform::Ethereum])];
+
+    fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
+        return vec![(
+            vec![Platform::Ethereum, Platform::Twitter],
+            vec![Platform::Twitter, Platform::Ethereum],
+        )];
     }
 }
