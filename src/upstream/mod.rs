@@ -4,17 +4,15 @@ pub mod proof_client;
 pub mod rss3;
 pub mod sybil_list;
 
-use crate::upstream::aggregation::Aggregation;
-use crate::upstream::keybase::Keybase;
+use crate::error::Error;
+use crate::upstream::{aggregation::Aggregation, keybase::Keybase};
 use crate::upstream::proof_client::ProofClient;
 use crate::upstream::sybil_list::SybilList;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use strum_macros::{Display, EnumString};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
-
-use crate::{error::Error, graph::edge::ProofRecord, graph::vertex::IdentityRecord};
+use strum_macros::{Display, EnumString};
 
 /// All identity platform.
 #[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq)]
@@ -77,7 +75,7 @@ pub enum DataSource {
     #[serde(rename = "ethLeaderboard")]
     EthLeaderboard,
 
-    /// Unknow
+    /// Unknown
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
     Unknown,
@@ -85,7 +83,7 @@ pub enum DataSource {
 
 impl Default for DataSource {
     fn default() -> Self {
-        DataSource::NextID
+        Self::Unknown
     }
 }
 
@@ -101,19 +99,14 @@ pub enum Curve {
     Secp256K1,
 }
 
-/// EdgeType: PubkeySerialize
-#[derive(Debug)]
-pub struct TempPubkeySerialize {
-    pub uuid: uuid::Uuid,
-}
-
 /// Fetcher defines how to fetch data from upstream.
 #[async_trait]
 pub trait Fetcher {
     /// Fetch data from given source.
     async fn fetch(&self) -> Result<(), Error>;
 
-    /// return support platform vec
+    /// Ability for this upstream.
+    /// `Vec<(AcceptedPlatformsAsInput, ResultOfPlatforms)>`
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)>;
 }
 
@@ -125,10 +118,14 @@ enum Upstream {
     Aggregation,
 }
 
-struct upstreamFactory;
+struct UpstreamFactory;
 
-impl upstreamFactory {
-    fn new_fetcher(u: &Upstream, platform: String, identity: String) -> Box<dyn Fetcher> {
+impl UpstreamFactory {
+    fn new_fetcher(
+        u: &Upstream,
+        platform: &String,
+        identity: &String,
+    ) -> Box<dyn Fetcher + Sync + Send> {
         match u {
             Upstream::Keybase => Box::new(Keybase {
                 platform: platform.clone(),
@@ -147,35 +144,28 @@ impl upstreamFactory {
     }
 }
 
-///fetch data from all supported upstream
-async fn fetch_all(platform: String, identity: String) -> Result<(), Error> {
-    let mut data_fetch: Box<dyn Fetcher>;
-    let mut ability: Vec<(Vec<Platform>, Vec<Platform>)>;
-    //let mut result = Vec::new();
-
+/// Drain all supported upstream out.
+pub async fn fetch_all(platform: &Platform, identity: &String) -> Result<(), Error> {
     for source in Upstream::iter() {
-        data_fetch = upstreamFactory::new_fetcher(&source, platform.clone(), identity.clone());
-        ability = data_fetch.ability();
-        for (support_platforms, _) in ability.into_iter() {
-            if support_platforms.iter().any(|p| p.to_string() == platform) {
-                let res = data_fetch.fetch().await;
-                if res.is_err() {
-                    continue;
-                }
+        let fetcher = UpstreamFactory::new_fetcher(&source, &platform.to_string(), identity);
+        let ability = fetcher.ability();
+        for (platforms, _) in ability.into_iter() {
+            if platforms.iter().any(|p| p == platform) {
+                let _ = fetcher.fetch().await;
             }
         }
     }
-    return Ok(());
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use crate::error::Error;
-    use crate::upstream::fetch_all;
+    use crate::upstream::{fetch_all, Platform};
 
     #[tokio::test]
     async fn test_fetcher_result() -> Result<(), Error> {
-        let result = fetch_all("github".to_string(), "fengshanshan".to_string()).await?;
+        let result = fetch_all(&Platform::Github, &"fengshanshan".into()).await?;
         assert_eq!(result, ());
         Ok(())
     }

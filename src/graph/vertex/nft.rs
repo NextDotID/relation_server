@@ -10,9 +10,9 @@ use aragog::{
     query::{Comparison, Filter, QueryResult},
     DatabaseConnection, DatabaseRecord, Record,
 };
-use chrono::NaiveDateTime;
+use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
-use strum_macros::{Display, EnumString, EnumIter};
+use strum_macros::{Display, EnumIter, EnumString};
 use uuid::Uuid;
 
 #[derive(Clone, Serialize, Deserialize, Debug, Display, PartialEq, EnumString, EnumIter)]
@@ -189,6 +189,16 @@ impl Vertex<NFTRecord> for NFT {
             Ok(Some(query_result.first().unwrap().to_owned().into()))
         }
     }
+
+    /// Outdated in 1 hour
+    fn is_outdated(&self) -> bool {
+        let outdated_in = Duration::hours(1);
+        self.fetched_at
+            .clone()
+            .checked_add_signed(outdated_in)
+            .unwrap()
+            .lt(&naive_now())
+    }
 }
 
 #[derive(Clone, Deserialize, Serialize, Default, Debug)]
@@ -216,7 +226,10 @@ impl From<DatabaseRecord<NFT>> for NFTRecord {
 
 impl NFTRecord {
     /// Which wallet (`Identity`) does this NFT belong to?
-    pub async fn belongs_to(&self, db: &DatabaseConnection) -> Result<Option<IdentityRecord>, Error> {
+    pub async fn belongs_to(
+        &self,
+        db: &DatabaseConnection,
+    ) -> Result<Option<IdentityRecord>, Error> {
         let query = self.inbound_query(1, 1, "Owns");
 
         let result: QueryResult<Identity> = Identity::get(&query, db).await?;
@@ -246,9 +259,9 @@ impl NFTRecord {
 
 #[cfg(test)]
 mod tests {
-    use fake::{Dummy, Faker, Fake};
+    use fake::{Dummy, Fake, Faker};
 
-    use crate::graph::{new_db_connection, edge::Own};
+    use crate::graph::{edge::Own, new_db_connection};
 
     use super::*;
 
@@ -309,7 +322,9 @@ mod tests {
         let neighbors = nft1.neighbors(&db).await?;
         assert_eq!(2, neighbors.len());
 
-        assert!(neighbors.iter().all(|nft| (nft.uuid == nft1.uuid) || (nft.uuid == nft2.uuid)));
+        assert!(neighbors
+            .iter()
+            .all(|nft| (nft.uuid == nft1.uuid) || (nft.uuid == nft2.uuid)));
         Ok(())
     }
 }

@@ -1,10 +1,41 @@
 use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
 use crate::error::{Error, Result};
-use crate::graph::vertex::{Identity, IdentityRecord};
+use crate::graph::vertex::{Identity, IdentityRecord, Vertex};
+use crate::upstream::fetch_all;
+
+/// Status for a record in RelationService DB
+#[derive(Default, Copy, Clone, PartialEq, Eq, async_graphql::Enum)]
+enum DataStatus {
+    /// Fetched or not in Database.
+    #[default]
+    #[graphql(name = "cached")]
+    Cached,
+
+    /// Fetching this data.
+    /// The result you got maybe outdated.
+    /// Come back later if you want a fresh one.
+    #[graphql(name = "fetching")]
+    Fetching,
+}
 
 #[Object]
 impl IdentityRecord {
+    /// Status for this record in RelationService.
+    async fn status(&self) -> Vec<DataStatus> {
+        use DataStatus::*;
+
+        if self.key().len() > 0 {
+            if self.0.record.is_outdated() {
+                vec![Cached, Fetching]
+            } else {
+                vec![Cached]
+            }
+        } else {
+            vec![Fetching]
+        }
+    }
+
     async fn uuid(&self) -> Option<String> {
         self.uuid.map(|u| u.to_string())
     }
@@ -78,8 +109,20 @@ impl IdentityQuery {
     ) -> Result<Option<IdentityRecord>> {
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let platform = platform.parse()?;
-        let found = Identity::find_by_platform_identity(&db, &platform, &identity).await?;
-
-        Ok(found)
+        // FIXME: Super dirty. Should be in an async job/worker-like shape.
+        match Identity::find_by_platform_identity(&db, &platform, &identity).await? {
+            None => {
+                fetch_all(&platform, &identity).await?;
+                Identity::find_by_platform_identity(&db, &platform, &identity).await
+            },
+            Some(found) => {
+                if found.0.record.is_outdated() {
+                    fetch_all(&platform, &identity).await?;
+                    Identity::find_by_platform_identity(&db, &platform, &identity).await
+                } else {
+                    Ok(Some(found))
+                }
+            },
+        }
     }
 }
