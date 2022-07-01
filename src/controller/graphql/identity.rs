@@ -1,8 +1,6 @@
 use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
-
 use crate::error::{Error, Result};
-use crate::graph::edge::ProofRecord;
 use crate::graph::vertex::{Identity, IdentityRecord};
 
 #[Object]
@@ -43,8 +41,36 @@ impl IdentityRecord {
         self.updated_at.timestamp()
     }
 
+    /// Neighbor identity from current. Flattened.
+    async fn neighbor(
+        &self,
+        ctx: &Context<'_>,
+        // #[graphql(
+        //     desc = "Upstream source of this connection. Will search all upstreams if omitted."
+        // )]
+        // upstream: Option<String>,
+        #[graphql(
+            desc = "Depth of traversal. 1 if omitted",
+        )]
+        depth: Option<u16>,
+    ) -> Result<Vec<IdentityRecord>> {
+        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        self.neighbors(
+            db,
+            depth.unwrap_or(1),
+            // upstream.map(|u| DataSource::from_str(&u).unwrap_or(DataSource::Unknown))
+            None
+        ).await
+    }
+}
+
+#[derive(Default)]
+pub struct IdentityQuery;
+
+#[Object]
+impl IdentityQuery {
     /// Query an `identity` by given `platform` and `identity`.
-    async fn identity_from(
+    async fn identity(
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "Platform to query")] platform: String,
@@ -55,16 +81,5 @@ impl IdentityRecord {
         let found = Identity::find_by_platform_identity(&db, &platform, &identity).await?;
 
         Ok(found)
-    }
-
-    async fn proofs(
-        &self,
-        _ctx: &Context<'_>,
-        #[graphql(
-            desc = "Upstream source of this connection. Param missing means searching all upstreams."
-        )]
-        upstream: Option<String>,
-    ) -> Result<Vec<ProofRecord>> {
-        todo!()
     }
 }

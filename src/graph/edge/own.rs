@@ -27,8 +27,6 @@ pub struct Own {
     /// In most case, it is a `"0xVERY_LONG_HEXSTRING"`.
     /// Maybe this is not provided by `source`, so we set it as `Option<>` here.
     pub transaction: Option<String>,
-    /// On which chain?
-    pub chain: Chain,
 }
 
 #[derive(Clone, Deserialize, Serialize, Default)]
@@ -109,6 +107,23 @@ impl Edge<Identity, NFT, OwnRecord> for Own {
             Ok(None)
         } else {
             Ok(Some(result.first().unwrap().to_owned().into()))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fake::{Dummy, Faker, Fake};
+
+    use super::*;
+
+    impl Dummy<Faker> for Own {
+        fn dummy_with_rng<R: rand::Rng + ?Sized>(config: &Faker, _rng: &mut R) -> Self {
+            Self {
+                uuid: Uuid::new_v4(),
+                source: DataSource::Unknown,
+                transaction: config.fake(),
+            }
         }
     }
 }

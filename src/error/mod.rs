@@ -23,8 +23,10 @@ pub enum Error {
     ConfigError(#[from] config::ConfigError),
     #[error("Database error: {0}")]
     SignatureValidationError(String),
-    #[error("Parse hex error: {0}")]
+    #[error("Hex parse error: {0}")]
     HttpClientError(#[from] hyper::Error),
+    #[error("UUID parse error: {0}")]
+    UuidError(#[from] uuid::Error),
     #[error("ArangoDB error: {0}")]
     ArangoDBError(#[from] aragog::Error),
     #[error("Parse error: {0}")]
@@ -49,6 +51,7 @@ impl Error {
             Error::ArangoDBError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::EnumParseError(_) => StatusCode::BAD_REQUEST,
             Error::GraphQLError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::UuidError(_) => StatusCode::BAD_REQUEST,
         }
     }
 }

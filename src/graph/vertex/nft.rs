@@ -1,14 +1,22 @@
-use crate::{error::Error, graph::Vertex, util::naive_now};
+use crate::{
+    error::Error,
+    graph::{
+        vertex::identity::{Identity, IdentityRecord},
+        Vertex,
+    },
+    util::naive_now,
+};
 use aragog::{
-    query::{Comparison, Filter},
+    query::{Comparison, Filter, QueryResult},
     DatabaseConnection, DatabaseRecord, Record,
 };
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use strum_macros::{Display, EnumString};
+use strum_macros::{Display, EnumString, EnumIter};
 use uuid::Uuid;
 
-#[derive(Clone, Serialize, Deserialize, Debug, Display, PartialEq, EnumString)]
+
+#[derive(Clone, Serialize, Deserialize, Debug, Display, PartialEq, EnumString, EnumIter)]
 pub enum Chain {
     #[strum(serialize = "ethereum")]
     #[serde(rename = "ethereum")]
@@ -93,6 +101,10 @@ pub enum NFTCategory {
     #[strum(serialize = "POAP")]
     #[serde(rename = "POAP")]
     POAP,
+
+    #[serde(rename = "unknown")]
+    #[strum(serialize = "unknown")]
+    Unknown,
 }
 impl Default for NFTCategory {
     fn default() -> Self {
@@ -135,7 +147,7 @@ impl Default for NFT {
 }
 
 impl NFT {
-    async fn find_by_chain_contract_id(
+    pub async fn find_by_chain_contract_id(
         db: &DatabaseConnection,
         chain: &Chain,
         contract: &String,
@@ -161,7 +173,7 @@ impl Vertex<NFTRecord> for NFT {
         Some(self.uuid)
     }
 
-    /// Create or update an NFT.
+    /// Create or update an NFT info by (chain, contract, nft_id).
     async fn create_or_update(&self, db: &DatabaseConnection) -> Result<NFTRecord, Error> {
         let found =
             Self::find_by_chain_contract_id(db, &self.chain, &self.contract, &self.id).await?;
@@ -191,15 +203,10 @@ impl Vertex<NFTRecord> for NFT {
             Ok(Some(query_result.first().unwrap().to_owned().into()))
         }
     }
-
-    /// What other NFTs does this NFT's owner has?
-    async fn neighbors(&self, db: &DatabaseConnection) -> Result<Vec<NFTRecord>, Error> {
-        todo!()
-    }
 }
 
 #[derive(Clone, Deserialize, Serialize, Default, Debug)]
-pub struct NFTRecord(DatabaseRecord<NFT>);
+pub struct NFTRecord(pub DatabaseRecord<NFT>);
 
 impl std::ops::Deref for NFTRecord {
     type Target = DatabaseRecord<NFT>;
@@ -218,5 +225,105 @@ impl std::ops::DerefMut for NFTRecord {
 impl From<DatabaseRecord<NFT>> for NFTRecord {
     fn from(record: DatabaseRecord<NFT>) -> Self {
         Self(record)
+    }
+}
+
+impl NFTRecord {
+    /// Which wallet (`Identity`) does this NFT belong to?
+    pub async fn belongs_to(&self, db: &DatabaseConnection) -> Result<Option<IdentityRecord>, Error> {
+        let query = self.inbound_query(1, 1, "Owns");
+
+        let result: QueryResult<Identity> = Identity::get(&query, db).await?;
+        if result.len() == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(result.first().unwrap().to_owned().into()))
+        }
+    }
+
+    /// What other NFTs does this NFT's owner has?
+    pub async fn neighbors(&self, db: &DatabaseConnection) -> Result<Vec<NFTRecord>, Error> {
+        let owner = self.belongs_to(db).await?;
+        if owner.is_none() {
+            return Ok(vec![]);
+        }
+
+        let query = owner.unwrap().outbound_query(1, 2, "Owns");
+        let result: QueryResult<NFT> = NFT::get(&query, db).await?;
+        if result.len() == 0 {
+            Ok(vec![]) // Empty result
+        } else {
+            Ok(result.iter().map(|r| r.to_owned().into()).collect())
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fake::{Dummy, Faker, Fake};
+
+    use crate::graph::{new_db_connection, edge::Own};
+
+    use super::*;
+
+    impl NFT {
+        pub async fn create_dummy(db: &DatabaseConnection) -> Result<NFTRecord, Error> {
+            let nft: NFT = Faker.fake();
+            Ok(nft.create_or_update(db).await?.into())
+        }
+    }
+
+    impl Dummy<Faker> for NFT {
+        fn dummy_with_rng<R: rand::Rng + ?Sized>(config: &Faker, _rng: &mut R) -> Self {
+            let mut nft = NFT::default();
+            nft.category = NFTCategory::ENS;
+            nft.chain = Chain::Ethereum;
+            nft.contract = config.fake();
+            nft.id = config.fake();
+            nft.symbol = Some("ENS".into());
+
+            nft
+        }
+    }
+
+    #[tokio::test]
+    async fn test_creation() -> Result<(), Error> {
+        let db = new_db_connection().await?;
+        let created = NFT::create_dummy(&db).await?;
+        assert!(created.key().len() > 0);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_belongs_to() -> Result<(), Error> {
+        let db = new_db_connection().await?;
+        let nft = NFT::create_dummy(&db).await?;
+        let identity = Identity::create_dummy(&db).await?;
+        let own: Own = Faker.fake();
+        DatabaseRecord::link(&identity, &nft, &db, own).await?;
+        let identity_found = nft.belongs_to(&db).await?.expect("Connection not found");
+        assert_eq!(identity.uuid, identity_found.uuid);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_neighbors() -> Result<(), Error> {
+        let db = new_db_connection().await?;
+        let identity = Identity::create_dummy(&db).await?;
+        // Create 2 Identity -> NFT connections
+        let nft1 = NFT::create_dummy(&db).await?;
+        let own1: Own = Faker.fake();
+        DatabaseRecord::link(&identity, &nft1, &db, own1).await?;
+        let nft2 = NFT::create_dummy(&db).await?;
+        let own2: Own = Faker.fake();
+        DatabaseRecord::link(&identity, &nft2, &db, own2).await?;
+
+        let neighbors = nft1.neighbors(&db).await?;
+        assert_eq!(2, neighbors.len());
+
+        assert!(neighbors.iter().all(|nft| (nft.uuid == nft1.uuid) || (nft.uuid == nft2.uuid)));
+        Ok(())
     }
 }
