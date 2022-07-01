@@ -25,7 +25,4 @@ where
     /// Find a vertex by UUID.
     async fn find_by_uuid(db: &DatabaseConnection, uuid: Uuid)
         -> Result<Option<RecordType>, Error>;
-
-    /// Traverse neighbors.
-    async fn neighbors(&self, db: &DatabaseConnection) -> Result<Vec<RecordType>, Error>;
 }

@@ -13,6 +13,8 @@ use crate::{
     util::naive_now,
 };
 
+pub const COLLECTION_NAME: &'static str = "Proofs";
+
 /// Edge to connect two `Identity`s.
 #[derive(Clone, Serialize, Deserialize, Record)]
 #[collection_name = "Proofs"]
@@ -96,12 +98,9 @@ impl Edge<Identity, Identity, ProofRecord> for Proof {
         from: &DatabaseRecord<Identity>,
         to: &DatabaseRecord<Identity>,
     ) -> Result<ProofRecord, Error> {
-        // Find first
         let found = Self::find_by_from_to(db, from, to, &self.source, &self.record_id).await?;
         match found {
-            // Found. Return it.
             Some(edge) => Ok(edge.into()),
-            // Not found. Create it.
             None => Ok(DatabaseRecord::link(from, to, db, self.clone())
                 .await?
                 .into()),

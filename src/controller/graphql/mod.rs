@@ -1,22 +1,15 @@
 mod identity;
-mod proof;
 mod nft;
+mod proof;
 
-use async_graphql::{EmptyMutation, EmptySubscription, MergedObject, Object};
+use self::{identity::IdentityQuery, nft::NFTQuery, proof::ProofQuery};
+use async_graphql::{MergedObject, Object};
 
-use crate::graph::{vertex::IdentityRecord, edge::ProofRecord};
-
-const API_VERSION: &str = "1.0";
-
-pub struct Context {
-    /// Real GraphDB upstream.
-    /// TODO: replace it with a real database.
-    pub pool: String,
-}
+const API_VERSION: &str = "0.1";
 
 /// Base struct of GraphQL query request.
 #[derive(MergedObject, Default)]
-pub struct Query(GeneralQuery, IdentityRecord, ProofRecord);
+pub struct Query(GeneralQuery, IdentityQuery, ProofQuery, NFTQuery);
 
 #[derive(Default)]
 pub struct GeneralQuery;
@@ -24,12 +17,10 @@ pub struct GeneralQuery;
 #[Object]
 impl GeneralQuery {
     async fn ping(&self) -> &'static str {
-        "pong"
+        "Pong!"
     }
 
     async fn api_version(&self) -> &'static str {
         API_VERSION
     }
 }
-
-type Schema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;

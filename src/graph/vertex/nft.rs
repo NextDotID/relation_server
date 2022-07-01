@@ -189,11 +189,6 @@ impl Vertex<NFTRecord> for NFT {
             Ok(Some(query_result.first().unwrap().to_owned().into()))
         }
     }
-
-    /// What other NFTs does this NFT's owner has?
-    async fn neighbors(&self, _db: &DatabaseConnection) -> Result<Vec<NFTRecord>, Error> {
-        Ok(vec![]) // TODO: delete this in trait. Should be implemented in TRecord.
-    }
 }
 
 #[derive(Clone, Deserialize, Serialize, Default, Debug)]
