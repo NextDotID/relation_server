@@ -78,7 +78,7 @@ async fn save_item(p: Record) -> Result<(), Error> {
         source: DataSource::from_str(p.source.as_str()).unwrap_or(DataSource::Unknown),
         record_id: Some(p.id.clone()),
         created_at: Some(timestamp_to_naive(p.create_timestamp.parse().unwrap())),
-        last_fetched_at: timestamp_to_naive(p.modify_timestamp.parse().unwrap()),
+        updated_at: timestamp_to_naive(p.modify_timestamp.parse().unwrap()),
     };
     pf.connect(&db, &from_record, &to_record).await?;
 

@@ -97,7 +97,7 @@ async fn save_item(p: ProofRecord) -> Result<(), Error> {
         created_at: Some(timestamp_to_naive(
             p.created_at.to_string().parse().unwrap(),
         )),
-        last_fetched_at: naive_now(),
+        updated_at: naive_now(),
     };
     pf.connect(&db, &from_record, &to_record).await?;
 

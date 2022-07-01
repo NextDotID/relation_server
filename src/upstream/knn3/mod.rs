@@ -50,10 +50,8 @@ impl Fetcher for Knn3 {
         };
         let data = client
             .query_with_vars::<Data, Vars>(query, vars)
-            .await
-            .unwrap();
+            .await.unwrap();
         let res = data.unwrap();
-        //let data = res.unwrap();
         let ens_vec = res.addrs.first().unwrap();
 
         let db = new_db_connection().await?;
@@ -80,7 +78,7 @@ impl Fetcher for Knn3 {
                 id: ens.to_string(),
                 chain: Chain::Ethereum,
                 symbol: None,
-                fetched_at: naive_now(),
+                updated_at: naive_now(),
             };
             let to_record = to.create_or_update(&db).await?;
 
@@ -88,7 +86,6 @@ impl Fetcher for Knn3 {
                 uuid: Uuid::new_v4(),
                 transaction: None,
                 source: DataSource::Knn3,
-                chain: Chain::Ethereum,
             };
             owner_ship.connect(&db, &from_record, &to_record).await?;
         }

@@ -99,7 +99,7 @@ async fn save_item(p: Item) -> Result<(), Error> {
         id: p.metadata.token_id.clone(),
         chain: Chain::from_str(p.metadata.network.as_str()).unwrap(),
         symbol: Some(p.metadata.token_symbol.clone()),
-        fetched_at: naive_now(),
+        updated_at: naive_now(),
     };
 
     let to_record = to.create_or_update(&db).await?;
@@ -107,7 +107,6 @@ async fn save_item(p: Item) -> Result<(), Error> {
     let owner_ship: Own = Own {
         uuid: Uuid::new_v4(),
         source: DataSource::Rss3,
-        chain: Chain::from_str(p.metadata.network.as_str()).unwrap(),
         transaction: Some(p.metadata.proof.clone()),
     };
 

@@ -30,7 +30,7 @@ pub struct Proof {
     /// When this connection is recorded in upstream platform (if platform gives such data).
     pub created_at: Option<NaiveDateTime>,
     /// When this connection is fetched by us RelationService.
-    pub last_fetched_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 impl Default for Proof {
@@ -40,7 +40,7 @@ impl Default for Proof {
             source: DataSource::NextID,
             record_id: None,
             created_at: None,
-            last_fetched_at: naive_now(),
+            updated_at: naive_now(),
         }
     }
 }
@@ -139,7 +139,7 @@ mod tests {
                 source: DataSource::SybilList,
                 record_id: Some(config.fake()),
                 created_at: Some(config.fake()),
-                last_fetched_at: naive_now(),
+                updated_at: naive_now(),
             }
         }
     }

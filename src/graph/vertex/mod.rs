@@ -24,5 +24,8 @@ where
 
     /// Find a vertex by UUID.
     async fn find_by_uuid(db: &DatabaseConnection, uuid: Uuid)
-        -> Result<Option<RecordType>, Error>;
+                          -> Result<Option<RecordType>, Error>;
+
+    /// Judge if this record is outdated.
+    fn is_outdated(&self) -> bool;
 }

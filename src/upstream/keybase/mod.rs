@@ -157,7 +157,7 @@ impl Fetcher for Keybase {
                 source: DataSource::Keybase,
                 record_id: Some(p.proof_id.clone()),
                 created_at: None,
-                last_fetched_at: naive_now(),
+                updated_at: naive_now(),
             };
             pf.connect(&db, &from_record, &to_record).await?;
         }

@@ -4,13 +4,12 @@ use crate::{
     upstream::{DataSource, Platform},
     util::naive_now,
 };
-use async_trait::async_trait;
-
 use aragog::{
     query::{Comparison, Filter, Query, QueryResult},
-    DatabaseConnection, DatabaseRecord, Record, DatabaseAccess,
+    DatabaseConnection, DatabaseRecord, Record,
 };
-use chrono::NaiveDateTime;
+use async_trait::async_trait;
+use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -102,7 +101,7 @@ impl Vertex<IdentityRecord> for Identity {
         let found = Self::find_by_platform_identity(db, &self.platform, &self.identity).await?;
         match found {
             None => {
-                // Not found. Create it.
+                // Create
                 let mut to_be_created = self.clone();
                 to_be_created.uuid = to_be_created.uuid.or(Some(Uuid::new_v4()));
                 to_be_created.added_at = naive_now();
@@ -111,12 +110,11 @@ impl Vertex<IdentityRecord> for Identity {
                 Ok(created.into())
             }
             Some(mut found) => {
-                // Found. Update it.
-                println!("UUID: {:?}", found.uuid);
+                // Update
                 found.display_name = self.display_name.clone();
                 found.profile_url = self.profile_url.clone();
                 found.avatar_url = self.avatar_url.clone();
-                found.created_at = self.created_at;
+                found.created_at = self.created_at.or(found.created_at.clone());
                 found.updated_at = naive_now();
 
                 found.save(db).await?;
@@ -137,12 +135,22 @@ impl Vertex<IdentityRecord> for Identity {
             Ok(Some(query_result.first().unwrap().to_owned().into()))
         }
     }
+
+    /// Judge if this record is outdated and should be refetched.
+    fn is_outdated(&self) -> bool {
+        let outdated_in = Duration::hours(1);
+        self.updated_at
+            .clone()
+            .checked_add_signed(outdated_in)
+            .unwrap()
+            .lt(&naive_now())
+    }
 }
 
 /// Result struct queried from graph database.
 /// Useful by GraphQL side to wrap more function / traits.
 #[derive(Clone, Deserialize, Serialize, Default, Debug)]
-pub struct IdentityRecord(DatabaseRecord<Identity>);
+pub struct IdentityRecord(pub DatabaseRecord<Identity>);
 
 impl std::ops::Deref for IdentityRecord {
     type Target = DatabaseRecord<Identity>;
@@ -182,7 +190,9 @@ impl IdentityRecord {
         //     ).distinct(),
         // };
 
-        let result: QueryResult<Identity> = Query::any(1, depth, Proof::COLLECTION_NAME, self.id()).call(db).await?;
+        let result: QueryResult<Identity> = Query::any(1, depth, Proof::COLLECTION_NAME, self.id())
+            .call(db)
+            .await?;
         Ok(result.iter().map(|r| r.to_owned().into()).collect())
     }
 }
