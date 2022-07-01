@@ -115,7 +115,7 @@ pub struct NFT {
     /// Token symbol
     pub symbol: Option<String>,
     /// When this data is fetched by RelationService.
-    pub fetched_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 impl Default for NFT {
@@ -127,7 +127,7 @@ impl Default for NFT {
             id: Default::default(),
             chain: Default::default(),
             symbol: Default::default(),
-            fetched_at: naive_now(),
+            updated_at: naive_now(),
         }
     }
 }
@@ -166,12 +166,12 @@ impl Vertex<NFTRecord> for NFT {
         match found {
             None => {
                 let mut to_be_created = self.clone();
-                to_be_created.fetched_at = naive_now();
+                to_be_created.updated_at = naive_now();
                 let created = DatabaseRecord::create(to_be_created, db).await?;
                 Ok(created.into())
             }
             Some(mut found) => {
-                found.fetched_at = naive_now();
+                found.updated_at = naive_now();
                 found.symbol = self.symbol.clone();
                 found.save(db).await?;
                 Ok(found.into())
@@ -193,7 +193,7 @@ impl Vertex<NFTRecord> for NFT {
     /// Outdated in 1 hour
     fn is_outdated(&self) -> bool {
         let outdated_in = Duration::hours(1);
-        self.fetched_at
+        self.updated_at
             .clone()
             .checked_add_signed(outdated_in)
             .unwrap()

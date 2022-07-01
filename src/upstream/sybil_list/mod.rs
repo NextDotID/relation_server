@@ -79,7 +79,7 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Result<(), Error
         source: DataSource::SybilList,
         record_id: Some(item.twitter.tweet_id.clone()),
         created_at: Some(timestamp_to_naive(item.twitter.timestamp)),
-        last_fetched_at: naive_now(),
+        updated_at: naive_now(),
     };
 
     pf.connect(&db, &from_record, &to_record).await?;

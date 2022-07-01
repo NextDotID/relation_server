@@ -101,7 +101,7 @@ impl Vertex<IdentityRecord> for Identity {
         let found = Self::find_by_platform_identity(db, &self.platform, &self.identity).await?;
         match found {
             None => {
-                // Not found. Create it.
+                // Create
                 let mut to_be_created = self.clone();
                 to_be_created.uuid = to_be_created.uuid.or(Some(Uuid::new_v4()));
                 to_be_created.added_at = naive_now();
@@ -110,12 +110,11 @@ impl Vertex<IdentityRecord> for Identity {
                 Ok(created.into())
             }
             Some(mut found) => {
-                // Found. Update it.
-                // println!("UUID: {:?}", found.uuid);
+                // Update
                 found.display_name = self.display_name.clone();
                 found.profile_url = self.profile_url.clone();
                 found.avatar_url = self.avatar_url.clone();
-                found.created_at = self.created_at;
+                found.created_at = self.created_at.or(found.created_at.clone());
                 found.updated_at = naive_now();
 
                 found.save(db).await?;

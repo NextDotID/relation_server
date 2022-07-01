@@ -123,7 +123,7 @@ async fn save_item(p: Item) -> Option<()> {
         source: DataSource::Rss3,
         record_id: Some(p.metadata.proof.clone()),
         created_at: Some(create_naive_date_time),
-        last_fetched_at: update_naive_date_time,
+        updated_at: update_naive_date_time,
     };
 
     let proof_record = pf.connect(&db, &from_record, &to_record).await.ok()?;
