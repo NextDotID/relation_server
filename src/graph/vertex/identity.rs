@@ -1,9 +1,14 @@
-use crate::{error::Error, graph::vertex::Vertex, upstream::Platform, util::naive_now};
+use crate::{
+    error::Error,
+    graph::{edge::Proof, vertex::Vertex},
+    upstream::{DataSource, Platform},
+    util::naive_now,
+};
 use async_trait::async_trait;
 
 use aragog::{
-    query::{Comparison, Filter},
-    DatabaseConnection, DatabaseRecord, Record,
+    query::{Comparison, Filter, Query, QueryResult},
+    DatabaseConnection, DatabaseRecord, Record, DatabaseAccess,
 };
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
@@ -132,10 +137,6 @@ impl Vertex<IdentityRecord> for Identity {
             Ok(Some(query_result.first().unwrap().to_owned().into()))
         }
     }
-
-    async fn neighbors(&self, db: &DatabaseConnection) -> Result<Vec<IdentityRecord>, Error> {
-        todo!()
-    }
 }
 
 /// Result struct queried from graph database.
@@ -163,6 +164,29 @@ impl From<DatabaseRecord<Identity>> for IdentityRecord {
     }
 }
 
+impl IdentityRecord {
+    /// Returns all neighbors of this identity. Depth and upstream data souce can be specified.
+    pub async fn neighbors(
+        &self,
+        db: &DatabaseConnection,
+        depth: u16,
+        _source: Option<DataSource>,
+    ) -> Result<Vec<Self>, Error> {
+        // TODO: make `source` filter work.
+        // let proof_query = match source {
+        //     None => Proof::query(),
+        //     Some(source) => Proof::query().filter(
+        //         Comparison::field("source") // Don't know why this won't work
+        //             .equals_str(source.to_string())
+        //             .into(),
+        //     ).distinct(),
+        // };
+
+        let result: QueryResult<Identity> = Query::any(1, depth, Proof::COLLECTION_NAME, self.id()).call(db).await?;
+        Ok(result.iter().map(|r| r.to_owned().into()).collect())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use aragog::DatabaseConnection;
@@ -172,7 +196,7 @@ mod tests {
     use super::{Identity, IdentityRecord};
     use crate::{
         error::Error,
-        graph::{new_db_connection, Vertex},
+        graph::{edge::Proof, new_db_connection, Edge, Vertex},
         upstream::Platform,
         util::naive_now,
     };
@@ -254,6 +278,26 @@ mod tests {
             .expect("Record not found");
         assert_eq!(found.uuid, created.uuid);
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_neighbors() -> Result<(), Error> {
+        let db = new_db_connection().await?;
+        // ID2 <--Proof1-- ID1 --Proof2--> ID3
+        let id1 = Identity::create_dummy(&db).await?;
+        let id2 = Identity::create_dummy(&db).await?;
+        let id3 = Identity::create_dummy(&db).await?;
+        let proof1_raw: Proof = Faker.fake();
+        let proof2_raw: Proof = Faker.fake();
+        proof1_raw.connect(&db, &id1, &id2).await?;
+        proof2_raw.connect(&db, &id1, &id3).await?;
+
+        let neighbors = id1.neighbors(&db, 2, None).await?;
+        assert_eq!(2, neighbors.len());
+        assert!(neighbors
+            .iter()
+            .all(|i| i.uuid == id2.uuid || i.uuid == id3.uuid));
         Ok(())
     }
 }
