@@ -78,7 +78,7 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Result<(), Error
         uuid: Uuid::new_v4(),
         source: DataSource::SybilList,
         record_id: Some(item.twitter.tweet_id.clone()),
-        created_at: Some(timestamp_to_naive(item.twitter.timestamp)),
+        created_at: Some(timestamp_to_naive(item.twitter.timestamp / 1000)), // millisecond
         updated_at: naive_now(),
     };
 
