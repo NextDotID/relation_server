@@ -31,7 +31,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-docker-build-${{ hashFiles('**/Cargo.lock' }}
+        key: ${{ runner.os }}-docker-build-${{ hashFiles('**/Cargo.lock') }}
     - name: Extract metadata
       id: meta
       uses: docker/metadata-action@v4
