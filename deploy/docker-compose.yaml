@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  server:
+    image: ghcr.io/nextdotid/relation_server:feature-build-image
+    environment:
+      # Enable this if you meet anything wrong
+      #RUST_BACKTRACE: full
+      RELATION_SERVER_ENV: production
+    volumes:
+    - ./config:/app/config:ro
+    depends_on:
+    - arangodb
+  arangodb:
+    image: arangodb/arangodb:3.9.2
+    # Enable this if you want to debugging database
+    #ports:
+    #- 127.0.0.1:8529:8529
+    environment:
+      ARANGO_ROOT_PASSWORD: CHANGE_ME

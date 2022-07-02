@@ -1,0 +1,25 @@
+[db]
+host = "http://arangodb:8529"
+username = "root"
+password = "CHANGE_ME"
+db = "relation_server_production"
+schema_path = "./config/schema.yaml"
+
+[web]
+listen = "0.0.0.0"
+port = 8000
+
+[upstream.proof_service]
+url = "https://proof-service.next.id"
+
+[upstream.aggregation_service]
+url = "https://7x16bogxfb.execute-api.us-east-1.amazonaws.com/v1/identity/search"
+
+[upstream.sybil_service]
+url = "https://raw.githubusercontent.com/Uniswap/sybil-list/master/verified.json"
+
+[upstream.keybase_service]
+url = "https://keybase.io/_/api/1.0/user/lookup.json"
+
+[upstream.knn3_service]
+url = "https://mw.graphql.knn3.xyz/"

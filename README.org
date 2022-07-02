@@ -7,9 +7,19 @@
 :END:
 
 This lambda function / standalone server provides relation
-aggregation store / search of web3 / web2.0.
+aggregation store / search for web3 / web2.0.
+
+* Deploy
+:PROPERTIES:
+:ID:       519dc17b-4eeb-4ef4-95d6-4e70e2817fac
+:END:
+
+See [[file:deploy/README.org][=deploy/README.org=]].
 
 * Develop
+:PROPERTIES:
+:ID:       c94a9fb6-58c8-481e-a0a3-ec98a3ad711b
+:END:
 
 1. Install [[https://github.com/casey/just][just]] and [[https://docs.docker.com/compose/][docker-compose]] first.
 2. =just prepare=
@@ -23,5 +33,8 @@ aggregation store / search of web3 / web2.0.
 :END:
 
 ** TODO Stage1: Search engine
+:PROPERTIES:
+:ID:       79e0996c-2bfc-4030-8df0-c700520c1dd2
+:END:
 
 One search engine to rule them all.
