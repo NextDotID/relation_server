@@ -21,7 +21,11 @@ WORKDIR /app
 
 COPY --from=builder /app/target/release/examples/standalone /app/server
 
-RUN chmod a+x server && mkdir config
+RUN chmod a+x server && \
+    mkdir config && \
+    apt-get update && \
+    apt-get install -y openssl && \
+    rm -rf /var/lib/apt
 
 VOLUME ["/app/config"]
 
