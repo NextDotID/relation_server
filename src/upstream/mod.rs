@@ -5,9 +5,9 @@ pub mod rss3;
 pub mod sybil_list;
 
 use crate::error::Error;
-use crate::upstream::{aggregation::Aggregation, keybase::Keybase};
 use crate::upstream::proof_client::ProofClient;
 use crate::upstream::sybil_list::SybilList;
+use crate::upstream::{aggregation::Aggregation, keybase::Keybase};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
