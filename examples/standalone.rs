@@ -1,4 +1,4 @@
-use std::convert::Infallible;
+use std::{convert::Infallible, net::SocketAddr};
 
 use async_graphql::{
     http::{playground_source, GraphQLPlaygroundConfig},
@@ -6,7 +6,7 @@ use async_graphql::{
 };
 use async_graphql_warp::{GraphQLBadRequest, GraphQLResponse};
 use http::StatusCode;
-use relation_server::{controller::graphql::Query, graph, error::Result};
+use relation_server::{config, controller::graphql::Query, error::Result, graph};
 use warp::{http::Response as HttpResponse, Filter, Rejection};
 
 #[tokio::main]
@@ -51,7 +51,8 @@ async fn main() -> Result<()> {
             ))
         });
 
-    warp::serve(routes).run(([127, 0, 0, 1], 8000)).await;
+    let address = SocketAddr::new(config::C.web.listen.parse().unwrap(), config::C.web.port);
+    warp::serve(routes).run(address).await;
 
     println!("Shutting down...");
     Ok(())
