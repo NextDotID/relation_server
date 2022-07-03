@@ -11,14 +11,12 @@ use warp::{http::Response as HttpResponse, Filter, Rejection};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // TODO: not sure if sharing one DB connection instance
+    // TODO: not sure if sharing one DB connection instance won't cause data race.
     let db = graph::new_db_connection().await?;
 
     let schema = Schema::build(Query::default(), EmptyMutation, EmptySubscription)
         .data(db)
         .finish();
-
-    println!("Playground: http://localhost:8000");
 
     let graphql_post = async_graphql_warp::graphql(schema).and_then(
         |(schema, request): (
@@ -52,6 +50,7 @@ async fn main() -> Result<()> {
         });
 
     let address = SocketAddr::new(config::C.web.listen.parse().unwrap(), config::C.web.port);
+    println!("Playground: http://{}", address.to_string());
     warp::serve(routes).run(address).await;
 
     println!("Shutting down...");
