@@ -1,0 +1,12 @@
+#+TITLE: RelationService deployment sample
+* How-To
+:PROPERTIES:
+:ID:       9f4a97c5-f701-4b84-8b8a-c6b822527ef9
+:END:
+
+1. Generate a strong password using =pwgen 16= and replace all
+   =CHANGE_ME= in
+   - =config/main.toml=
+   - =docker-compose.yaml=
+2. =docker-compose up -d arangodb=, wait for ~1min.
+3. =docker-compose up -d server=.

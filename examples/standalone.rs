@@ -1,4 +1,4 @@
-use std::convert::Infallible;
+use std::{convert::Infallible, net::SocketAddr};
 
 use async_graphql::{
     http::{playground_source, GraphQLPlaygroundConfig},
@@ -6,19 +6,17 @@ use async_graphql::{
 };
 use async_graphql_warp::{GraphQLBadRequest, GraphQLResponse};
 use http::StatusCode;
-use relation_server::{controller::graphql::Query, graph, error::Result};
+use relation_server::{config, controller::graphql::Query, error::Result, graph};
 use warp::{http::Response as HttpResponse, Filter, Rejection};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // TODO: not sure if sharing one DB connection instance
+    // TODO: not sure if sharing one DB connection instance won't cause data race.
     let db = graph::new_db_connection().await?;
 
     let schema = Schema::build(Query::default(), EmptyMutation, EmptySubscription)
         .data(db)
         .finish();
-
-    println!("Playground: http://localhost:8000");
 
     let graphql_post = async_graphql_warp::graphql(schema).and_then(
         |(schema, request): (
@@ -51,7 +49,9 @@ async fn main() -> Result<()> {
             ))
         });
 
-    warp::serve(routes).run(([127, 0, 0, 1], 8000)).await;
+    let address = SocketAddr::new(config::C.web.listen.parse().unwrap(), config::C.web.port);
+    println!("Playground: http://{}", address.to_string());
+    warp::serve(routes).run(address).await;
 
     println!("Shutting down...");
     Ok(())

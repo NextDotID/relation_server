@@ -9,10 +9,6 @@ readme = "README.org"
 repository = "https://github.com/nextdotid/relation_server"
 publish = false
 
-[[bin]]
-name = "bootstrap"
-path = "examples/lambda.rs"
-
 [dependencies]
 config = "0.12"
 lazy_static = "1.4"

@@ -5,10 +5,10 @@ use crate::graph::vertex::{Identity, IdentityRecord, Vertex};
 use crate::upstream::fetch_all;
 
 /// Status for a record in RelationService DB
-#[derive(Default, Copy, Clone, PartialEq, Eq, async_graphql::Enum)]
+#[derive(Copy, Clone, PartialEq, Eq, async_graphql::Enum)]
 enum DataStatus {
     /// Fetched or not in Database.
-    #[default]
+   // #[default]
     #[graphql(name = "cached")]
     Cached,
 
