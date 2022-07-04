@@ -4,13 +4,15 @@ use crate::config::C;
 use crate::error::Error;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, Platform};
+use crate::upstream::{DataSource, Fetcher, Platform, Upstream};
 use crate::util::{make_client, naive_now, parse_body};
 use async_trait::async_trait;
 use serde::Deserialize;
 
 use std::str::FromStr;
 use uuid::Uuid;
+
+use super::fetch_all;
 
 #[derive(Deserialize, Debug)]
 pub struct KeybaseResponse {
@@ -139,9 +141,11 @@ impl Fetcher for Keybase {
             if Platform::from_str(p.proof_type.as_str()).is_err() {
                 continue;
             }
+
+            let to_platform =  Platform::from_str(p.proof_type.as_str()).unwrap();
             let to: Identity = Identity {
                 uuid: Some(Uuid::new_v4()),
-                platform: Platform::from_str(p.proof_type.as_str()).unwrap(),
+                platform: to_platform.clone(),
                 identity: p.nametag.clone(),
                 created_at: None,
                 display_name: p.nametag.clone(),
@@ -151,6 +155,11 @@ impl Fetcher for Keybase {
                 updated_at: naive_now(),
             };
             let to_record = to.create_or_update(&db).await?;
+            println!("to {:?}", to_record);
+
+            //according to, fetch more
+            fetch_all(&Upstream::Keybase, &to_platform, &p.nametag.clone()).await?;
+
 
             let pf: Proof = Proof {
                 uuid: Uuid::new_v4(),

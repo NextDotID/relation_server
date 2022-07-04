@@ -1,20 +1,21 @@
 use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
+//use crate::config::Upstream;
 use crate::error::{Error, Result};
 use crate::graph::vertex::{Identity, IdentityRecord, Vertex};
-use crate::upstream::fetch_all;
+use crate::upstream::{fetch_all, Upstream};
 
 /// Status for a record in RelationService DB
-#[derive(Default, Copy, Clone, PartialEq, Eq, async_graphql::Enum)]
+#[derive(Copy, Clone, PartialEq, Eq, async_graphql::Enum)]
 enum DataStatus {
     /// Fetched or not in Database.
-    #[default]
+    //#[default]
     #[graphql(name = "cached")]
     Cached,
 
     /// Fetching this data.
     /// The result you got maybe outdated.
-    /// Come back later if you want a fresh one.
+    /// Come back later if you want a fresh& one.
     #[graphql(name = "fetching")]
     Fetching,
 }
@@ -134,12 +135,12 @@ impl IdentityQuery {
         // FIXME: Super dirty. Should be in an async job/worker-like shape.
         match Identity::find_by_platform_identity(&db, &platform, &identity).await? {
             None => {
-                fetch_all(&platform, &identity).await?;
+                fetch_all(&Upstream::Keybase, &platform, &identity).await?;
                 Identity::find_by_platform_identity(&db, &platform, &identity).await
             },
             Some(found) => {
                 if found.0.record.is_outdated() {
-                    fetch_all(&platform, &identity).await?;
+                    fetch_all(&Upstream::Keybase, &platform, &identity).await?;
                     Identity::find_by_platform_identity(&db, &platform, &identity).await
                 } else {
                     Ok(Some(found))

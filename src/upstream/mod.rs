@@ -111,7 +111,7 @@ pub trait Fetcher {
 }
 
 #[derive(EnumIter, Debug, PartialEq)]
-enum Upstream {
+pub enum Upstream {
     Keybase,
     NextID,
     SybilList,
@@ -145,8 +145,13 @@ impl UpstreamFactory {
 }
 
 /// Drain all supported upstream out.
-pub async fn fetch_all(platform: &Platform, identity: &String) -> Result<(), Error> {
+pub async fn fetch_all(from: &Upstream, platform: &Platform, identity: &String) -> Result<(), Error> {
+    println!("fetching...");
     for source in Upstream::iter() {
+        println!("source {:?}, from {:?}", source, from);
+        if &source == from {
+            continue;
+        }
         let fetcher = UpstreamFactory::new_fetcher(&source, &platform.to_string(), identity);
         let ability = fetcher.ability();
         for (platforms, _) in ability.into_iter() {
@@ -161,11 +166,11 @@ pub async fn fetch_all(platform: &Platform, identity: &String) -> Result<(), Err
 #[cfg(test)]
 mod tests {
     use crate::error::Error;
-    use crate::upstream::{fetch_all, Platform};
+    use crate::upstream::{fetch_all, Platform, Upstream};
 
     #[tokio::test]
     async fn test_fetcher_result() -> Result<(), Error> {
-        let result = fetch_all(&Platform::Github, &"fengshanshan".into()).await?;
+        let result = fetch_all(&Upstream::NextID, &Platform::Github, &"fengshanshan".into()).await?;
         assert_eq!(result, ());
         Ok(())
     }
