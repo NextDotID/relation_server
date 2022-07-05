@@ -4,9 +4,10 @@ use crate::config::C;
 use crate::error::Error;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, Platform};
+use crate::upstream::{DataSource, Fetcher, IdentityProcessList, Platform};
 use crate::util::{make_client, naive_now, parse_body};
 use async_trait::async_trait;
+use hyper::body;
 use serde::Deserialize;
 
 use std::str::FromStr;
@@ -76,7 +77,7 @@ pub struct Keybase {
 
 #[async_trait]
 impl Fetcher for Keybase {
-    async fn fetch(&self) -> Result<(), Error> {
+    async fn fetch(&self) -> Result<IdentityProcessList, Error> {
         let client = make_client();
         let uri: http::Uri = match format!(
             "{}?{}={}&fields=proofs_summary",
@@ -104,6 +105,7 @@ impl Fetcher for Keybase {
         }
 
         let mut body: KeybaseResponse = parse_body(&mut resp).await?;
+
         if body.status.code != 0 {
             return Err(Error::General(
                 format!("Keybase Result Get Error: {}", body.status.name),
@@ -119,8 +121,8 @@ impl Fetcher for Keybase {
         };
         let user_id = person_info.id;
         let user_name = person_info.basics.username;
-
         let db = new_db_connection().await?;
+        let mut res: IdentityProcessList = Vec::new();
 
         for p in person_info.proofs_summary.all.into_iter() {
             let from: Identity = Identity {
@@ -151,6 +153,10 @@ impl Fetcher for Keybase {
                 updated_at: naive_now(),
             };
             let to_record = to.create_or_update(&db).await?;
+            res.push((
+                Platform::from_str(p.proof_type.as_str()).unwrap(),
+                p.nametag.clone(),
+            ));
 
             let pf: Proof = Proof {
                 uuid: Uuid::new_v4(),
@@ -162,7 +168,7 @@ impl Fetcher for Keybase {
             pf.connect(&db, &from_record, &to_record).await?;
         }
 
-        Ok(())
+        Ok(res)
     }
 
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {

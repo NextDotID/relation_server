@@ -5,7 +5,7 @@ use crate::config::C;
 use crate::error::Error;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, Platform};
+use crate::upstream::{DataSource, Fetcher, IdentityProcessList, Platform};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -43,10 +43,10 @@ pub struct ErrorResponse {
 
 pub struct SybilList {}
 
-async fn save_item(eth_wallet_address: String, value: Value) -> Result<(), Error> {
-    let db = new_db_connection().await?;
+async fn save_item(eth_wallet_address: String, value: Value) -> Option<(Platform, String)> {
+    let db = new_db_connection().await.ok()?;
 
-    let item: VerifiedItem = serde_json::from_value(value)?;
+    let item: VerifiedItem = serde_json::from_value(value).ok()?;
 
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -59,7 +59,7 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Result<(), Error
         profile_url: None,
         updated_at: naive_now(),
     };
-    let from_record = from.create_or_update(&db).await?;
+    let from_record = from.create_or_update(&db).await.ok()?;
 
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -72,7 +72,7 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Result<(), Error
         profile_url: None,
         updated_at: naive_now(),
     };
-    let to_record = to.create_or_update(&db).await?;
+    let to_record = to.create_or_update(&db).await.ok()?;
 
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
@@ -82,13 +82,13 @@ async fn save_item(eth_wallet_address: String, value: Value) -> Result<(), Error
         updated_at: naive_now(),
     };
 
-    pf.connect(&db, &from_record, &to_record).await?;
-    Ok(())
+    pf.connect(&db, &from_record, &to_record).await.ok()?;
+    Some((Platform::Twitter, item.twitter.handle))
 }
 
 #[async_trait]
 impl Fetcher for SybilList {
-    async fn fetch(&self) -> Result<(), Error> {
+    async fn fetch(&self) -> Result<IdentityProcessList, Error> {
         let client = make_client();
         let uri: http::Uri = (C.upstream.sybil_service.url).parse().unwrap();
 
@@ -112,9 +112,10 @@ impl Fetcher for SybilList {
                 save_item(eth_wallet_address.to_string(), value.to_owned())
             })
             .collect();
-        join_all(futures).await;
+        let results = join_all(futures).await;
+        let res: IdentityProcessList = results.into_iter().filter_map(|i| i).collect();
 
-        Ok(())
+        Ok(res)
     }
 
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
