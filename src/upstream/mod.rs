@@ -5,6 +5,8 @@ mod proof_client;
 mod rss3;
 mod sybil_list;
 
+use std::sync::Arc;
+
 use crate::error::Error;
 use crate::upstream::proof_client::ProofClient;
 use crate::upstream::sybil_list::SybilList;
@@ -14,6 +16,10 @@ use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use strum_macros::{Display, EnumString};
+
+/// List when processing identities.
+type IdentityProcessList = Vec<(Platform, String)>;
+//type IdentityObject = (Platform, String);
 
 /// All identity platform.
 #[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq)]
@@ -113,7 +119,7 @@ pub enum Curve {
 #[async_trait]
 pub trait Fetcher {
     /// Fetch data from given source.
-    async fn fetch(&self) -> Result<(), Error>;
+    async fn fetch(&self) -> Result<IdentityProcessList, Error>;
 
     /// Ability for this upstream.
     /// `Vec<(AcceptedPlatformsAsInput, ResultOfPlatforms)>`
@@ -154,18 +160,46 @@ impl UpstreamFactory {
     }
 }
 
-/// Drain all supported upstream out.
+/// Find all available (platform, identity) in all `Upstream`s.
 pub async fn fetch_all(platform: &Platform, identity: &String) -> Result<(), Error> {
+    let mut up_next: IdentityProcessList = vec![(platform.clone(), identity.clone())];
+    let mut processed: IdentityProcessList = vec![];
+    while up_next.len() > 0 {
+        let (next_platform, next_identity) = up_next.pop().unwrap();
+
+        let fetched = fetch_one(&next_platform, &next_identity).await?;
+        processed.push((next_platform, next_identity));
+        fetched.clone().into_iter().for_each(|f| {
+            if processed.iter().all(|p| p.0 != f.0 || p.1 != f.1) {
+                up_next.push((f.0, f.1));
+            }
+        });
+    }
+
+    Ok(())
+}
+
+/// Find one (platform, identity) pair in all upstreams.
+/// Returns identities just fetched for next iter..
+pub async fn fetch_one(
+    platform: &Platform,
+    identity: &String,
+) -> Result<IdentityProcessList, Error> {
+    let mut res: IdentityProcessList = Vec::new();
     for source in Upstream::iter() {
         let fetcher = UpstreamFactory::new_fetcher(&source, &platform.to_string(), identity);
         let ability = fetcher.ability();
         for (platforms, _) in ability.into_iter() {
             if platforms.iter().any(|p| p == platform) {
-                let _ = fetcher.fetch().await;
+                let resp = match fetcher.fetch().await {
+                    Ok(resp) => resp,
+                    Err(..) => continue,
+                };
+                res.extend(resp);
             }
         }
     }
-    Ok(())
+    Ok(res)
 }
 
 #[cfg(test)]
@@ -177,6 +211,7 @@ mod tests {
     async fn test_fetcher_result() -> Result<(), Error> {
         let result = fetch_all(&Platform::Github, &"fengshanshan".into()).await?;
         assert_eq!(result, ());
+
         Ok(())
     }
 }

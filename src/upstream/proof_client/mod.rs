@@ -5,7 +5,7 @@ use crate::config::C;
 use crate::error::Error;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, Platform};
+use crate::upstream::{DataSource, Fetcher, IdentityProcessList, Platform};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 
 use async_trait::async_trait;
@@ -56,8 +56,8 @@ pub struct ProofClient {
     pub identity: String,
 }
 
-async fn save_item(p: ProofRecord) -> Result<(), Error> {
-    let db = new_db_connection().await?;
+async fn save_item(p: ProofRecord) -> Option<(Platform, String)> {
+    let db = new_db_connection().await.ok()?;
 
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -73,7 +73,7 @@ async fn save_item(p: ProofRecord) -> Result<(), Error> {
         updated_at: naive_now(),
     };
 
-    let from_record = from.create_or_update(&db).await?;
+    let from_record = from.create_or_update(&db).await.ok()?;
 
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -88,7 +88,7 @@ async fn save_item(p: ProofRecord) -> Result<(), Error> {
         profile_url: None,
         updated_at: naive_now(),
     };
-    let to_record = to.create_or_update(&db).await?;
+    let to_record = to.create_or_update(&db).await.ok()?;
 
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
@@ -99,14 +99,17 @@ async fn save_item(p: ProofRecord) -> Result<(), Error> {
         )),
         updated_at: naive_now(),
     };
-    pf.connect(&db, &from_record, &to_record).await?;
+    pf.connect(&db, &from_record, &to_record).await.ok()?;
 
-    Ok(())
+    Some((
+        Platform::from_str(p.platform.as_str()).unwrap(),
+        p.identity.clone(),
+    ))
 }
 
 #[async_trait]
 impl Fetcher for ProofClient {
-    async fn fetch(&self) -> Result<(), Error> {
+    async fn fetch(&self) -> Result<IdentityProcessList, Error> {
         let client = make_client();
         let uri: http::Uri = match format!(
             "{}/v1/proof?platform={}&identity={}",
@@ -146,9 +149,10 @@ impl Fetcher for ProofClient {
 
         // parse
         let futures: Vec<_> = proofs.proofs.into_iter().map(|p| save_item(p)).collect();
-        join_all(futures).await;
+        let results = join_all(futures).await;
+        let res: IdentityProcessList = results.into_iter().filter_map(|p| p).collect();
 
-        Ok(())
+        Ok(res)
     }
 
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
