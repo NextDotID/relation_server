@@ -124,7 +124,6 @@ impl Fetcher for ProofClient {
                 )))
             }
         };
-        println!("url {}", uri.to_string());
         let mut resp = client.get(uri).await?;
 
         if !resp.status().is_success() {

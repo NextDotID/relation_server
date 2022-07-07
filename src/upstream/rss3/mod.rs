@@ -10,11 +10,14 @@ use crate::{
     error::Error,
     graph::{edge::Own, new_db_connection},
 };
+use crate::config::C;
+
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime};
 use futures::future::join_all;
 use serde::Deserialize;
 use uuid::Uuid;
+
 
 #[derive(Deserialize, Debug)]
 pub struct Rss3Response {
@@ -117,8 +120,8 @@ impl Fetcher for Rss3 {
     async fn fetch(&self) -> Result<IdentityProcessList, Error> {
         let client = make_client();
         let uri: http::Uri = match format!(
-            "https://pregod.rss3.dev/v0.4.0/account:{}@{}/notes?tags=NFT",
-            self.identity, self.platform
+            "{}account:{}@{}/notes?tags=NFT",
+            C.upstream.knn3_service.url, self.identity, self.platform
         )
         .parse()
         {
