@@ -4,20 +4,18 @@ use crate::config::C;
 use crate::graph::edge::Own;
 use crate::graph::vertex::{nft::Chain, nft::NFTCategory, NFT};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, Platform};
+use crate::upstream::{DataSource, Fetcher, Platform, IdentityProcessList};
 use crate::util::naive_now;
 use crate::{
     error::Error,
     graph::{new_db_connection, vertex::Identity},
 };
+use aragog::query;
 use async_trait::async_trait;
 use gql_client::Client;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-pub struct Knn3 {
-    pub account: String,
-}
+use std::str::FromStr;
 
 #[derive(Deserialize, Debug)]
 pub struct Ens {
@@ -34,36 +32,43 @@ pub struct Vars {
     addr: String,
 }
 
+pub struct Knn3 {
+    pub platform: String,
+    pub identity: String,
+}
+
 #[async_trait]
 impl Fetcher for Knn3 {
-    async fn fetch(&self) -> Result<(), Error> {
+    async fn fetch(&self) -> Result<IdentityProcessList, Error> {
+
         let query = r#"
-                query EnsByAddressQuery($addr: String!){
-                    addrs(where: { address: $addr }) {
-                    ens
-                }
+            query EnsByAddressQuery($addr: String!){
+                addrs(where: { address: $addr }) {
+                ens
             }
-        "#;
+        }
+    "#;
+
         let client = Client::new(C.upstream.knn3_service.url.clone());
         let vars = Vars {
-            addr: "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".to_string(),
+            addr: self.identity.clone(),
         };
+
         let data = client
             .query_with_vars::<Data, Vars>(query, vars)
-            .await.unwrap();
+            .await
+            .unwrap();
         let res = data.unwrap();
         let ens_vec = res.addrs.first().unwrap();
-
         let db = new_db_connection().await?;
-
+        
         for ens in ens_vec.ens.iter() {
-            //let ens = item.ens.unwrap();
             let from: Identity = Identity {
                 uuid: Some(Uuid::new_v4()),
                 platform: Platform::Ethereum,
-                identity: self.account.clone(),
+                identity: self.identity.clone(),
                 created_at: None,
-                display_name: self.account.clone(),
+                display_name: self.identity.clone(),
                 added_at: naive_now(),
                 avatar_url: None,
                 profile_url: None,
@@ -89,13 +94,11 @@ impl Fetcher for Knn3 {
             };
             owner_ship.connect(&db, &from_record, &to_record).await?;
         }
-        Ok(())
+        Ok(vec![])
     }
 
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(
-            vec![Platform::Ethereum],
-            vec![],
-        )];
+        return vec![(vec![Platform::Ethereum], vec![])];
     }
+
 }

@@ -4,11 +4,11 @@ use std::str::FromStr;
 
 use crate::graph::vertex::{nft::Chain, nft::NFTCategory, Identity, NFT};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, Platform};
+use crate::upstream::{DataSource, Fetcher, Platform, IdentityProcessList};
 use crate::util::{make_client, naive_now, parse_body};
 use crate::{
     error::Error,
-    graph::{edge::Own, edge::Proof, new_db_connection},
+    graph::{edge::Own, new_db_connection},
 };
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime};
@@ -65,16 +65,13 @@ pub struct ErrorResponse {
 }
 
 pub struct Rss3 {
-    pub network: String,
-    pub account: String,
-    pub tags: String,
+    pub platform: String,
+    pub identity: String,
 }
 
 async fn save_item(p: Item) -> Result<(), Error> {
     let create_date_time = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
     let create_naive_date_time = NaiveDateTime::from_timestamp(create_date_time.timestamp(), 0);
-    let update_date_time = DateTime::parse_from_rfc3339(&p.date_updated).unwrap();
-    let update_naive_date_time = NaiveDateTime::from_timestamp(update_date_time.timestamp(), 0);
 
     let db = new_db_connection().await?;
 
@@ -82,7 +79,7 @@ async fn save_item(p: Item) -> Result<(), Error> {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: p.metadata.to.clone(),
-        created_at: None,
+        created_at: Some(create_naive_date_time),
         display_name: p.metadata.to.clone(),
         added_at: naive_now(),
         avatar_url: None,
@@ -117,11 +114,11 @@ async fn save_item(p: Item) -> Result<(), Error> {
 
 #[async_trait]
 impl Fetcher for Rss3 {
-    async fn fetch(&self) -> Result<(), Error> {
+    async fn fetch(&self) -> Result<IdentityProcessList, Error> {
         let client = make_client();
         let uri: http::Uri = match format!(
-            "https://pregod.rss3.dev/v0.4.0/account:{}@{}/notes?tags={}",
-            self.account, self.network, self.tags
+            "https://pregod.rss3.dev/v0.4.0/account:{}@{}/notes?tags=NFT",
+            self.identity, self.platform
         )
         .parse()
         {
@@ -153,23 +150,21 @@ impl Fetcher for Rss3 {
             ));
         }
 
+    
         // parse
         let futures: Vec<_> = body
             .list
             .into_iter()
-            .filter(|p| p.metadata.to == self.account.to_lowercase())
+            .filter(|p| p.metadata.to == self.identity.to_lowercase())
             .map(|p| save_item(p))
             .collect();
         let results = join_all(futures).await;
         //let parse_body: Vec<Connection> = results.into_iter().filter_map(|i| i).collect();
 
-        Ok(())
+        Ok(vec![])
     }
 
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(
-            vec![Platform::Ethereum],
-            vec![],
-        )];
+        return vec![(vec![Platform::Ethereum], vec![])];
     }
 }

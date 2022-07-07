@@ -10,7 +10,7 @@ use std::sync::Arc;
 use crate::error::Error;
 use crate::upstream::proof_client::ProofClient;
 use crate::upstream::sybil_list::SybilList;
-use crate::upstream::{aggregation::Aggregation, keybase::Keybase};
+use crate::upstream::{aggregation::Aggregation, keybase::Keybase, knn3::Knn3, rss3::Rss3};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -132,6 +132,8 @@ enum Upstream {
     NextID,
     SybilList,
     Aggregation,
+    Knn3,
+    Rss3,
 }
 
 struct UpstreamFactory;
@@ -153,6 +155,14 @@ impl UpstreamFactory {
             }),
             Upstream::SybilList => Box::new(SybilList {}),
             Upstream::Aggregation => Box::new(Aggregation {
+                platform: platform.clone(),
+                identity: identity.clone(),
+            }),
+            Upstream::Knn3 => Box::new(Knn3 {
+                platform: platform.clone(),
+                identity: identity.clone(),
+            }),
+            Upstream::Rss3 => Box::new(Rss3 {
                 platform: platform.clone(),
                 identity: identity.clone(),
             }),
