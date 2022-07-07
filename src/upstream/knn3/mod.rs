@@ -17,6 +17,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use std::str::FromStr;
 
+const ENSCONTRACTADDR: &str = "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85";
+
 #[derive(Deserialize, Debug)]
 pub struct Ens {
     ens: Vec<String>,
@@ -66,9 +68,9 @@ impl Fetcher for Knn3 {
             let from: Identity = Identity {
                 uuid: Some(Uuid::new_v4()),
                 platform: Platform::Ethereum,
-                identity: self.identity.clone(),
+                identity: self.identity.clone().to_lowercase(),
                 created_at: None,
-                display_name: self.identity.clone(),
+                display_name: self.identity.clone().to_lowercase(),
                 added_at: naive_now(),
                 avatar_url: None,
                 profile_url: None,
@@ -79,7 +81,7 @@ impl Fetcher for Knn3 {
             let to: NFT = NFT {
                 uuid: Uuid::new_v4(),
                 category: NFTCategory::ENS,
-                contract: "".to_string(),
+                contract: ENSCONTRACTADDR.clone().to_string(),
                 id: ens.to_string(),
                 chain: Chain::Ethereum,
                 symbol: None,
@@ -87,12 +89,12 @@ impl Fetcher for Knn3 {
             };
             let to_record = to.create_or_update(&db).await?;
 
-            let owner_ship: Own = Own {
+            let ownership: Own = Own {
                 uuid: Uuid::new_v4(),
                 transaction: None,
                 source: DataSource::Knn3,
             };
-            owner_ship.connect(&db, &from_record, &to_record).await?;
+            ownership.connect(&db, &from_record, &to_record).await?;
         }
         Ok(vec![])
     }

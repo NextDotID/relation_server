@@ -112,6 +112,8 @@ impl Default for NFTCategory {
     }
 }
 
+
+
 /// NFT
 #[derive(Clone, Serialize, Deserialize, Record, Debug)]
 #[collection_name = "NFTs"]

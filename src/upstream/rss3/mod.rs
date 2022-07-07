@@ -81,9 +81,9 @@ async fn save_item(p: Item) -> Result<(), Error> {
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
-        identity: p.metadata.to.clone(),
+        identity: p.metadata.to.clone().to_lowercase(),
         created_at: Some(create_naive_date_time),
-        display_name: p.metadata.to.clone(),
+        display_name: p.metadata.to.clone().to_lowercase(),
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
@@ -95,7 +95,7 @@ async fn save_item(p: Item) -> Result<(), Error> {
     let to: NFT = NFT {
         uuid: Uuid::new_v4(),
         category: NFTCategory::from_str(p.metadata.contract_type.as_str()).unwrap(),
-        contract: p.metadata.collection_address.clone(),
+        contract: p.metadata.collection_address.clone().to_lowercase(),
         id: p.metadata.token_id.clone(),
         chain: Chain::from_str(p.metadata.network.as_str()).unwrap(),
         symbol: Some(p.metadata.token_symbol.clone()),
@@ -104,13 +104,13 @@ async fn save_item(p: Item) -> Result<(), Error> {
 
     let to_record = to.create_or_update(&db).await?;
 
-    let owner_ship: Own = Own {
+    let ownership: Own = Own {
         uuid: Uuid::new_v4(),
         source: DataSource::Rss3,
         transaction: Some(p.metadata.proof.clone()),
     };
 
-    owner_ship.connect(&db, &from_record, &to_record).await?;
+    ownership.connect(&db, &from_record, &to_record).await?;
 
     Ok(())
 }
@@ -121,7 +121,7 @@ impl Fetcher for Rss3 {
         let client = make_client();
         let uri: http::Uri = match format!(
             "{}account:{}@{}/notes?tags=NFT",
-            C.upstream.knn3_service.url, self.identity, self.platform
+            C.upstream.rss3_service.url, self.identity, self.platform
         )
         .parse()
         {
@@ -135,6 +135,7 @@ impl Fetcher for Rss3 {
         };
 
         let mut resp = client.get(uri).await?;
+        //println!("resp {:?}", resp);
 
         if !resp.status().is_success() {
             let body: ErrorResponse = parse_body(&mut resp).await?;
@@ -161,7 +162,7 @@ impl Fetcher for Rss3 {
             .filter(|p| p.metadata.to == self.identity.to_lowercase())
             .map(|p| save_item(p))
             .collect();
-        let results = join_all(futures).await;
+        let _results = join_all(futures).await;
         //let parse_body: Vec<Connection> = results.into_iter().filter_map(|i| i).collect();
 
         Ok(vec![])
