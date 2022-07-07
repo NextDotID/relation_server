@@ -1,14 +1,14 @@
-use aragog::DatabaseConnection;
-use async_graphql::{Context, Object};
 use crate::error::{Error, Result};
 use crate::graph::vertex::{Identity, IdentityRecord, Vertex};
 use crate::upstream::fetch_all;
+use aragog::DatabaseConnection;
+use async_graphql::{Context, Object};
 
 /// Status for a record in RelationService DB
-#[derive(Copy, Clone, PartialEq, Eq, async_graphql::Enum)]
+#[derive(Default, Copy, Clone, PartialEq, Eq, async_graphql::Enum)]
 enum DataStatus {
     /// Fetched or not in Database.
-   // #[default]
+    #[default]
     #[graphql(name = "cached")]
     Cached,
 
@@ -102,18 +102,16 @@ impl IdentityRecord {
         //     desc = "Upstream source of this connection. Will search all upstreams if omitted."
         // )]
         // upstream: Option<String>,
-        #[graphql(
-            desc = "Depth of traversal. 1 if omitted",
-        )]
-        depth: Option<u16>,
+        #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
     ) -> Result<Vec<IdentityRecord>> {
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         self.neighbors(
             db,
             depth.unwrap_or(1),
             // upstream.map(|u| DataSource::from_str(&u).unwrap_or(DataSource::Unknown))
-            None
-        ).await
+            None,
+        )
+        .await
     }
 }
 
@@ -136,7 +134,7 @@ impl IdentityQuery {
             None => {
                 fetch_all(&platform, &identity).await?;
                 Identity::find_by_platform_identity(&db, &platform, &identity).await
-            },
+            }
             Some(found) => {
                 if found.0.record.is_outdated() {
                     fetch_all(&platform, &identity).await?;
@@ -144,7 +142,7 @@ impl IdentityQuery {
                 } else {
                     Ok(Some(found))
                 }
-            },
+            }
         }
     }
 }
