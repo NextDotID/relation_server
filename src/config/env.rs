@@ -2,18 +2,13 @@ use core::fmt;
 
 use serde::Deserialize;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Default, Clone, Debug, Deserialize)]
 pub enum ENV {
+    #[default]
     Development,
     Testing,
     Staging,
     Production,
-}
-
-impl Default for ENV {
-    fn default() -> Self {
-        Self::Development
-    }
 }
 
 impl fmt::Display for ENV {

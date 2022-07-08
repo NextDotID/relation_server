@@ -5,6 +5,7 @@ use async_graphql::{
     EmptyMutation, EmptySubscription, Schema,
 };
 use async_graphql_warp::{GraphQLBadRequest, GraphQLResponse};
+use env_logger::Env;
 use http::StatusCode;
 use log::warn;
 use relation_server::{config, controller::graphql::Query, error::Result, graph};
@@ -12,7 +13,9 @@ use warp::{http::Response as HttpResponse, Filter, Rejection};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::try_init().expect("Failed to initialize logger");
+    env_logger::Builder::from_env(Env::default().default_filter_or("trace"))
+        .try_init()
+        .expect("Failed to initialize logger");
 
     // TODO: not sure if sharing one DB connection instance won't cause data race.
     let db = graph::new_db_connection().await?;

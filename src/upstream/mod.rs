@@ -22,7 +22,7 @@ type IdentityProcessList = Vec<(Platform, String)>;
 //type IdentityObject = (Platform, String);
 
 /// All identity platform.
-#[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq, EnumIter)]
 pub enum Platform {
     /// Twitter
     #[strum(serialize = "twitter")]
@@ -56,7 +56,7 @@ pub enum Platform {
 }
 
 /// All data respource platform.
-#[derive(Serialize, Deserialize, Debug, Clone, Display, EnumString, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Display, EnumString, PartialEq, EnumIter)]
 pub enum DataSource {
     /// https://github.com/Uniswap/sybil-list/blob/master/verified.json
     #[strum(serialize = "sybil")]

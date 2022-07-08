@@ -1,8 +1,9 @@
 use crate::error::{Error, Result};
 use crate::graph::vertex::{Identity, IdentityRecord, Vertex};
-use crate::upstream::fetch_all;
+use crate::upstream::{fetch_all, DataSource, Platform};
 use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
+use strum::IntoEnumIterator;
 
 /// Status for a record in RelationService DB
 #[derive(Default, Copy, Clone, PartialEq, Eq, async_graphql::Enum)]
@@ -120,6 +121,16 @@ pub struct IdentityQuery;
 
 #[Object]
 impl IdentityQuery {
+    /// Returns a list of all platforms supported by RelationService.
+    async fn available_platforms(&self) -> Result<Vec<String>> {
+        Ok(Platform::iter().map(|p| p.to_string()).collect())
+    }
+
+    /// Returns a list of all upstreams (data sources) supported by RelationService.
+    async fn available_upstreams(&self) -> Result<Vec<String>> {
+        Ok(DataSource::iter().map(|p| p.to_string()).collect())
+    }
+
     /// Query an `identity` by given `platform` and `identity`.
     async fn identity(
         &self,
