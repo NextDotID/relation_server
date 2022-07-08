@@ -12,7 +12,7 @@ use crate::upstream::proof_client::ProofClient;
 use crate::upstream::sybil_list::SybilList;
 use crate::upstream::{aggregation::Aggregation, keybase::Keybase, knn3::Knn3, rss3::Rss3};
 use async_trait::async_trait;
-use log::{debug, info, trace};
+use log::{debug, info, trace, warn};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -173,11 +173,11 @@ impl UpstreamFactory {
 
 /// Find all available (platform, identity) in all `Upstream`s.
 pub async fn fetch_all(platform: &Platform, identity: &String) -> Result<(), Error> {
-    info!("upstream::fetch_all : {}  {}", platform, identity);
+    info!("fetch_all : {}  {}", platform, identity);
     let mut up_next: IdentityProcessList = vec![(platform.clone(), identity.clone())];
     let mut processed: IdentityProcessList = vec![];
     while up_next.len() > 0 {
-        debug!("upstream::fetch_all::up_next | {:?}", up_next);
+        debug!("fetch_all::up_next | {:?}", up_next);
         let (next_platform, next_identity) = up_next.pop().unwrap();
 
         let fetched = fetch_one(&next_platform, &next_identity).await?;
@@ -185,17 +185,13 @@ pub async fn fetch_all(platform: &Platform, identity: &String) -> Result<(), Err
         fetched.clone().into_iter().for_each(|f| {
             if processed.iter().all(|p| p.0 != f.0 || p.1 != f.1) {
                 trace!(
-                    "upstream::fetch_all::iter | Fetched {} {} | pushed into up_next",
+                    "fetch_all::iter | Fetched {} {} | pushed into up_next",
                     f.0,
                     f.1
                 );
                 up_next.push((f.0, f.1));
             } else {
-                trace!(
-                    "upstream::fetch_all::iter | Fetched {} {} | duplicated",
-                    f.0,
-                    f.1
-                );
+                trace!("fetch_all::iter | Fetched {} {} | duplicated", f.0, f.1);
             }
         });
     }
@@ -215,9 +211,25 @@ pub async fn fetch_one(
         let ability = fetcher.ability();
         for (platforms, _) in ability.into_iter() {
             if platforms.iter().any(|p| p == platform) {
+                debug!(
+                    "fetch_one | Fetching {} / {} from {:?}",
+                    platform, identity, source
+                );
                 let resp = match fetcher.fetch().await {
-                    Ok(resp) => resp,
-                    Err(..) => continue,
+                    Ok(resp) => {
+                        debug!(
+                            "fetch_one | Fetched ({} / {} from {:?}): {:?}",
+                            platform, identity, source, resp
+                        );
+                        resp
+                    }
+                    Err(err) => {
+                        warn!(
+                            "fetch_one | Failed to fetch ({} / {} from {:?}): {:?}",
+                            platform, identity, source, err
+                        );
+                        continue;
+                    }
                 };
                 res.extend(resp);
             }
