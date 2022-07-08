@@ -12,6 +12,7 @@ use crate::upstream::proof_client::ProofClient;
 use crate::upstream::sybil_list::SybilList;
 use crate::upstream::{aggregation::Aggregation, keybase::Keybase, knn3::Knn3, rss3::Rss3};
 use async_trait::async_trait;
+use log::{debug, info, trace};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -172,16 +173,29 @@ impl UpstreamFactory {
 
 /// Find all available (platform, identity) in all `Upstream`s.
 pub async fn fetch_all(platform: &Platform, identity: &String) -> Result<(), Error> {
+    info!("upstream::fetch_all : {}  {}", platform, identity);
     let mut up_next: IdentityProcessList = vec![(platform.clone(), identity.clone())];
     let mut processed: IdentityProcessList = vec![];
     while up_next.len() > 0 {
+        debug!("upstream::fetch_all::up_next | {:?}", up_next);
         let (next_platform, next_identity) = up_next.pop().unwrap();
 
         let fetched = fetch_one(&next_platform, &next_identity).await?;
         processed.push((next_platform, next_identity));
         fetched.clone().into_iter().for_each(|f| {
             if processed.iter().all(|p| p.0 != f.0 || p.1 != f.1) {
+                trace!(
+                    "upstream::fetch_all::iter | Fetched {} {} | pushed into up_next",
+                    f.0,
+                    f.1
+                );
                 up_next.push((f.0, f.1));
+            } else {
+                trace!(
+                    "upstream::fetch_all::iter | Fetched {} {} | duplicated",
+                    f.0,
+                    f.1
+                );
             }
         });
     }
