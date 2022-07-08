@@ -55,57 +55,6 @@ pub struct ProofClient {
     pub identity: String,
 }
 
-async fn save_item(p: ProofRecord) -> Option<(Platform, String)> {
-    let db = new_db_connection().await.ok()?;
-
-    let from: Identity = Identity {
-        uuid: Some(Uuid::new_v4()),
-        platform: Platform::NextID,
-        identity: p.identity.clone(),
-        created_at: Some(timestamp_to_naive(
-            p.created_at.to_string().parse().unwrap(),
-        )),
-        display_name: p.identity.clone(),
-        added_at: naive_now(),
-        avatar_url: None,
-        profile_url: None,
-        updated_at: naive_now(),
-    };
-
-    let from_record = from.create_or_update(&db).await.ok()?;
-
-    let to: Identity = Identity {
-        uuid: Some(Uuid::new_v4()),
-        platform: Platform::from_str(p.platform.as_str()).unwrap(),
-        identity: p.identity.to_string(),
-        created_at: Some(timestamp_to_naive(
-            p.created_at.to_string().parse().unwrap(),
-        )),
-        display_name: p.identity.clone(),
-        added_at: naive_now(),
-        avatar_url: None,
-        profile_url: None,
-        updated_at: naive_now(),
-    };
-    let to_record = to.create_or_update(&db).await.ok()?;
-
-    let pf: Proof = Proof {
-        uuid: Uuid::new_v4(),
-        source: DataSource::NextID,
-        record_id: None,
-        created_at: Some(timestamp_to_naive(
-            p.created_at.to_string().parse().unwrap(),
-        )),
-        updated_at: naive_now(),
-    };
-    pf.connect(&db, &from_record, &to_record).await.ok()?;
-
-    Some((
-        Platform::from_str(p.platform.as_str()).unwrap(),
-        p.identity.clone(),
-    ))
-}
-
 #[async_trait]
 impl Fetcher for ProofClient {
     async fn fetch(&self) -> Result<IdentityProcessList, Error> {
@@ -145,12 +94,59 @@ impl Fetcher for ProofClient {
                 return Err(Error::NoResult);
             }
         };
+        let next_id_identity = proofs.persona;
+        let db = new_db_connection().await?;
+        let mut res: IdentityProcessList = Vec::new();
 
-        // parse
-        let futures: Vec<_> = proofs.proofs.into_iter().map(|p| save_item(p)).collect();
-        let results = join_all(futures).await;
-        let res: IdentityProcessList = results.into_iter().filter_map(|p| p).collect();
+        for p in proofs.proofs.into_iter() {
+            let from: Identity = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: Platform::NextID,
+                identity: next_id_identity.clone(),
+                created_at: Some(timestamp_to_naive(
+                    p.created_at.to_string().parse().unwrap(),
+                )),
+                display_name: next_id_identity.clone(),
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: None,
+                updated_at: naive_now(),
+            };
 
+            let from_record = from.create_or_update(&db).await?;
+            let to_platform = Platform::from_str(p.platform.as_str());
+            if to_platform.is_err() {
+                continue;
+            }
+
+            let to: Identity = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: to_platform.clone().unwrap(),
+                identity: p.identity.to_string(),
+                created_at: Some(timestamp_to_naive(
+                    p.created_at.to_string().parse().unwrap(),
+                )),
+                display_name: p.identity.clone(),
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: None,
+                updated_at: naive_now(),
+            };
+            let to_record = to.create_or_update(&db).await?;
+
+            res.push((to_platform.clone().unwrap(), p.identity.clone()));
+
+            let pf: Proof = Proof {
+                uuid: Uuid::new_v4(),
+                source: DataSource::NextID,
+                record_id: None,
+                created_at: Some(timestamp_to_naive(
+                    p.created_at.to_string().parse().unwrap(),
+                )),
+                updated_at: naive_now(),
+            };
+            pf.connect(&db, &from_record, &to_record).await?;
+        }
         Ok(res)
     }
 
