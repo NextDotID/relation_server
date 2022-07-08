@@ -24,7 +24,7 @@ COPY --from=builder /app/target/release/examples/standalone /app/server
 RUN chmod a+x server && \
     mkdir config && \
     apt-get update && \
-    apt-get install -y openssl && \
+    apt-get install -y openssl ca-certificates && \
     rm -rf /var/lib/apt
 
 VOLUME ["/app/config"]
