@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
 use uuid::Uuid;
 
+
 #[derive(Clone, Serialize, Deserialize, Debug, Display, PartialEq, EnumString, EnumIter)]
 pub enum Chain {
     #[strum(serialize = "ethereum")]
@@ -83,20 +84,35 @@ impl Chain {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, EnumString, Display)]
+#[derive(Clone, Serialize, Deserialize, EnumString, Display, Debug)]
 pub enum NFTCategory {
+    #[strum(serialize = "ENS")]
+    #[serde(rename = "ENS")]
+    ENS,
+
+    #[strum(serialize = "ERC721")]
+    #[serde(rename = "ERC721")]
+    ERC721,
+
+    #[strum(serialize = "ERC1155")]
+    #[serde(rename = "ERC1155")]
+    ERC1155,
+
+    #[strum(serialize = "POAP")]
+    #[serde(rename = "POAP")]
+    POAP,
+
     #[serde(rename = "unknown")]
     #[strum(serialize = "unknown")]
     Unknown,
-    #[serde(rename = "ens")]
-    #[strum(serialize = "ens")]
-    ENS,
 }
 impl Default for NFTCategory {
     fn default() -> Self {
         NFTCategory::ENS
     }
 }
+
+
 
 /// NFT
 #[derive(Clone, Serialize, Deserialize, Record, Debug)]

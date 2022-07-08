@@ -42,6 +42,9 @@ strum = "*"
 async-graphql = {version = "4", features = ["uuid", "chrono"]}
 async-graphql-warp = "*"
 
+gql_client = "1.0.4"
+
 [dev_dependencies]
 fake = { version = "2.4", features = ["uuid", "chrono"] }
 rand = "0.8"
+insta = "0.16"

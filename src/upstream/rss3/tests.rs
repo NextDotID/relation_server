@@ -1,35 +1,30 @@
 mod tests {
-    use crate::{error::Error, upstream::rss3::Rss3, upstream::Fetcher};
+    use crate::{
+        error::Error, 
+        upstream::rss3::Rss3, 
+        upstream::Fetcher,
+        upstream::Platform,
+        graph::new_db_connection,
+        graph::{vertex::Identity, vertex::NFT, vertex::nft::Chain},
+    };
 
     #[tokio::test]
     async fn test_smoke_nft_rss3() -> Result<(), Error> {
         let rs: Rss3 = Rss3 {
-            account: "0x6875e13A6301040388F61f5DBa5045E1bE01c657".to_string(),
-            network: "ethereum".to_string(),
-            tags: "NFT".to_string(),
+            identity: "0x6875e13A6301040388F61f5DBa5045E1bE01c657".to_string(),
+            platform: "ethereum".to_string(),
         };
-
-        let result = rs.fetch().await?;
-
-        // print!(result);
-        //assert_ne!(result.len(), 0);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_smoke_token_rss3() -> Result<(), Error> {
-        let rs: Rss3 = Rss3 {
-            account: "0x6875e13A6301040388F61f5DBa5045E1bE01c657".to_string(),
-            network: "ethereum".to_string(),
-            tags: "Token".to_string(),
-        };
-
         rs.fetch().await?;
+        let db = new_db_connection().await?;
+        
+        let owner = Identity::find_by_platform_identity(&db, &Platform::Ethereum, &rs.identity)
+        .await?
+        .expect("Record not found");
+        let nft = NFT::find_by_chain_contract_id(&db, &Chain::Polygon, &"0x8f9772d0ed34bd0293098a439912f0f6d6e78e3f".to_string(), &"1".to_string()).await?.unwrap();
 
-        //println!("{}", result);
-        //assert_ne!(result.len(), 0);
-
+        let res = nft.belongs_to(&db).await.unwrap();
+    
+        assert_eq!(owner.identity, res.unwrap().identity);
         Ok(())
     }
 }

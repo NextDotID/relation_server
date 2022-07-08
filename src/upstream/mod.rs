@@ -1,15 +1,16 @@
-pub mod aggregation;
-pub mod keybase;
-pub mod proof_client;
-pub mod rss3;
-pub mod sybil_list;
+mod aggregation;
+mod keybase;
+mod knn3;
+mod proof_client;
+mod rss3;
+mod sybil_list;
 
 use std::sync::Arc;
 
 use crate::error::Error;
 use crate::upstream::proof_client::ProofClient;
 use crate::upstream::sybil_list::SybilList;
-use crate::upstream::{aggregation::Aggregation, keybase::Keybase};
+use crate::upstream::{aggregation::Aggregation, keybase::Keybase, knn3::Knn3, rss3::Rss3};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -27,18 +28,22 @@ pub enum Platform {
     #[strum(serialize = "twitter")]
     #[serde(rename = "twitter")]
     Twitter,
+
     /// Ethereum wallet `0x[a-f0-9]{40}`
     #[strum(serialize = "ethereum", serialize = "eth")]
     #[serde(rename = "ethereum")]
     Ethereum,
+
     /// NextID
     #[strum(serialize = "nextid")]
     #[serde(rename = "nextid")]
     NextID,
+
     /// Keybase
     #[strum(serialize = "keybase")]
     #[serde(rename = "keybase")]
     Keybase,
+
     /// Github
     #[strum(serialize = "github")]
     #[serde(rename = "github")]
@@ -72,6 +77,11 @@ pub enum DataSource {
     #[strum(serialize = "rss3")]
     #[serde(rename = "rss3")]
     Rss3, // = "rss3",
+
+    /// https://docs.knn3.xyz/graphql/
+    #[strum(serialize = "knn3")]
+    #[serde(rename = "knn3")]
+    Knn3, // = "rss3",
 
     #[strum(serialize = "cyberconnect")]
     #[serde(rename = "cyberconnect")]
@@ -122,6 +132,8 @@ enum Upstream {
     NextID,
     SybilList,
     Aggregation,
+    Knn3,
+    Rss3,
 }
 
 struct UpstreamFactory;
@@ -143,6 +155,14 @@ impl UpstreamFactory {
             }),
             Upstream::SybilList => Box::new(SybilList {}),
             Upstream::Aggregation => Box::new(Aggregation {
+                platform: platform.clone(),
+                identity: identity.clone(),
+            }),
+            Upstream::Knn3 => Box::new(Knn3 {
+                platform: platform.clone(),
+                identity: identity.clone(),
+            }),
+            Upstream::Rss3 => Box::new(Rss3 {
                 platform: platform.clone(),
                 identity: identity.clone(),
             }),

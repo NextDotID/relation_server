@@ -18,6 +18,7 @@ mod tests {
             .expect("Record not found");
 
         assert_eq!(found.updated_at.timestamp(), naive_now().timestamp());
+
         Ok(())
     }
 }

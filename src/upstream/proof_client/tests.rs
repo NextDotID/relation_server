@@ -8,7 +8,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_smoke() -> Result<(), Error> {
-        let addr = String::from("0x2467Ee73Bb0c5AcDeEdf4E6cC5aA685741126872");
+        let addr = String::from("0x2467ee73bb0c5acdeedf4e6cc5aa685741126872");
         let pf: ProofClient = ProofClient {
             platform: "ethereum".to_string(),
             identity: addr.clone(),
