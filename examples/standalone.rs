@@ -6,14 +6,16 @@ use async_graphql::{
 };
 use async_graphql_warp::{GraphQLBadRequest, GraphQLResponse};
 use http::StatusCode;
+use log::warn;
 use relation_server::{config, controller::graphql::Query, error::Result, graph};
 use warp::{http::Response as HttpResponse, Filter, Rejection};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    env_logger::try_init().expect("Failed to initialize logger");
+
     // TODO: not sure if sharing one DB connection instance won't cause data race.
     let db = graph::new_db_connection().await?;
-
     let schema = Schema::build(Query::default(), EmptyMutation, EmptySubscription)
         .data(db)
         .finish();
@@ -37,9 +39,17 @@ async fn main() -> Result<()> {
         .or(graphql_post)
         .recover(|err: Rejection| async move {
             if let Some(GraphQLBadRequest(err)) = err.find() {
+                warn!("GraphQL error: {}", err);
                 return Ok::<_, Infallible>(warp::reply::with_status(
                     err.to_string(),
                     StatusCode::BAD_REQUEST,
+                ));
+            }
+            if let Some(myerr) = err.find::<relation_server::error::Error>() {
+                warn!("General Error: {}", myerr.to_string());
+                return Ok(warp::reply::with_status(
+                    myerr.to_string(),
+                    myerr.http_status(),
                 ));
             }
 

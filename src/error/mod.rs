@@ -56,6 +56,8 @@ impl Error {
     }
 }
 
+impl warp::reject::Reject for Error {}
+
 unsafe impl Sync for Error {}
 unsafe impl Send for Error {}
 
