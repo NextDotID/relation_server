@@ -139,7 +139,7 @@ impl IdentityQuery {
         #[graphql(desc = "Identity on target Platform")] identity: String,
     ) -> Result<Option<IdentityRecord>> {
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let platform = platform.parse()?;
+        let platform: Platform = platform.parse()?;
         // FIXME: Super dirty. Should be in an async job/worker-like shape.
         match Identity::find_by_platform_identity(&db, &platform, &identity).await? {
             None => {
@@ -147,7 +147,7 @@ impl IdentityQuery {
                 Identity::find_by_platform_identity(&db, &platform, &identity).await
             }
             Some(found) => {
-                if found.0.record.is_outdated() {
+                if found.is_outdated() {
                     fetch_all(&platform, &identity).await?;
                     Identity::find_by_platform_identity(&db, &platform, &identity).await
                 } else {

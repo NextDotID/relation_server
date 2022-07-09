@@ -4,20 +4,16 @@ use crate::config::C;
 use crate::graph::edge::Own;
 use crate::graph::vertex::{nft::Chain, nft::NFTCategory, NFT};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, Platform, IdentityProcessList};
+use crate::upstream::{DataSource, Fetcher, IdentityProcessList, Platform};
 use crate::util::naive_now;
 use crate::{
     error::Error,
     graph::{new_db_connection, vertex::Identity},
 };
-use aragog::query;
 use async_trait::async_trait;
 use gql_client::Client;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use std::str::FromStr;
-
-const ENSCONTRACTADDR: &str = "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85";
 
 #[derive(Deserialize, Debug)]
 pub struct Ens {
@@ -42,7 +38,6 @@ pub struct Knn3 {
 #[async_trait]
 impl Fetcher for Knn3 {
     async fn fetch(&self) -> Result<IdentityProcessList, Error> {
-
         let query = r#"
             query EnsByAddressQuery($addr: String!){
                 addrs(where: { address: $addr }) {
@@ -63,7 +58,7 @@ impl Fetcher for Knn3 {
         let res = data.unwrap();
         let ens_vec = res.addrs.first().unwrap();
         let db = new_db_connection().await?;
-        
+
         for ens in ens_vec.ens.iter() {
             let from: Identity = Identity {
                 uuid: Some(Uuid::new_v4()),
@@ -81,7 +76,7 @@ impl Fetcher for Knn3 {
             let to: NFT = NFT {
                 uuid: Uuid::new_v4(),
                 category: NFTCategory::ENS,
-                contract: ENSCONTRACTADDR.clone().to_string(),
+                contract: NFTCategory::ENS.default_contract_address().unwrap(),
                 id: ens.to_string(),
                 chain: Chain::Ethereum,
                 symbol: None,
@@ -102,5 +97,4 @@ impl Fetcher for Knn3 {
     fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
         return vec![(vec![Platform::Ethereum], vec![])];
     }
-
 }

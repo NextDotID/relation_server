@@ -10,14 +10,19 @@ use aragog::{
     query::{Comparison, Filter, QueryResult},
     DatabaseConnection, DatabaseRecord, Record,
 };
+use async_graphql::{
+    InputObject, InputType, InputValueError, InputValueResult, Scalar, ScalarType, Value,
+};
 use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
 use uuid::Uuid;
 
-
-#[derive(Clone, Serialize, Deserialize, Debug, Display, PartialEq, EnumString, EnumIter)]
+#[derive(
+    Default, Clone, Serialize, Deserialize, Debug, Display, PartialEq, EnumString, EnumIter,
+)]
 pub enum Chain {
+    #[default]
     #[strum(serialize = "ethereum")]
     #[serde(rename = "ethereum")]
     Ethereum,
@@ -46,9 +51,24 @@ pub enum Chain {
     #[strum(serialize = "conflux_espace")]
     ConfluxESpace,
 }
-impl Default for Chain {
-    fn default() -> Self {
-        Chain::Ethereum
+
+#[Scalar]
+impl ScalarType for Chain {
+    fn parse(value: Value) -> InputValueResult<Self> {
+        match value {
+            Value::String(s) => {
+                let nft_category: Chain = s.parse().or(Err(InputValueError::custom(format!(
+                    "Non-supported Chain: {}",
+                    s
+                ))))?;
+                Ok(nft_category)
+            }
+            _ => Err(InputValueError::expected_type(value)),
+        }
+    }
+
+    fn to_value(&self) -> Value {
+        Value::String(self.to_string())
     }
 }
 
@@ -84,8 +104,9 @@ impl Chain {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, EnumString, Display, Debug)]
+#[derive(Default, Clone, Serialize, Deserialize, EnumString, Display, Debug, EnumIter)]
 pub enum NFTCategory {
+    #[default]
     #[strum(serialize = "ENS")]
     #[serde(rename = "ENS")]
     ENS,
@@ -106,13 +127,46 @@ pub enum NFTCategory {
     #[strum(serialize = "unknown")]
     Unknown,
 }
-impl Default for NFTCategory {
-    fn default() -> Self {
-        NFTCategory::ENS
+#[Scalar]
+impl ScalarType for NFTCategory {
+    fn parse(value: Value) -> InputValueResult<Self> {
+        match value {
+            Value::String(s) => {
+                let nft_category: NFTCategory = s.parse().or(Err(InputValueError::custom(
+                    format!("Non-supported NFT Category: {}", s),
+                )))?;
+                Ok(nft_category)
+            }
+            _ => Err(InputValueError::expected_type(value)),
+        }
+    }
+
+    fn to_value(&self) -> Value {
+        Value::String(self.to_string())
     }
 }
 
+impl NFTCategory {
+    pub fn default_contract_address(&self) -> Option<String> {
+        use NFTCategory::*;
+        match self {
+            // TODO: ENS has a complicated contract structure, which cannot determine the "main" contract easily.
+            ENS => Some("0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85".to_string()),
+            _ => None,
+        }
+    }
 
+    pub fn default_chain(&self) -> Option<Chain> {
+        use NFTCategory::*;
+        match self {
+            ENS => Some(Chain::Ethereum),
+            ERC721 => Some(Chain::Ethereum),
+            ERC1155 => Some(Chain::Ethereum),
+            POAP => Some(Chain::Ethereum),
+            _ => None,
+        }
+    }
+}
 
 /// NFT
 #[derive(Clone, Serialize, Deserialize, Record, Debug)]
