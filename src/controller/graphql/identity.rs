@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::graph::vertex::{Identity, IdentityRecord, Vertex};
+use crate::graph::vertex::{Identity, IdentityRecord, NFTRecord, Vertex};
 use crate::upstream::{fetch_all, DataSource, Platform};
 use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
@@ -113,6 +113,13 @@ impl IdentityRecord {
             None,
         )
         .await
+    }
+
+    /// NFTs owned by this identity.
+    /// For now, there's only `platform: ethereum` identity has NFTs.
+    async fn nft(&self, ctx: &Context<'_>) -> Result<Vec<NFTRecord>> {
+        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        self.nfts(db).await
     }
 }
 

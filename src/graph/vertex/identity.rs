@@ -1,6 +1,9 @@
 use crate::{
     error::Error,
-    graph::{edge::Proof, vertex::Vertex},
+    graph::{
+        edge::{Own, Proof},
+        vertex::Vertex,
+    },
     upstream::{DataSource, Platform},
     util::naive_now,
 };
@@ -12,6 +15,8 @@ use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use super::{NFTRecord, NFT};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Record)]
 #[collection_name = "Identities"]
@@ -191,6 +196,17 @@ impl IdentityRecord {
         // };
 
         let result: QueryResult<Identity> = Query::any(1, depth, Proof::COLLECTION_NAME, self.id())
+            .call(db)
+            .await?;
+        Ok(result.iter().map(|r| r.to_owned().into()).collect())
+    }
+
+    /// Returns all NFTs owned by this identity. Empty list if `self.platform != Ethereum`.
+    pub async fn nfts(&self, db: &DatabaseConnection) -> Result<Vec<NFTRecord>, Error> {
+        if self.0.record.platform != Platform::Ethereum {
+            return Ok(vec![]);
+        }
+        let result: QueryResult<NFT> = Query::outbound(1, 1, Own::COLLECTION_NAME, self.id())
             .call(db)
             .await?;
         Ok(result.iter().map(|r| r.to_owned().into()).collect())
