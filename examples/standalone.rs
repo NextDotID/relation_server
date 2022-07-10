@@ -13,7 +13,7 @@ use warp::{http::Response as HttpResponse, Filter, Rejection};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::Builder::from_env(Env::default().default_filter_or("trace"))
+    env_logger::Builder::from_env(Env::default().default_filter_or("debug"))
         .try_init()
         .expect("Failed to initialize logger");
 
