@@ -5,8 +5,6 @@ mod proof_client;
 mod rss3;
 mod sybil_list;
 
-use std::sync::Arc;
-
 use crate::error::Error;
 use crate::upstream::proof_client::ProofClient;
 use crate::upstream::sybil_list::SybilList;
@@ -154,7 +152,10 @@ impl UpstreamFactory {
                 platform: platform.clone(),
                 identity: identity.clone(),
             }),
-            Upstream::SybilList => Box::new(SybilList {}),
+            Upstream::SybilList => Box::new(SybilList {
+                platform: platform.parse().expect("SybilList: invalid platform"),
+                identity: identity.clone(),
+            }),
             Upstream::Aggregation => Box::new(Aggregation {
                 platform: platform.clone(),
                 identity: identity.clone(),
@@ -236,6 +237,14 @@ pub async fn fetch_one(
         }
     }
     Ok(res)
+}
+
+/// Prefetch all prefetchable upstreams, e.g. SybilList.
+pub async fn prefetch() -> Result<(), Error> {
+    info!("Prefetching sybil_list ...");
+    sybil_list::prefetch().await?;
+    info!("Prefetch completed.");
+    Ok(())
 }
 
 #[cfg(test)]

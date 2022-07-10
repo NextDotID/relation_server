@@ -72,4 +72,10 @@ impl ProofQuery {
 
         Ok(found)
     }
+
+    /// Prefetch proofs which are prefetchable, e.g. SybilList.
+    async fn prefetch_proof(&self) -> Result<String> {
+        crate::upstream::prefetch().await?;
+        Ok("Fetched".into())
+    }
 }
