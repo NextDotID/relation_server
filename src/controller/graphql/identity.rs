@@ -3,6 +3,7 @@ use crate::graph::vertex::{Identity, IdentityRecord, NFTRecord, Vertex};
 use crate::upstream::{fetch_all, DataSource, Platform};
 use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
+use log::debug;
 use strum::IntoEnumIterator;
 
 /// Status for a record in RelationService DB
@@ -147,7 +148,7 @@ impl IdentityQuery {
     ) -> Result<Option<IdentityRecord>> {
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let platform: Platform = platform.parse()?;
-        // FIXME: Super dirty. Should be in an async job/worker-like shape.
+        // FIXME: Still kinda dirty. Should be in an background queue/worker-like shape.
         match Identity::find_by_platform_identity(&db, &platform, &identity).await? {
             None => {
                 fetch_all(&platform, &identity).await?;
@@ -155,11 +156,12 @@ impl IdentityQuery {
             }
             Some(found) => {
                 if found.is_outdated() {
-                    fetch_all(&platform, &identity).await?;
-                    Identity::find_by_platform_identity(&db, &platform, &identity).await
-                } else {
-                    Ok(Some(found))
+                    debug!("{}/{} is outdated. Refetching...", platform, identity);
+                    tokio::spawn(async move {
+                        let _ = fetch_all(&platform, &identity).await;
+                    });
                 }
+                Ok(Some(found))
             }
         }
     }

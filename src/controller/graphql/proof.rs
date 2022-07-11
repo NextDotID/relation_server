@@ -75,7 +75,9 @@ impl ProofQuery {
 
     /// Prefetch proofs which are prefetchable, e.g. SybilList.
     async fn prefetch_proof(&self) -> Result<String> {
-        crate::upstream::prefetch().await?;
-        Ok("Fetched".into())
+        tokio::spawn(async move {
+            let _ = crate::upstream::prefetch().await;
+        });
+        Ok("Fetching".into())
     }
 }
