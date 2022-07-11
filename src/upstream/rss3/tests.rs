@@ -1,11 +1,11 @@
 mod tests {
     use crate::{
-        error::Error, 
-        upstream::rss3::Rss3, 
+        error::Error,
+        graph::new_db_connection,
+        graph::{vertex::nft::Chain, vertex::Identity, vertex::NFT},
+        upstream::rss3::Rss3,
         upstream::Fetcher,
         upstream::Platform,
-        graph::new_db_connection,
-        graph::{vertex::Identity, vertex::NFT, vertex::nft::Chain},
     };
 
     #[tokio::test]
@@ -16,14 +16,21 @@ mod tests {
         };
         rs.fetch().await?;
         let db = new_db_connection().await?;
-        
+
         let owner = Identity::find_by_platform_identity(&db, &Platform::Ethereum, &rs.identity)
+            .await?
+            .expect("Record not found");
+        let nft = NFT::find_by_chain_contract_id(
+            &db,
+            &Chain::Polygon,
+            &"0x8f9772d0ed34bd0293098a439912f0f6d6e78e3f".to_string(),
+            &"1".to_string(),
+        )
         .await?
-        .expect("Record not found");
-        let nft = NFT::find_by_chain_contract_id(&db, &Chain::Polygon, &"0x8f9772d0ed34bd0293098a439912f0f6d6e78e3f".to_string(), &"1".to_string()).await?.unwrap();
+        .unwrap();
 
         let res = nft.belongs_to(&db).await.unwrap();
-    
+
         assert_eq!(owner.identity, res.unwrap().identity);
         Ok(())
     }

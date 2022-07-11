@@ -11,6 +11,7 @@ use crate::{
     graph::{new_db_connection, vertex::Identity},
 };
 use async_trait::async_trait;
+use futures::future::ok;
 use gql_client::Client;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -52,10 +53,12 @@ impl Fetcher for Knn3 {
         };
 
         let data = client
-            .query_with_vars::<Data, Vars>(query, vars)
-            .await
-            .unwrap();
-        let res = data.unwrap();
+         .query_with_vars::<Data, Vars>(query, vars).await;
+        if data.is_err() {
+            return Ok(vec![]);
+        }
+    
+        let res = data.unwrap().unwrap();
         let ens_vec = res.addrs.first().unwrap();
         let db = new_db_connection().await?;
 

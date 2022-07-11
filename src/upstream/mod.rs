@@ -4,6 +4,7 @@ mod knn3;
 mod proof_client;
 mod rss3;
 mod sybil_list;
+use futures::{stream, StreamExt};
 
 use crate::error::Error;
 use crate::upstream::proof_client::ProofClient;
@@ -18,7 +19,6 @@ use strum_macros::{Display, EnumString};
 
 /// List when processing identities.
 type IdentityProcessList = Vec<(Platform, String)>;
-//type IdentityObject = (Platform, String);
 
 /// All identity platform.
 #[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq, EnumIter)]
@@ -180,7 +180,6 @@ pub async fn fetch_all(platform: &Platform, identity: &String) -> Result<(), Err
     while up_next.len() > 0 {
         debug!("fetch_all::up_next | {:?}", up_next);
         let (next_platform, next_identity) = up_next.pop().unwrap();
-
         let fetched = fetch_one(&next_platform, &next_identity).await?;
         processed.push((next_platform, next_identity));
         fetched.clone().into_iter().for_each(|f| {
@@ -200,43 +199,67 @@ pub async fn fetch_all(platform: &Platform, identity: &String) -> Result<(), Err
     Ok(())
 }
 
+#[derive(Debug)]
+struct Params {
+    pub source: Upstream,
+    pub platform: Platform,
+    pub identity: String,
+}
+
+async fn fetching(p: Params) -> IdentityProcessList {
+    let fetcher = UpstreamFactory::new_fetcher(&p.source, &p.platform.to_string(), &p.identity);
+    let ability = fetcher.ability();
+    let mut res: IdentityProcessList = Vec::new();
+    for (platforms, _) in ability.into_iter() {
+        if platforms.iter().any(|i| i == &p.platform) {
+            debug!(
+                "fetch_one | Fetching {} / {} from {:?}",
+                p.platform, p.identity, p.source
+            );
+            match fetcher.fetch().await {
+                Ok(resp) => {
+                        debug!(
+                            "fetch_one | Fetched ({} / {} from {:?}): {:?}",
+                            p.platform, p.identity, p.source, resp
+                        );
+                        res.extend(resp);
+                    }
+                Err(err) => {
+                        warn!(
+                            "fetch_one | Failed to fetch ({} / {} from {:?}): {:?}",
+                            p.platform, p.identity, p.source, err
+                        );
+                        continue;
+                    }    
+            };  
+        }
+    }
+    res
+}
+
 /// Find one (platform, identity) pair in all upstreams.
 /// Returns identities just fetched for next iter..
 pub async fn fetch_one(
     platform: &Platform,
     identity: &String,
 ) -> Result<IdentityProcessList, Error> {
-    let mut res: IdentityProcessList = Vec::new();
-    for source in Upstream::iter() {
-        let fetcher = UpstreamFactory::new_fetcher(&source, &platform.to_string(), identity);
-        let ability = fetcher.ability();
-        for (platforms, _) in ability.into_iter() {
-            if platforms.iter().any(|p| p == platform) {
-                debug!(
-                    "fetch_one | Fetching {} / {} from {:?}",
-                    platform, identity, source
-                );
-                let resp = match fetcher.fetch().await {
-                    Ok(resp) => {
-                        debug!(
-                            "fetch_one | Fetched ({} / {} from {:?}): {:?}",
-                            platform, identity, source, resp
-                        );
-                        resp
-                    }
-                    Err(err) => {
-                        warn!(
-                            "fetch_one | Failed to fetch ({} / {} from {:?}): {:?}",
-                            platform, identity, source, err
-                        );
-                        continue;
-                    }
-                };
-                res.extend(resp);
-            }
+
+    let params: Vec<Params> = Upstream::iter().map(|p| {
+        Params {
+            source: p,
+            platform: platform.to_owned(),
+            identity: identity.to_owned(),
         }
-    }
-    Ok(res)
+    }).collect(); 
+
+    let numbers = params.len();
+    let results: IdentityProcessList = stream::iter(params)
+        .map(fetching)
+        .buffer_unordered(numbers)
+        .concat()
+        .await;
+    
+    Ok(results)
 }
 
 /// Prefetch all prefetchable upstreams, e.g. SybilList.
@@ -250,12 +273,20 @@ pub async fn prefetch() -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use crate::error::Error;
-    use crate::upstream::{fetch_all, Platform};
+    use crate::upstream::{fetch_all, fetch_one, Platform};
 
     #[tokio::test]
     async fn test_fetcher_result() -> Result<(), Error> {
-        let result = fetch_all(&Platform::Github, &"fengshanshan".into()).await?;
+        let result = fetch_all(&Platform::Twitter, &"0xsannie".into()).await?;
         assert_eq!(result, ());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_fetch_one_result() -> Result<(), Error> {
+        let result = fetch_one(&Platform::Twitter, &"0xsannie".into()).await?;
+        assert_ne!(result.len(), 0);
 
         Ok(())
     }

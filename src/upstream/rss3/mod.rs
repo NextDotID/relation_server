@@ -2,22 +2,21 @@ mod tests;
 
 use std::str::FromStr;
 
+use crate::config::C;
 use crate::graph::vertex::{nft::Chain, nft::NFTCategory, Identity, NFT};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, Platform, IdentityProcessList};
+use crate::upstream::{DataSource, Fetcher, IdentityProcessList, Platform};
 use crate::util::{make_client, naive_now, parse_body};
 use crate::{
     error::Error,
     graph::{edge::Own, new_db_connection},
 };
-use crate::config::C;
 
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime};
 use futures::future::join_all;
 use serde::Deserialize;
 use uuid::Uuid;
-
 
 #[derive(Deserialize, Debug)]
 pub struct Rss3Response {
@@ -154,7 +153,6 @@ impl Fetcher for Rss3 {
             ));
         }
 
-    
         // parse
         let futures: Vec<_> = body
             .list
