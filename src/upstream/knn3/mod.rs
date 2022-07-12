@@ -14,6 +14,7 @@ use async_trait::async_trait;
 use gql_client::Client;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use log::{warn, info};
 
 #[derive(Deserialize, Debug)]
 pub struct Ens {
@@ -51,11 +52,25 @@ impl Fetcher for Knn3 {
             addr: self.identity.clone(),
         };
 
-        let data = client
-            .query_with_vars::<Data, Vars>(query, vars)
-            .await
-            .unwrap();
-        let res = data.unwrap();
+        let resp = client
+         .query_with_vars::<Data, Vars>(query, vars).await;
+        if resp.is_err() {
+            warn!(
+                "KNN3 fetch | Failed to fetch addrs: {}, err: {:?}",
+                self.identity.clone(), resp.err()
+            );
+            return Ok(vec![]);
+        }
+
+        let res = resp.unwrap().unwrap();
+        if res.addrs.is_empty() {
+            info!(
+                "KNN3 fetch | address: {} cannot find any result",
+                self.identity.clone()
+            );
+            return Ok(vec![]);
+        }
+        
         let ens_vec = res.addrs.first().unwrap();
         let db = new_db_connection().await?;
 

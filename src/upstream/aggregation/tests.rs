@@ -8,7 +8,8 @@ mod tests {
             identity: "0000".to_string(),
         };
         let res = ag.fetch().await?;
-        println!("{:?}", res);
+        assert_ne!(res.len(), 0);
+        //println!("{:?}", res);
 
         Ok(())
     }

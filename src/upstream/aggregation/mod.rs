@@ -1,6 +1,6 @@
 mod tests;
 
-use crate::config::{Upstream, C};
+use crate::config::C;
 use crate::error::Error;
 use crate::graph::{edge::Proof, vertex::Identity};
 use crate::graph::{new_db_connection, Edge, Vertex};

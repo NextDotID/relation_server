@@ -7,7 +7,6 @@ use crate::graph::{Edge, Vertex};
 use crate::upstream::{DataSource, Fetcher, IdentityProcessList, Platform};
 use crate::util::{make_client, naive_now, parse_body};
 use async_trait::async_trait;
-use hyper::body;
 use serde::Deserialize;
 
 use std::str::FromStr;
