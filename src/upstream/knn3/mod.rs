@@ -55,7 +55,12 @@ impl Fetcher for Knn3 {
             .query_with_vars::<Data, Vars>(query, vars)
             .await
             .unwrap();
+
         let res = data.unwrap();
+        if res.addrs.first().is_none() {
+            return Ok(IdentityProcessList::new());
+        }
+
         let ens_vec = res.addrs.first().unwrap();
         let db = new_db_connection().await?;
 
