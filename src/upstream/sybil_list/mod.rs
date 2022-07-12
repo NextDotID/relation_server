@@ -4,7 +4,6 @@ mod tests;
 use crate::config::C;
 use crate::error::Error;
 use crate::graph::edge::ProofRecord;
-use crate::graph::vertex::IdentityRecord;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
 use crate::upstream::{DataSource, Fetcher, IdentityProcessList, Platform};

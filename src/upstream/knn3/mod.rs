@@ -11,10 +11,10 @@ use crate::{
     graph::{new_db_connection, vertex::Identity},
 };
 use async_trait::async_trait;
-use futures::future::ok;
 use gql_client::Client;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use log::{warn, info};
 
 #[derive(Deserialize, Debug)]
 pub struct Ens {
@@ -52,13 +52,25 @@ impl Fetcher for Knn3 {
             addr: self.identity.clone(),
         };
 
-        let data = client
+        let resp = client
          .query_with_vars::<Data, Vars>(query, vars).await;
-        if data.is_err() {
+        if resp.is_err() {
+            warn!(
+                "KNN3 fetch | Failed to fetch addrs: {}, err: {:?}",
+                self.identity.clone(), resp.err()
+            );
             return Ok(vec![]);
         }
-    
-        let res = data.unwrap().unwrap();
+
+        let res = resp.unwrap().unwrap();
+        if res.addrs.is_empty() {
+            info!(
+                "KNN3 fetch | address: {} cannot find any result",
+                self.identity.clone()
+            );
+            return Ok(vec![]);
+        }
+        
         let ens_vec = res.addrs.first().unwrap();
         let db = new_db_connection().await?;
 

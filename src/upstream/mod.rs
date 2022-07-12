@@ -199,35 +199,29 @@ pub async fn fetch_all(platform: &Platform, identity: &String) -> Result<(), Err
     Ok(())
 }
 
-#[derive(Debug)]
-struct Params {
-    pub source: Upstream,
-    pub platform: Platform,
-    pub identity: String,
-}
-
-async fn fetching(p: Params) -> IdentityProcessList {
-    let fetcher = UpstreamFactory::new_fetcher(&p.source, &p.platform.to_string(), &p.identity);
+/// doing fetching from one upstream
+async fn fetching(source: Upstream, platform: &Platform, identity: &String) -> IdentityProcessList {
+    let fetcher = UpstreamFactory::new_fetcher(&source, &platform.to_string(), identity);
     let ability = fetcher.ability();
     let mut res: IdentityProcessList = Vec::new();
     for (platforms, _) in ability.into_iter() {
-        if platforms.iter().any(|i| i == &p.platform) {
+        if platforms.iter().any(|i| i == platform) {
             debug!(
                 "fetch_one | Fetching {} / {} from {:?}",
-                p.platform, p.identity, p.source
+                platform, identity, source
             );
             match fetcher.fetch().await {
                 Ok(resp) => {
                         debug!(
                             "fetch_one | Fetched ({} / {} from {:?}): {:?}",
-                            p.platform, p.identity, p.source, resp
+                            platform, identity, source, resp
                         );
                         res.extend(resp);
                     }
                 Err(err) => {
                         warn!(
                             "fetch_one | Failed to fetch ({} / {} from {:?}): {:?}",
-                            p.platform, p.identity, p.source, err
+                            platform, identity, source, err
                         );
                         continue;
                     }    
@@ -244,17 +238,10 @@ pub async fn fetch_one(
     identity: &String,
 ) -> Result<IdentityProcessList, Error> {
 
-    let params: Vec<Params> = Upstream::iter().map(|p| {
-        Params {
-            source: p,
-            platform: platform.to_owned(),
-            identity: identity.to_owned(),
-        }
-    }).collect(); 
-
-    let numbers = params.len();
-    let results: IdentityProcessList = stream::iter(params)
-        .map(fetching)
+    let ups = Upstream::iter().collect::<Vec<_>>();
+    let numbers = ups.len();
+    let results: IdentityProcessList = stream::iter(ups)
+        .map(|u| fetching(u, platform, identity))
         .buffer_unordered(numbers)
         .concat()
         .await;

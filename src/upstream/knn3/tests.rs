@@ -37,4 +37,15 @@ mod tests {
         assert_eq!(owner.uuid, res.unwrap().uuid);
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_knn3_fail_get_result() -> Result<(), Error> {
+        let kn: Knn3 = Knn3 {
+            platform: "ethereum".to_string(),
+            identity: "0xd8da6bf26964af9d7eed9e03e53415d37aa96044".to_string(),
+        };
+        let res = kn.fetch().await?;
+        assert_eq!(res.len(), 0);
+        Ok(())
+    }
 }
