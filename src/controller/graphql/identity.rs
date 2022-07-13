@@ -152,8 +152,8 @@ impl IdentityQuery {
         #[graphql(desc = "Identity on target Platform")] identity: String,
     ) -> Result<Option<IdentityRecord>> {
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let platform = platform.parse()?;
-        let target = Target::Identity(platform, identity);
+        let platform: Platform = platform.parse()?;
+        let target = Target::Identity(platform.clone(), identity.clone());
         // FIXME: Still kinda dirty. Should be in an background queue/worker-like shape.
         match Identity::find_by_platform_identity(&db, &platform, &identity).await? {
             None => {

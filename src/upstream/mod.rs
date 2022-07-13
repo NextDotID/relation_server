@@ -5,20 +5,20 @@ mod proof_client;
 mod rss3;
 mod sybil_list;
 
-use futures::future::join_all;
-use futures::{stream, StreamExt};
-use http::StatusCode;
-
-use crate::error::Error;
-use crate::graph::vertex::nft::{Chain, NFTCategory};
-use crate::upstream::proof_client::ProofClient;
-use crate::upstream::sybil_list::SybilList;
-use crate::upstream::{aggregation::Aggregation, keybase::Keybase, knn3::Knn3, rss3::Rss3};
+use crate::{
+    error::Error,
+    graph::vertex::nft::{Chain, NFTCategory},
+    upstream::{
+        aggregation::Aggregation, keybase::Keybase, knn3::Knn3, proof_client::ProofClient,
+        rss3::Rss3, sybil_list::SybilList,
+    },
+};
 use async_trait::async_trait;
-use log::{debug, info, trace, warn};
+use futures::future::join_all;
+use http::StatusCode;
+use log::{debug, info, trace};
 use serde::{Deserialize, Serialize};
-use strum_macros::EnumIter;
-use strum_macros::{Display, EnumString};
+use strum_macros::{Display, EnumIter, EnumString};
 
 /// List when processing identities.
 type TargetProcessedList = Vec<Target>;
@@ -237,11 +237,11 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
         let fetched = fetch_one(&target).await?;
         processed.push(target.clone());
         fetched.into_iter().for_each(|f| {
-            if processed.contains(&target) {
-                trace!("fetch_all::iter | Fetched {} | duplicated", target);
+            if processed.contains(&f) {
+                trace!("fetch_all::iter | Fetched {} | duplicated", f);
             } else {
-                trace!("fetch_all::iter | Fetched {} | pushed into up_next", target);
-                up_next.push(target.clone());
+                trace!("fetch_all::iter | Fetched {} | pushed into up_next", f);
+                up_next.push(f.clone());
             }
         });
     }
@@ -284,17 +284,19 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
 /// Find one (platform, identity) pair in all upstreams.
 /// Returns identities just fetched for next iter..
 pub async fn fetch_one(target: &Target) -> Result<TargetProcessedList, Error> {
-    let upstreams = DataSource::fetchers_for(target);
-    let upstreams_count = upstreams.len();
-    let results: TargetProcessedList = join_all(vec![SybilList::fetch(target)])
-        .await
-        .into_iter()
-        .flat_map(|res| res.unwrap_or(vec![]))
-        .collect();
-
-    // .map(|u| u.unwrap_or(vec![]))
-    // .concat()
-    // .await
+    // FIXME: Yeah yeah I know it's stupid.
+    let results: TargetProcessedList = join_all(vec![
+        Aggregation::fetch(target),
+        SybilList::fetch(target),
+        Keybase::fetch(target),
+        ProofClient::fetch(target),
+        Rss3::fetch(target),
+        Knn3::fetch(target),
+    ])
+    .await
+    .into_iter()
+    .flat_map(|res| res.unwrap_or(vec![]))
+    .collect();
 
     Ok(results)
 }

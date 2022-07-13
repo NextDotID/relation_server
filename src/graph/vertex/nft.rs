@@ -10,9 +10,7 @@ use aragog::{
     query::{Comparison, Filter, QueryResult},
     DatabaseConnection, DatabaseRecord, Record,
 };
-use async_graphql::{
-    InputObject, InputType, InputValueError, InputValueResult, Scalar, ScalarType, Value,
-};
+use async_graphql::{InputValueError, InputValueResult, Scalar, ScalarType, Value};
 use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};

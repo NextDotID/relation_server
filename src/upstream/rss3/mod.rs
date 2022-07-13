@@ -1,25 +1,23 @@
 mod tests;
 
-use std::str::FromStr;
-
-use crate::config::C;
-use crate::graph::vertex::{nft::Chain, nft::NFTCategory, Identity, NFT};
-use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
-use crate::util::{make_client, naive_now, parse_body};
 use crate::{
+    config::C,
     error::Error,
-    graph::{edge::Own, new_db_connection},
+    graph::{
+        edge::Own,
+        new_db_connection,
+        vertex::{nft::Chain, nft::NFTCategory, Identity, NFT},
+        Edge, Vertex,
+    },
+    upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList},
+    util::{make_client, naive_now, parse_body},
 };
-
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime};
 use futures::future::join_all;
-use futures::TryFutureExt;
 use serde::Deserialize;
+use std::str::FromStr;
 use uuid::Uuid;
-
-use super::Target;
 
 #[derive(Deserialize, Debug)]
 pub struct Rss3Response {

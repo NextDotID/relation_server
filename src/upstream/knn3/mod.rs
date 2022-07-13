@@ -107,8 +107,8 @@ impl Fetcher for Knn3 {
         }
         Ok(ens_vec
             .ens
-            .into_iter()
-            .map(|ens| Target::NFT(Chain::Ethereum, NFTCategory::ENS, ens))
+            .iter()
+            .map(|ens| Target::NFT(Chain::Ethereum, NFTCategory::ENS, ens.clone()))
             .collect())
     }
 

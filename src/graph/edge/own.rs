@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     error::Error,
-    graph::vertex::{nft::Chain, Identity, NFT},
+    graph::vertex::{Identity, NFT},
     upstream::DataSource,
 };
 
@@ -113,7 +113,7 @@ impl Edge<Identity, NFT, OwnRecord> for Own {
 
 #[cfg(test)]
 mod tests {
-    use fake::{Dummy, Faker, Fake};
+    use fake::{Dummy, Fake, Faker};
 
     use super::*;
 
