@@ -21,6 +21,7 @@ use strum_macros::{Display, EnumString};
 type IdentityProcessList = Vec<(Platform, String)>;
 
 /// All identity platform.
+/// TODO: move this definition into `graph/vertex/identity`, since it is not specific to upstream.
 #[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq, EnumIter)]
 pub enum Platform {
     /// Twitter
@@ -135,38 +136,40 @@ enum Upstream {
     Rss3,
 }
 
-struct UpstreamFactory;
-
-impl UpstreamFactory {
-    fn new_fetcher(
-        u: &Upstream,
-        platform: &String,
-        identity: &String,
+impl Upstream {
+    /// Get fetcher instance for given platform / identity.
+    pub fn get_fetcher<P: ToString, I: ToString>(
+        &self,
+        platform: &P,
+        identity: &I,
     ) -> Box<dyn Fetcher + Sync + Send> {
-        match u {
+        match self {
             Upstream::Keybase => Box::new(Keybase {
-                platform: platform.clone(),
-                identity: identity.clone(),
+                platform: platform.to_string(),
+                identity: identity.to_string(),
             }),
             Upstream::NextID => Box::new(ProofClient {
-                platform: platform.clone(),
-                identity: identity.clone(),
+                platform: platform.to_string(),
+                identity: identity.to_string(),
             }),
             Upstream::SybilList => Box::new(SybilList {
-                platform: platform.parse().expect("SybilList: invalid platform"),
-                identity: identity.clone(),
+                platform: platform
+                    .to_string()
+                    .parse()
+                    .expect("SybilList: invalid platform"),
+                identity: identity.to_string(),
             }),
             Upstream::Aggregation => Box::new(Aggregation {
-                platform: platform.clone(),
-                identity: identity.clone(),
+                platform: platform.to_string(),
+                identity: identity.to_string(),
             }),
             Upstream::Knn3 => Box::new(Knn3 {
-                platform: platform.clone(),
-                identity: identity.clone(),
+                platform: platform.to_string(),
+                identity: identity.to_string(),
             }),
             Upstream::Rss3 => Box::new(Rss3 {
-                platform: platform.clone(),
-                identity: identity.clone(),
+                platform: platform.to_string(),
+                identity: identity.to_string(),
             }),
         }
     }
@@ -200,8 +203,8 @@ pub async fn fetch_all(platform: &Platform, identity: &String) -> Result<(), Err
 }
 
 /// doing fetching from one upstream
-async fn fetching(source: Upstream, platform: &Platform, identity: &String) -> IdentityProcessList {
-    let fetcher = UpstreamFactory::new_fetcher(&source, &platform.to_string(), identity);
+async fn fetching(source: Upstream, platform: &Platform, identity: &str) -> IdentityProcessList {
+    let fetcher = source.get_fetcher(platform, &identity);
     let ability = fetcher.ability();
     let mut res: IdentityProcessList = Vec::new();
     for (platforms, _) in ability.into_iter() {
@@ -212,20 +215,20 @@ async fn fetching(source: Upstream, platform: &Platform, identity: &String) -> I
             );
             match fetcher.fetch().await {
                 Ok(resp) => {
-                        debug!(
-                            "fetch_one | Fetched ({} / {} from {:?}): {:?}",
-                            platform, identity, source, resp
-                        );
-                        res.extend(resp);
-                    }
+                    debug!(
+                        "fetch_one | Fetched ({} / {} from {:?}): {:?}",
+                        platform, identity, source, resp
+                    );
+                    res.extend(resp);
+                }
                 Err(err) => {
-                        warn!(
-                            "fetch_one | Failed to fetch ({} / {} from {:?}): {:?}",
-                            platform, identity, source, err
-                        );
-                        continue;
-                    }    
-            };  
+                    warn!(
+                        "fetch_one | Failed to fetch ({} / {} from {:?}): {:?}",
+                        platform, identity, source, err
+                    );
+                    continue;
+                }
+            };
         }
     }
     res
@@ -237,15 +240,14 @@ pub async fn fetch_one(
     platform: &Platform,
     identity: &String,
 ) -> Result<IdentityProcessList, Error> {
-
-    let ups = Upstream::iter().collect::<Vec<_>>();
-    let numbers = ups.len();
-    let results: IdentityProcessList = stream::iter(ups)
+    let upstreams = Upstream::iter().collect::<Vec<_>>();
+    let upstreams_count = upstreams.len();
+    let results: IdentityProcessList = stream::iter(upstreams)
         .map(|u| fetching(u, platform, identity))
-        .buffer_unordered(numbers)
+        .buffer_unordered(upstreams_count)
         .concat()
         .await;
-    
+
     Ok(results)
 }
 
