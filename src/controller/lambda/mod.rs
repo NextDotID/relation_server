@@ -1,6 +1,5 @@
 use crate::controller::{
-    error_response, healthz, Body as OurBody, Request as OurRequest,
-    Response as OurResponse,
+    error_response, healthz, Body as OurBody, Request as OurRequest, Response as OurResponse,
 };
 use crate::error::Error;
 use http::{Method, StatusCode};

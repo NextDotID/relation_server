@@ -5,7 +5,7 @@
 ---
 up:
   - create_collection:
-      name: NFTs
+      name: Contracts
 down:
   - delete_collection:
-      name: NFTs
+      name: Contracts

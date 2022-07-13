@@ -9,7 +9,7 @@ collections:
     is_edge_collection: false
   - name: Proofs
     is_edge_collection: true
-  - name: NFTs
+  - name: Contracts
     is_edge_collection: false
   - name: Owns
     is_edge_collection: true

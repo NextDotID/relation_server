@@ -1,15 +1,15 @@
 mod identity;
-mod nft;
+mod contract;
 mod proof;
 
-use self::{identity::IdentityQuery, nft::NFTQuery, proof::ProofQuery};
+use self::{identity::IdentityQuery, contract::ContractQuery, proof::ProofQuery};
 use async_graphql::{MergedObject, Object};
 
 const API_VERSION: &str = "0.1";
 
 /// Base struct of GraphQL query request.
 #[derive(MergedObject, Default)]
-pub struct Query(GeneralQuery, IdentityQuery, ProofQuery, NFTQuery);
+pub struct Query(GeneralQuery, IdentityQuery, ProofQuery, ContractQuery);
 
 #[derive(Default)]
 pub struct GeneralQuery;

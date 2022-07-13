@@ -23,6 +23,7 @@ where
     fn uuid(&self) -> Option<Uuid>;
 
     /// Connect 2 vertex.
+    // TODO after the transfer, connect record need to update
     async fn connect(
         &self,
         db: &DatabaseConnection,

@@ -79,7 +79,6 @@ pub struct ConfigKnn3Service {
     pub url: String,
 }
 
-
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigRss3Service {
     pub url: String,

@@ -2,7 +2,7 @@ mod tests;
 
 use crate::config::C;
 use crate::graph::edge::Own;
-use crate::graph::vertex::{nft::Chain, nft::NFTCategory, NFT};
+use crate::graph::vertex::{contract::Chain, contract::ContractCategory, Contract};
 use crate::graph::{Edge, Vertex};
 use crate::upstream::{DataSource, Fetcher, IdentityProcessList, Platform};
 use crate::util::naive_now;
@@ -12,9 +12,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use gql_client::Client;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use log::{warn, info};
 
 #[derive(Deserialize, Debug)]
 pub struct Ens {
@@ -52,12 +52,12 @@ impl Fetcher for Knn3 {
             addr: self.identity.clone(),
         };
 
-        let resp = client
-         .query_with_vars::<Data, Vars>(query, vars).await;
+        let resp = client.query_with_vars::<Data, Vars>(query, vars).await;
         if resp.is_err() {
             warn!(
                 "KNN3 fetch | Failed to fetch addrs: {}, err: {:?}",
-                self.identity.clone(), resp.err()
+                self.identity.clone(),
+                resp.err()
             );
             return Ok(vec![]);
         }
@@ -70,7 +70,7 @@ impl Fetcher for Knn3 {
             );
             return Ok(vec![]);
         }
-        
+
         let ens_vec = res.addrs.first().unwrap();
         let db = new_db_connection().await?;
 
@@ -88,11 +88,10 @@ impl Fetcher for Knn3 {
             };
             let from_record = from.create_or_update(&db).await?;
 
-            let to: NFT = NFT {
+            let to: Contract = Contract {
                 uuid: Uuid::new_v4(),
-                category: NFTCategory::ENS,
-                contract: NFTCategory::ENS.default_contract_address().unwrap(),
-                id: ens.to_string(),
+                category: ContractCategory::ENS,
+                contract: ContractCategory::ENS.default_contract_address().unwrap(),
                 chain: Chain::Ethereum,
                 symbol: None,
                 updated_at: naive_now(),
@@ -102,7 +101,9 @@ impl Fetcher for Knn3 {
             let ownership: Own = Own {
                 uuid: Uuid::new_v4(),
                 transaction: None,
+                token_id: ens.to_string(),
                 source: DataSource::Knn3,
+                connected_at: naive_now(),
             };
             ownership.connect(&db, &from_record, &to_record).await?;
         }

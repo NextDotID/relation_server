@@ -105,7 +105,7 @@ impl Chain {
 }
 
 #[derive(Default, Clone, Serialize, Deserialize, EnumString, Display, Debug, EnumIter)]
-pub enum NFTCategory {
+pub enum ContractCategory {
     #[default]
     #[strum(serialize = "ENS")]
     #[serde(rename = "ENS")]
@@ -128,12 +128,12 @@ pub enum NFTCategory {
     Unknown,
 }
 #[Scalar]
-impl ScalarType for NFTCategory {
+impl ScalarType for ContractCategory {
     fn parse(value: Value) -> InputValueResult<Self> {
         match value {
             Value::String(s) => {
-                let nft_category: NFTCategory = s.parse().or(Err(InputValueError::custom(
-                    format!("Non-supported NFT Category: {}", s),
+                let nft_category: ContractCategory = s.parse().or(Err(InputValueError::custom(
+                    format!("Non-supported Contract Category: {}", s),
                 )))?;
                 Ok(nft_category)
             }
@@ -146,9 +146,9 @@ impl ScalarType for NFTCategory {
     }
 }
 
-impl NFTCategory {
+impl ContractCategory {
     pub fn default_contract_address(&self) -> Option<String> {
-        use NFTCategory::*;
+        use ContractCategory::*;
         match self {
             // TODO: ENS has a complicated contract structure, which cannot determine the "main" contract easily.
             ENS => Some("0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85".to_string()),
@@ -157,7 +157,7 @@ impl NFTCategory {
     }
 
     pub fn default_chain(&self) -> Option<Chain> {
-        use NFTCategory::*;
+        use ContractCategory::*;
         match self {
             ENS => Some(Chain::Ethereum),
             ERC721 => Some(Chain::Ethereum),
@@ -168,18 +168,16 @@ impl NFTCategory {
     }
 }
 
-/// NFT
+/// Contract
 #[derive(Clone, Serialize, Deserialize, Record, Debug)]
-#[collection_name = "NFTs"]
-pub struct NFT {
+#[collection_name = "Contracts"]
+pub struct Contract {
     /// UUID of this record
     pub uuid: Uuid,
-    /// Which NFT is this?
-    pub category: NFTCategory,
+    /// What kind of Contract is it?
+    pub category: ContractCategory,
     /// Contract address
     pub contract: String,
-    /// Token ID in contract. Basiclly `uint256.to_string()`.
-    pub id: String,
     /// On which chain?
     pub chain: Chain,
     /// Token symbol
@@ -188,13 +186,12 @@ pub struct NFT {
     pub updated_at: NaiveDateTime,
 }
 
-impl Default for NFT {
+impl Default for Contract {
     fn default() -> Self {
         Self {
             uuid: Uuid::new_v4(),
             category: Default::default(),
             contract: Default::default(),
-            id: Default::default(),
             chain: Default::default(),
             symbol: Default::default(),
             updated_at: naive_now(),
@@ -202,17 +199,15 @@ impl Default for NFT {
     }
 }
 
-impl NFT {
-    pub async fn find_by_chain_contract_id(
+impl Contract {
+    pub async fn find_by_chain_contract(
         db: &DatabaseConnection,
         chain: &Chain,
         contract: &String,
-        id: &String,
-    ) -> Result<Option<NFTRecord>, Error> {
+    ) -> Result<Option<ContractRecord>, Error> {
         let query = Self::query().filter(
             Filter::new(Comparison::field("chain").equals_str(chain))
-                .and(Comparison::field("contract").equals_str(contract))
-                .and(Comparison::field("id").equals_str(id)),
+                .and(Comparison::field("contract").equals_str(contract)),
         );
         let result = Self::get(&query, db).await?;
         if result.len() == 0 {
@@ -224,15 +219,14 @@ impl NFT {
 }
 
 #[async_trait::async_trait]
-impl Vertex<NFTRecord> for NFT {
+impl Vertex<ContractRecord> for Contract {
     fn uuid(&self) -> Option<uuid::Uuid> {
         Some(self.uuid)
     }
 
-    /// Create or update an NFT info by (chain, contract, nft_id).
-    async fn create_or_update(&self, db: &DatabaseConnection) -> Result<NFTRecord, Error> {
-        let found =
-            Self::find_by_chain_contract_id(db, &self.chain, &self.contract, &self.id).await?;
+    /// Create or update an Contract info by (chain, contract, nft_id).
+    async fn create_or_update(&self, db: &DatabaseConnection) -> Result<ContractRecord, Error> {
+        let found = Self::find_by_chain_contract(db, &self.chain, &self.contract).await?;
         match found {
             None => {
                 let mut to_be_created = self.clone();
@@ -249,10 +243,13 @@ impl Vertex<NFTRecord> for NFT {
         }
     }
 
-    /// Find an NFT by UUID.
-    async fn find_by_uuid(db: &DatabaseConnection, uuid: Uuid) -> Result<Option<NFTRecord>, Error> {
-        let query = NFT::query().filter(Comparison::field("uuid").equals_str(uuid).into());
-        let query_result = NFT::get(&query, db).await?;
+    /// Find an Contract by UUID.
+    async fn find_by_uuid(
+        db: &DatabaseConnection,
+        uuid: Uuid,
+    ) -> Result<Option<ContractRecord>, Error> {
+        let query = Contract::query().filter(Comparison::field("uuid").equals_str(uuid).into());
+        let query_result = Contract::get(&query, db).await?;
         if query_result.len() == 0 {
             Ok(None)
         } else {
@@ -272,30 +269,30 @@ impl Vertex<NFTRecord> for NFT {
 }
 
 #[derive(Clone, Deserialize, Serialize, Default, Debug)]
-pub struct NFTRecord(pub DatabaseRecord<NFT>);
+pub struct ContractRecord(pub DatabaseRecord<Contract>);
 
-impl std::ops::Deref for NFTRecord {
-    type Target = DatabaseRecord<NFT>;
+impl std::ops::Deref for ContractRecord {
+    type Target = DatabaseRecord<Contract>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl std::ops::DerefMut for NFTRecord {
+impl std::ops::DerefMut for ContractRecord {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl From<DatabaseRecord<NFT>> for NFTRecord {
-    fn from(record: DatabaseRecord<NFT>) -> Self {
+impl From<DatabaseRecord<Contract>> for ContractRecord {
+    fn from(record: DatabaseRecord<Contract>) -> Self {
         Self(record)
     }
 }
 
-impl NFTRecord {
-    /// Which wallet (`Identity`) does this NFT belong to?
+impl ContractRecord {
+    /// Which wallet (`Identity`) does this Contract belong to?
     pub async fn belongs_to(
         &self,
         db: &DatabaseConnection,
@@ -310,15 +307,15 @@ impl NFTRecord {
         }
     }
 
-    /// What other NFTs does this NFT's owner has?
-    pub async fn neighbors(&self, db: &DatabaseConnection) -> Result<Vec<NFTRecord>, Error> {
+    /// What other Contracts does this Contract's owner has?
+    pub async fn neighbors(&self, db: &DatabaseConnection) -> Result<Vec<ContractRecord>, Error> {
         let owner = self.belongs_to(db).await?;
         if owner.is_none() {
             return Ok(vec![]);
         }
 
         let query = owner.unwrap().outbound_query(1, 2, "Owns");
-        let result: QueryResult<NFT> = NFT::get(&query, db).await?;
+        let result: QueryResult<Contract> = Contract::get(&query, db).await?;
         if result.len() == 0 {
             Ok(vec![]) // Empty result
         } else {
@@ -335,20 +332,19 @@ mod tests {
 
     use super::*;
 
-    impl NFT {
-        pub async fn create_dummy(db: &DatabaseConnection) -> Result<NFTRecord, Error> {
-            let nft: NFT = Faker.fake();
+    impl Contract {
+        pub async fn create_dummy(db: &DatabaseConnection) -> Result<ContractRecord, Error> {
+            let nft: Contract = Faker.fake();
             Ok(nft.create_or_update(db).await?.into())
         }
     }
 
-    impl Dummy<Faker> for NFT {
+    impl Dummy<Faker> for Contract {
         fn dummy_with_rng<R: rand::Rng + ?Sized>(config: &Faker, _rng: &mut R) -> Self {
-            let mut nft = NFT::default();
-            nft.category = NFTCategory::ENS;
+            let mut nft = Contract::default();
+            nft.category = ContractCategory::ENS;
             nft.chain = Chain::Ethereum;
             nft.contract = config.fake();
-            nft.id = config.fake();
             nft.symbol = Some("ENS".into());
 
             nft
@@ -358,7 +354,7 @@ mod tests {
     #[tokio::test]
     async fn test_creation() -> Result<(), Error> {
         let db = new_db_connection().await?;
-        let created = NFT::create_dummy(&db).await?;
+        let created = Contract::create_dummy(&db).await?;
         assert!(created.key().len() > 0);
 
         Ok(())
@@ -367,7 +363,7 @@ mod tests {
     #[tokio::test]
     async fn test_belongs_to() -> Result<(), Error> {
         let db = new_db_connection().await?;
-        let nft = NFT::create_dummy(&db).await?;
+        let nft = Contract::create_dummy(&db).await?;
         let identity = Identity::create_dummy(&db).await?;
         let own: Own = Faker.fake();
         DatabaseRecord::link(&identity, &nft, &db, own).await?;
@@ -381,11 +377,11 @@ mod tests {
     async fn test_neighbors() -> Result<(), Error> {
         let db = new_db_connection().await?;
         let identity = Identity::create_dummy(&db).await?;
-        // Create 2 Identity -> NFT connections
-        let nft1 = NFT::create_dummy(&db).await?;
+        // Create 2 Identity -> Contract connections
+        let nft1 = Contract::create_dummy(&db).await?;
         let own1: Own = Faker.fake();
         DatabaseRecord::link(&identity, &nft1, &db, own1).await?;
-        let nft2 = NFT::create_dummy(&db).await?;
+        let nft2 = Contract::create_dummy(&db).await?;
         let own2: Own = Faker.fake();
         DatabaseRecord::link(&identity, &nft2, &db, own2).await?;
 

@@ -1,6 +1,4 @@
 mod tests {
-    use warp::addr;
-
     use crate::{error::Error, upstream::proof_client::ProofClient, upstream::Fetcher};
     use crate::{
         graph::new_db_connection, graph::vertex::Identity, upstream::Platform, util::naive_now,

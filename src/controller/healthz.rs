@@ -17,8 +17,12 @@ pub async fn controller(_req: Request) -> Result<Response, Error> {
         StatusCode::OK,
         &HealthzResponse {
             hello: "kv server".to_string(),
-            built_at: option_env!("RELATION_SERVER_BUILT_AT").unwrap_or("UNKNOWN").to_string(),
-            revision: option_env!("RELATION_SERVER_REVISION").unwrap_or("UNKNOWN").to_string(),
+            built_at: option_env!("RELATION_SERVER_BUILT_AT")
+                .unwrap_or("UNKNOWN")
+                .to_string(),
+            revision: option_env!("RELATION_SERVER_REVISION")
+                .unwrap_or("UNKNOWN")
+                .to_string(),
         },
     )
 }

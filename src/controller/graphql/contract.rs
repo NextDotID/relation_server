@@ -1,8 +1,8 @@
 use crate::{
     error::{Error, Result},
     graph::vertex::{
-        nft::{Chain, NFTCategory},
-        IdentityRecord, NFTRecord, NFT,
+        contract::{Chain, ContractCategory},
+        Contract, ContractRecord, IdentityRecord,
     },
 };
 use aragog::DatabaseConnection;
@@ -10,26 +10,26 @@ use async_graphql::{Context, Object};
 use strum::IntoEnumIterator;
 
 #[Object]
-impl NFTRecord {
+impl ContractRecord {
     /// UUID of this record. Managed by us RelationService.
     async fn uuid(&self) -> String {
         self.uuid.to_string()
     }
 
-    /// Which NFT is this?
+    /// Which Contract is this?
     async fn category(&self) -> String {
         self.category.to_string()
     }
 
-    /// Contract address of this NFT. Usually `0xHEX_STRING`.
+    /// Contract address of this Contract. Usually `0xHEX_STRING`.
     async fn contract(&self) -> String {
         self.contract.clone()
     }
 
     /// Token ID in contract. Usually `uint256.to_string()`. For ENS, this will become `abc.eth`.
-    async fn id(&self) -> String {
-        self.id.clone()
-    }
+    // async fn id(&self) -> String {
+    //     self.id.clone()
+    // }
 
     /// On which chain?
     ///
@@ -48,56 +48,56 @@ impl NFTRecord {
         self.updated_at.timestamp()
     }
 
-    /// Which `Identity` does this NFT belong to.
+    /// Which `Identity` does this Contract belong to.
     async fn owner(&self, ctx: &Context<'_>) -> Result<Option<IdentityRecord>> {
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         self.belongs_to(db).await
     }
 
-    /// Which `NFT`s does this owner has?
-    async fn neighbor(&self, ctx: &Context<'_>) -> Result<Vec<NFTRecord>> {
+    /// Which `Contract`s does this owner has?
+    async fn neighbor(&self, ctx: &Context<'_>) -> Result<Vec<ContractRecord>> {
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         self.neighbors(db).await
     }
 }
 
 #[derive(Default)]
-pub struct NFTQuery;
+pub struct ContractQuery;
 
 #[Object]
-impl NFTQuery {
+impl ContractQuery {
     /// List of all chains supported by RelationService.
     async fn available_chains(&self) -> Vec<String> {
         Chain::iter().map(|c| c.to_string()).collect()
     }
 
-    /// List of all NFT Categoris supported by RelationService.
+    /// List of all Contract Categoris supported by RelationService.
     async fn available_nft_categoris(&self) -> Vec<String> {
-        NFTCategory::iter().map(|c| c.to_string()).collect()
+        ContractCategory::iter().map(|c| c.to_string()).collect()
     }
 
-    /// Search NFT
+    /// Search Contract
     async fn nft(
         &self,
         ctx: &Context<'_>,
         #[graphql(
-            desc = "Category of this NFT. See `available_nft_categoris` for all categories supported by RelationService."
+            desc = "Category of this Contract. See `available_nft_categoris` for all categories supported by RelationService."
         )]
-        category: NFTCategory,
+        category: ContractCategory,
         // contract: Option<String>,
         #[graphql(
-            desc = "ID of this NFT. For ENS, this is the name of the token (abc.eth). For other NFT, this is the token ID in contract."
+            desc = "ID of this Contract. For ENS, this is the name of the token (abc.eth). For other Contract, this is the token ID in contract."
         )]
-        id: String,
-        #[graphql(
-            desc = "On which chain does this NFT exist? See `available_chains` for all chains supported by RelationService."
-        )]
+        // id: String,
+        // #[graphql(
+        //     desc = "On which chain does this Contract exist? See `available_chains` for all chains supported by RelationService."
+        // )]
         chain: Chain,
         #[graphql(
-            desc = "Contract address of this NFT. Usually `0xHEX_STRING`. For ENS, this can be omitted."
+            desc = "Contract address of this Contract. Usually `0xHEX_STRING`. For ENS, this can be omitted."
         )]
         contract: Option<String>,
-    ) -> Result<Option<NFTRecord>> {
+    ) -> Result<Option<ContractRecord>> {
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let contract_address =
             contract
@@ -105,14 +105,14 @@ impl NFTQuery {
                 .ok_or(Error::GraphQLError(
                     "Contract address is required.".to_string(),
                 ))?;
-        match NFT::find_by_chain_contract_id(db, &chain, &contract_address, &id).await? {
+        match Contract::find_by_chain_contract(db, &chain, &contract_address).await? {
             Some(nft) => {
-                // FIXME: fetch NFT data here.
+                // FIXME: fetch Contract data here.
                 // if nft.is_outdated() {
                 // }
                 Ok(Some(nft))
             }
-            None => Ok(None), // FIXME: Really need to fetch NFT info here.
+            None => Ok(None), // FIXME: Really need to fetch Contract info here.
         }
     }
 }

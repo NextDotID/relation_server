@@ -16,7 +16,7 @@ use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{NFTRecord, NFT};
+use super::{Contract, ContractRecord};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Record)]
 #[collection_name = "Identities"]
@@ -201,12 +201,12 @@ impl IdentityRecord {
         Ok(result.iter().map(|r| r.to_owned().into()).collect())
     }
 
-    /// Returns all NFTs owned by this identity. Empty list if `self.platform != Ethereum`.
-    pub async fn nfts(&self, db: &DatabaseConnection) -> Result<Vec<NFTRecord>, Error> {
+    /// Returns all Contracts owned by this identity. Empty list if `self.platform != Ethereum`.
+    pub async fn nfts(&self, db: &DatabaseConnection) -> Result<Vec<ContractRecord>, Error> {
         if self.0.record.platform != Platform::Ethereum {
             return Ok(vec![]);
         }
-        let result: QueryResult<NFT> = Query::outbound(1, 1, Own::COLLECTION_NAME, self.id())
+        let result: QueryResult<Contract> = Query::outbound(1, 1, Own::COLLECTION_NAME, self.id())
             .call(db)
             .await?;
         Ok(result.iter().map(|r| r.to_owned().into()).collect())

@@ -1,11 +1,11 @@
+pub mod contract;
 mod identity;
-pub mod nft;
 // mod crypto_identity;
 
 use aragog::{DatabaseConnection, Record};
 use async_trait::async_trait;
+pub use contract::{Contract, ContractRecord};
 pub use identity::{Identity, IdentityRecord};
-pub use nft::{NFTRecord, NFT};
 use uuid::Uuid;
 
 use crate::error::Error;
@@ -24,7 +24,7 @@ where
 
     /// Find a vertex by UUID.
     async fn find_by_uuid(db: &DatabaseConnection, uuid: Uuid)
-                          -> Result<Option<RecordType>, Error>;
+        -> Result<Option<RecordType>, Error>;
 
     /// Judge if this record is outdated.
     fn is_outdated(&self) -> bool;

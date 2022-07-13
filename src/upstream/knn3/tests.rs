@@ -4,9 +4,9 @@ mod tests {
         error::Error,
         graph::{
             new_db_connection,
-            vertex::nft::Chain,
+            vertex::contract::Chain,
             vertex::Identity,
-            vertex::{nft::NFTCategory, NFT},
+            vertex::{contract::ContractCategory, Contract},
         },
     };
 
@@ -14,7 +14,9 @@ mod tests {
     async fn test_knn3() -> Result<(), Error> {
         let kn: Knn3 = Knn3 {
             platform: "ethereum".to_string(),
-            identity: "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".to_string(),
+            identity: "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+                .to_string()
+                .to_lowercase(),
         };
         kn.fetch().await?;
 
@@ -23,11 +25,11 @@ mod tests {
             .await?
             .expect("Record not found");
 
-        let ens = NFT::find_by_chain_contract_id(
+        let ens = Contract::find_by_chain_contract(
             &db,
             &Chain::Ethereum,
-            &NFTCategory::ENS.default_contract_address().unwrap(),
-            &"vitalik.eth".to_string(),
+            &ContractCategory::ENS.default_contract_address().unwrap(),
+            //&"vitalik.eth".to_string(),
         )
         .await?
         .unwrap();

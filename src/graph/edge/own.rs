@@ -2,34 +2,41 @@ use aragog::{
     query::{Comparison, Filter, QueryResult},
     DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
     error::Error,
-    graph::vertex::{nft::Chain, Identity, NFT},
+    graph::vertex::{Contract, Identity},
     upstream::DataSource,
+    util::naive_now,
 };
 
 use super::Edge;
 
-#[derive(Clone, Deserialize, Serialize, Default, Record, Debug)]
+#[derive(Clone, Deserialize, Serialize, Record, Debug)]
 #[collection_name = "Owns"]
 pub struct Own {
     /// UUID of this record.
     pub uuid: Uuid,
     /// Data source (upstream) which provides this info.
-    /// Theoretically, NFT info should only be fetched by chain's RPC server,
+    /// Theoretically, Contract info should only be fetched by chain's RPC server,
     /// but in practice, we still rely on third-party cache / snapshot service.
     pub source: DataSource,
     /// Transaction info of this connection.
-    /// i.e. in which `tx` the NFT is transferred / minted.
+    /// i.e. in which `tx` the Contract is transferred / minted.
     /// In most case, it is a `"0xVERY_LONG_HEXSTRING"`.
     /// Maybe this is not provided by `source`, so we set it as `Option<>` here.
     pub transaction: Option<String>,
+    /// Token ID in contract. Basiclly `uint256.to_string()`.
+    pub token_id: String,
+    /// When this connection is built.
+    /// if it doesn't provide by `source`, use fetch time instead
+    pub connected_at: NaiveDateTime,
 }
 
-#[derive(Clone, Deserialize, Serialize, Default)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct OwnRecord(DatabaseRecord<EdgeRecord<Own>>);
 
 impl std::ops::Deref for OwnRecord {
@@ -56,7 +63,7 @@ impl Own {
     pub async fn find_by_from_to(
         db: &DatabaseConnection,
         from: &DatabaseRecord<Identity>,
-        to: &DatabaseRecord<NFT>,
+        to: &DatabaseRecord<Contract>,
     ) -> Result<Option<OwnRecord>, Error> {
         let filter = Filter::new(Comparison::field("_from").equals_str(from.id()))
             .and(Comparison::field("_to").equals_str(to.id()));
@@ -71,7 +78,7 @@ impl Own {
 }
 
 #[async_trait::async_trait]
-impl Edge<Identity, NFT, OwnRecord> for Own {
+impl Edge<Identity, Contract, OwnRecord> for Own {
     /// Returns UUID of self.
     fn uuid(&self) -> Option<Uuid> {
         Some(self.uuid)
@@ -82,7 +89,7 @@ impl Edge<Identity, NFT, OwnRecord> for Own {
         &self,
         db: &DatabaseConnection,
         from: &DatabaseRecord<Identity>,
-        to: &DatabaseRecord<NFT>,
+        to: &DatabaseRecord<Contract>,
     ) -> Result<OwnRecord, Error> {
         let found = Self::find_by_from_to(db, from, to).await?;
         match found {
@@ -113,7 +120,8 @@ impl Edge<Identity, NFT, OwnRecord> for Own {
 
 #[cfg(test)]
 mod tests {
-    use fake::{Dummy, Faker, Fake};
+    use crate::util::naive_now;
+    use fake::{Dummy, Fake, Faker};
 
     use super::*;
 
@@ -123,6 +131,8 @@ mod tests {
                 uuid: Uuid::new_v4(),
                 source: DataSource::Unknown,
                 transaction: config.fake(),
+                token_id: config.fake(),
+                connected_at: naive_now(),
             }
         }
     }

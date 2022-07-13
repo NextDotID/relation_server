@@ -3,7 +3,7 @@ mod tests;
 use std::str::FromStr;
 
 use crate::config::C;
-use crate::graph::vertex::{nft::Chain, nft::NFTCategory, Identity, NFT};
+use crate::graph::vertex::{contract::Chain, contract::ContractCategory, Contract, Identity};
 use crate::graph::{Edge, Vertex};
 use crate::upstream::{DataSource, Fetcher, IdentityProcessList, Platform};
 use crate::util::{make_client, naive_now, parse_body};
@@ -21,6 +21,7 @@ use uuid::Uuid;
 #[derive(Deserialize, Debug)]
 pub struct Rss3Response {
     pub version: String,
+    #[serde(default)]
     pub date_updated: String,
     pub identifier: String,
     pub total: i64,
@@ -30,6 +31,7 @@ pub struct Rss3Response {
 #[derive(Deserialize, Debug)]
 pub struct Item {
     pub date_created: String,
+    #[serde(default)]
     pub date_updated: String,
     pub related_urls: Vec<String>,
     pub tags: Vec<String>,
@@ -91,11 +93,11 @@ async fn save_item(p: Item) -> Result<(), Error> {
 
     let from_record = from.create_or_update(&db).await?;
 
-    let to: NFT = NFT {
+    let to: Contract = Contract {
         uuid: Uuid::new_v4(),
-        category: NFTCategory::from_str(p.metadata.contract_type.as_str()).unwrap(),
+        category: ContractCategory::from_str(p.metadata.contract_type.as_str()).unwrap(),
         contract: p.metadata.collection_address.clone().to_lowercase(),
-        id: p.metadata.token_id.clone(),
+
         chain: Chain::from_str(p.metadata.network.as_str()).unwrap(),
         symbol: Some(p.metadata.token_symbol.clone()),
         updated_at: naive_now(),
@@ -107,6 +109,8 @@ async fn save_item(p: Item) -> Result<(), Error> {
         uuid: Uuid::new_v4(),
         source: DataSource::Rss3,
         transaction: Some(p.metadata.proof.clone()),
+        token_id: p.metadata.token_id.clone(),
+        connected_at: naive_now(),
     };
 
     ownership.connect(&db, &from_record, &to_record).await?;
@@ -133,8 +137,9 @@ impl Fetcher for Rss3 {
             }
         };
 
+        //println!("url {:?}", uri.to_string());
         let mut resp = client.get(uri).await?;
-        //println!("resp {:?}", resp);
+        //println!("resp {:?}", resp.status());
 
         if !resp.status().is_success() {
             let body: ErrorResponse = parse_body(&mut resp).await?;

@@ -212,20 +212,20 @@ async fn fetching(source: Upstream, platform: &Platform, identity: &String) -> I
             );
             match fetcher.fetch().await {
                 Ok(resp) => {
-                        debug!(
-                            "fetch_one | Fetched ({} / {} from {:?}): {:?}",
-                            platform, identity, source, resp
-                        );
-                        res.extend(resp);
-                    }
+                    debug!(
+                        "fetch_one | Fetched ({} / {} from {:?}): {:?}",
+                        platform, identity, source, resp
+                    );
+                    res.extend(resp);
+                }
                 Err(err) => {
-                        warn!(
-                            "fetch_one | Failed to fetch ({} / {} from {:?}): {:?}",
-                            platform, identity, source, err
-                        );
-                        continue;
-                    }    
-            };  
+                    warn!(
+                        "fetch_one | Failed to fetch ({} / {} from {:?}): {:?}",
+                        platform, identity, source, err
+                    );
+                    continue;
+                }
+            };
         }
     }
     res
@@ -237,7 +237,6 @@ pub async fn fetch_one(
     platform: &Platform,
     identity: &String,
 ) -> Result<IdentityProcessList, Error> {
-
     let ups = Upstream::iter().collect::<Vec<_>>();
     let numbers = ups.len();
     let results: IdentityProcessList = stream::iter(ups)
@@ -245,7 +244,7 @@ pub async fn fetch_one(
         .buffer_unordered(numbers)
         .concat()
         .await;
-    
+
     Ok(results)
 }
 
