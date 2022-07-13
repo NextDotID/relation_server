@@ -4,7 +4,7 @@ use crate::config::C;
 use crate::graph::edge::Own;
 use crate::graph::vertex::{nft::Chain, nft::NFTCategory, NFT};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, IdentityProcessList, Platform};
+use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
 use crate::util::naive_now;
 use crate::{
     error::Error,
@@ -12,9 +12,11 @@ use crate::{
 };
 use async_trait::async_trait;
 use gql_client::Client;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use log::{warn, info};
+
+use super::Target;
 
 #[derive(Deserialize, Debug)]
 pub struct Ens {
@@ -27,18 +29,15 @@ pub struct Data {
 }
 
 #[derive(Serialize)]
-pub struct Vars {
-    addr: String,
+pub struct Vars<'a> {
+    addr: &'a str,
 }
 
-pub struct Knn3 {
-    pub platform: String,
-    pub identity: String,
-}
+pub struct Knn3 {}
 
 #[async_trait]
 impl Fetcher for Knn3 {
-    async fn fetch(&self) -> Result<IdentityProcessList, Error> {
+    async fn fetch(target: &Target) -> Result<TargetProcessedList, Error> {
         let query = r#"
             query EnsByAddressQuery($addr: String!){
                 addrs(where: { address: $addr }) {
@@ -46,31 +45,31 @@ impl Fetcher for Knn3 {
             }
         }
     "#;
+        if !Self::can_fetch(target) {
+            return Ok(vec![]);
+        }
+        let identity = target.identity()?;
 
         let client = Client::new(C.upstream.knn3_service.url.clone());
-        let vars = Vars {
-            addr: self.identity.clone(),
-        };
+        // TODO: Does KNN3 case-sensitive?
+        let vars = Vars { addr: &identity };
 
-        let resp = client
-         .query_with_vars::<Data, Vars>(query, vars).await;
+        let resp = client.query_with_vars::<Data, Vars>(query, vars).await;
         if resp.is_err() {
             warn!(
                 "KNN3 fetch | Failed to fetch addrs: {}, err: {:?}",
-                self.identity.clone(), resp.err()
+                identity,
+                resp.err()
             );
             return Ok(vec![]);
         }
 
         let res = resp.unwrap().unwrap();
         if res.addrs.is_empty() {
-            info!(
-                "KNN3 fetch | address: {} cannot find any result",
-                self.identity.clone()
-            );
+            info!("KNN3 fetch | address: {} cannot find any result", identity);
             return Ok(vec![]);
         }
-        
+
         let ens_vec = res.addrs.first().unwrap();
         let db = new_db_connection().await?;
 
@@ -78,9 +77,9 @@ impl Fetcher for Knn3 {
             let from: Identity = Identity {
                 uuid: Some(Uuid::new_v4()),
                 platform: Platform::Ethereum,
-                identity: self.identity.clone().to_lowercase(),
+                identity: identity.to_lowercase(),
                 created_at: None,
-                display_name: self.identity.clone().to_lowercase(),
+                display_name: identity.to_lowercase(),
                 added_at: naive_now(),
                 avatar_url: None,
                 profile_url: None,
@@ -106,10 +105,14 @@ impl Fetcher for Knn3 {
             };
             ownership.connect(&db, &from_record, &to_record).await?;
         }
-        Ok(vec![])
+        Ok(ens_vec
+            .ens
+            .into_iter()
+            .map(|ens| Target::NFT(Chain::Ethereum, NFTCategory::ENS, ens))
+            .collect())
     }
 
-    fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(vec![Platform::Ethereum], vec![])];
+    fn can_fetch(target: &Target) -> bool {
+        target.in_platform_supported(vec![Platform::Ethereum])
     }
 }

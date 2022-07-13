@@ -104,7 +104,9 @@ impl Chain {
     }
 }
 
-#[derive(Default, Clone, Serialize, Deserialize, EnumString, Display, Debug, EnumIter)]
+#[derive(
+    Default, Clone, Serialize, Deserialize, EnumString, Display, Debug, EnumIter, PartialEq,
+)]
 pub enum NFTCategory {
     #[default]
     #[strum(serialize = "ENS")]

@@ -4,22 +4,23 @@ mod tests {
         graph::new_db_connection,
         graph::{vertex::nft::Chain, vertex::Identity, vertex::NFT},
         upstream::rss3::Rss3,
-        upstream::Fetcher,
         upstream::Platform,
+        upstream::{Fetcher, Target},
     };
 
     #[tokio::test]
     async fn test_smoke_nft_rss3() -> Result<(), Error> {
-        let rs: Rss3 = Rss3 {
-            identity: "0x6875e13A6301040388F61f5DBa5045E1bE01c657".to_string(),
-            platform: "ethereum".to_string(),
-        };
-        rs.fetch().await?;
+        let target = Target::Identity(
+            Platform::Ethereum,
+            "0x6875e13A6301040388F61f5DBa5045E1bE01c657".to_string(),
+        );
+        Rss3::fetch(&target).await?;
         let db = new_db_connection().await?;
 
-        let owner = Identity::find_by_platform_identity(&db, &Platform::Ethereum, &rs.identity)
-            .await?
-            .expect("Record not found");
+        let owner =
+            Identity::find_by_platform_identity(&db, &Platform::Ethereum, &target.identity()?)
+                .await?
+                .expect("Record not found");
         let nft = NFT::find_by_chain_contract_id(
             &db,
             &Chain::Polygon,
