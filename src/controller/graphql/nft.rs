@@ -2,11 +2,13 @@ use crate::{
     error::{Error, Result},
     graph::vertex::{
         nft::{Chain, NFTCategory},
-        IdentityRecord, NFTRecord, NFT,
+        IdentityRecord, NFTRecord, Vertex, NFT,
     },
+    upstream::{fetch_all, Target},
 };
 use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
+use log::info;
 use strum::IntoEnumIterator;
 
 #[Object]
@@ -105,14 +107,22 @@ impl NFTQuery {
                 .ok_or(Error::GraphQLError(
                     "Contract address is required.".to_string(),
                 ))?;
+        let target = Target::NFT(chain.clone(), category, id.clone());
         match NFT::find_by_chain_contract_id(db, &chain, &contract_address, &id).await? {
             Some(nft) => {
-                // FIXME: fetch NFT data here.
-                // if nft.is_outdated() {
-                // }
+                if nft.is_outdated() {
+                    info!(
+                        "NFT: {}/{}/{} is outdated. Refetching...",
+                        nft.record.chain, nft.record.category, nft.record.id
+                    );
+                    tokio::spawn(async move { fetch_all(target).await });
+                }
                 Ok(Some(nft))
             }
-            None => Ok(None), // FIXME: Really need to fetch NFT info here.
+            None => {
+                fetch_all(target).await?;
+                NFT::find_by_chain_contract_id(db, &chain, &contract_address, &id).await
+            }
         }
     }
 }
