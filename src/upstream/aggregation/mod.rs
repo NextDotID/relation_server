@@ -8,11 +8,13 @@ use crate::upstream::{DataSource, Platform};
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::upstream::{Fetcher, IdentityProcessList};
+use crate::upstream::{Fetcher, TargetProcessedList};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use futures::future::join_all;
 use std::str::FromStr;
 use uuid::Uuid;
+
+use super::Target;
 
 #[derive(Deserialize, Debug)]
 pub struct Pagination {
@@ -38,12 +40,9 @@ pub struct Response {
     pub pagination: Pagination,
     pub records: Vec<Record>,
 }
-pub struct Aggregation {
-    pub platform: String,
-    pub identity: String,
-}
+pub struct Aggregation {}
 
-async fn save_item(p: Record) -> Option<(Platform, String)> {
+async fn save_item(p: Record) -> Option<Target> {
     let db = new_db_connection().await.ok()?;
 
     let from: Identity = Identity {
@@ -82,7 +81,7 @@ async fn save_item(p: Record) -> Option<(Platform, String)> {
     };
     pf.connect(&db, &from_record, &to_record).await.ok()?;
 
-    return Some((
+    return Some(Target::Identity(
         Platform::from_str(p.web3_platform.as_str()).unwrap(),
         p.web3_addr.clone(),
     ));
@@ -90,15 +89,17 @@ async fn save_item(p: Record) -> Option<(Platform, String)> {
 
 #[async_trait]
 impl Fetcher for Aggregation {
-    async fn fetch(&self) -> Result<IdentityProcessList, Error> {
+    async fn fetch(target: &Target) -> Result<TargetProcessedList, Error> {
         let client = make_client();
         let mut page = 1;
 
-        let mut res: IdentityProcessList = Vec::new();
+        let mut res: TargetProcessedList = Vec::new();
+        let platform = target.platform()?;
+        let identity = target.identity()?;
         loop {
             let uri: http::Uri = match format!(
                 "{}?platform={}&identity={}&page={}&size=100",
-                C.upstream.aggregation_service.url, self.platform, self.identity, page
+                C.upstream.aggregation_service.url, platform, identity, page
             )
             .parse()
             {
@@ -124,7 +125,7 @@ impl Fetcher for Aggregation {
             // parse
             let futures: Vec<_> = body.records.into_iter().map(|p| save_item(p)).collect();
             let results = join_all(futures).await;
-            let cons: IdentityProcessList = results.into_iter().filter_map(|i| i).collect();
+            let cons: TargetProcessedList = results.into_iter().filter_map(|i| i).collect();
             res.extend(cons);
 
             if body.pagination.current == body.pagination.next {
@@ -132,15 +133,11 @@ impl Fetcher for Aggregation {
             }
             page = body.pagination.next;
         }
-        //return cons;
 
         Ok(res)
     }
 
-    fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(
-            vec![Platform::Ethereum, Platform::Twitter],
-            vec![Platform::Ethereum, Platform::Twitter],
-        )];
+    fn can_fetch(target: &Target) -> bool {
+        target.in_platform_supported(vec![Platform::Ethereum, Platform::Twitter])
     }
 }

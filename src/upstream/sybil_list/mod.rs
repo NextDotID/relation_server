@@ -6,7 +6,7 @@ use crate::error::Error;
 use crate::graph::edge::ProofRecord;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, IdentityProcessList, Platform};
+use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use aragog::query::{Comparison, Filter, QueryResult};
 use aragog::{DatabaseConnection, DatabaseRecord, EdgeRecord, Record};
@@ -20,6 +20,8 @@ use serde_json::{Map, Value};
 use uuid::Uuid;
 
 use futures::future::join_all;
+
+use super::Target;
 
 #[derive(Deserialize, Debug)]
 pub struct SybilListItem {
@@ -46,12 +48,7 @@ pub struct ErrorResponse {
     pub message: String,
 }
 
-pub struct SybilList {
-    /// Platform to search. Only `ethereum` and `twitter` supported.
-    pub platform: Platform,
-    /// Twitter username or Ethereum `0xWALLET_ADDRESS`;.
-    pub identity: String,
-}
+pub struct SybilList {}
 
 async fn save_item(
     db: &DatabaseConnection,
@@ -129,22 +126,28 @@ pub async fn prefetch() -> Result<(), Error> {
 #[async_trait]
 impl Fetcher for SybilList {
     /// Only search sybil list in local database, no download process should occur.
-    async fn fetch(&self) -> Result<IdentityProcessList, Error> {
+    async fn fetch(target: &Target) -> Result<TargetProcessedList, Error> {
+        if !Self::can_fetch(target) {
+            return Ok(vec![]);
+        }
+
+        let platform = target.platform()?;
+        let identity = target.identity()?;
         let db = new_db_connection().await?;
-        let target =
-            Identity::find_by_platform_identity(&db, &self.platform, &self.identity).await?;
-        if target.is_none() {
+        let found = Identity::find_by_platform_identity(&db, &platform, &identity).await?;
+        if found.is_none() {
             info!(
-                "Sybil list: {} {} not found in local sybil list record",
-                self.platform, self.identity,
+                "Sybil list: {} not found in local sybil list record",
+                target,
             );
             return Ok(vec![]);
         }
 
-        match self.platform {
+        match platform {
+            // FIXME: stupid.
             Platform::Ethereum => {
                 let filter =
-                    Filter::new(Comparison::field("_from").equals_str(target.unwrap().id()))
+                    Filter::new(Comparison::field("_from").equals_str(found.unwrap().id()))
                         .and(Comparison::field("source").equals_str(DataSource::SybilList));
                 let result: QueryResult<EdgeRecord<Proof>> = EdgeRecord::<Proof>::query()
                     .filter(filter)
@@ -152,17 +155,20 @@ impl Fetcher for SybilList {
                     .await?;
 
                 if result.len() == 0 {
-                    debug!("No sybil list record found for {}", self.identity);
+                    debug!("No sybil list record found for {}", identity);
                     Ok(vec![])
                 } else {
                     let found: ProofRecord = result.first().unwrap().clone().into();
-                    let target: DatabaseRecord<Identity> = found.record.to_record(&db).await?;
+                    let next_target: DatabaseRecord<Identity> = found.record.to_record(&db).await?;
 
-                    Ok(vec![(target.platform.clone(), target.identity.clone())])
+                    Ok(vec![Target::Identity(
+                        next_target.platform.clone(),
+                        next_target.identity.clone(),
+                    )])
                 }
             }
             Platform::Twitter => {
-                let filter = Filter::new(Comparison::field("_to").equals_str(target.unwrap().id()))
+                let filter = Filter::new(Comparison::field("_to").equals_str(found.unwrap().id()))
                     .and(Comparison::field("source").equals_str(DataSource::SybilList));
                 let result: QueryResult<EdgeRecord<Proof>> = EdgeRecord::<Proof>::query()
                     .filter(filter)
@@ -170,29 +176,27 @@ impl Fetcher for SybilList {
                     .await?;
 
                 if result.len() == 0 {
-                    debug!("No sybil list record found for {}", self.identity);
+                    debug!("No sybil list record found for {}", identity);
                     Ok(vec![])
                 } else {
                     let found: ProofRecord = result.first().unwrap().clone().into();
-                    let target: DatabaseRecord<Identity> = found.record.from_record(&db).await?;
+                    let next_target: DatabaseRecord<Identity> =
+                        found.record.from_record(&db).await?;
 
-                    Ok(vec![(target.platform.clone(), target.identity.clone())])
+                    Ok(vec![Target::Identity(
+                        next_target.platform.clone(),
+                        next_target.identity.clone(),
+                    )])
                 }
             }
             _ => Err(Error::General(
-                format!(
-                    "Platform not supported in sybil_list fetcher: {}",
-                    self.platform
-                ),
+                format!("Platform not supported in sybil_list fetcher: {}", platform),
                 StatusCode::INTERNAL_SERVER_ERROR,
             )),
         }
     }
 
-    fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(
-            vec![Platform::Ethereum, Platform::Twitter],
-            vec![Platform::Twitter, Platform::Ethereum],
-        )];
+    fn can_fetch(target: &Target) -> bool {
+        target.in_platform_supported(vec![Platform::Ethereum, Platform::Twitter])
     }
 }

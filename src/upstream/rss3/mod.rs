@@ -1,21 +1,21 @@
 mod tests;
-
-use std::str::FromStr;
-
-use crate::config::C;
-use crate::graph::vertex::{contract::Chain, contract::ContractCategory, Contract, Identity};
-use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, IdentityProcessList, Platform};
-use crate::util::{make_client, naive_now, parse_body};
 use crate::{
+    config::C,
     error::Error,
-    graph::{edge::Own, new_db_connection},
+    graph::{
+        edge::Own,
+        new_db_connection,
+        vertex::{contract::Chain, contract::ContractCategory, Identity, Contract},
+        Edge, Vertex,
+    },
+    upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList},
+    util::{make_client, naive_now, parse_body},
 };
-
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime};
 use futures::future::join_all;
 use serde::Deserialize;
+use std::str::FromStr;
 use uuid::Uuid;
 
 #[derive(Deserialize, Debug)]
@@ -68,36 +68,33 @@ pub struct ErrorResponse {
     pub message: String,
 }
 
-pub struct Rss3 {
-    pub platform: String,
-    pub identity: String,
-}
+pub struct Rss3 {}
 
-async fn save_item(p: Item) -> Result<(), Error> {
-    let create_date_time = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
-    let create_naive_date_time = NaiveDateTime::from_timestamp(create_date_time.timestamp(), 0);
+async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
+    let creataed_at = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
+    let created_at_naive = NaiveDateTime::from_timestamp(creataed_at.timestamp(), 0);
 
     let db = new_db_connection().await?;
 
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
-        identity: p.metadata.to.clone().to_lowercase(),
-        created_at: Some(create_naive_date_time),
-        display_name: p.metadata.to.clone().to_lowercase(),
+        identity: p.metadata.to.to_lowercase(),
+        created_at: Some(created_at_naive),
+        display_name: p.metadata.to.to_lowercase(),
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
     };
-
     let from_record = from.create_or_update(&db).await?;
 
+    let chain = Chain::from_str(p.metadata.network.as_str()).unwrap();
+    let nft_category = ContractCategory::from_str(p.metadata.contract_type.as_str()).unwrap();
     let to: Contract = Contract {
         uuid: Uuid::new_v4(),
-        category: ContractCategory::from_str(p.metadata.contract_type.as_str()).unwrap(),
+        category: nft_category.clone(),
         contract: p.metadata.collection_address.clone().to_lowercase(),
-
         chain: Chain::from_str(p.metadata.network.as_str()).unwrap(),
         symbol: Some(p.metadata.token_symbol.clone()),
         updated_at: naive_now(),
@@ -115,16 +112,26 @@ async fn save_item(p: Item) -> Result<(), Error> {
 
     ownership.connect(&db, &from_record, &to_record).await?;
 
-    Ok(())
+    Ok(vec![Target::NFT(
+        chain,
+        nft_category.clone(),
+        p.metadata.token_id.clone(),
+    )])
 }
 
 #[async_trait]
 impl Fetcher for Rss3 {
-    async fn fetch(&self) -> Result<IdentityProcessList, Error> {
+    async fn fetch(target: &Target) -> Result<TargetProcessedList, Error> {
+        if !Self::can_fetch(target) {
+            return Ok(vec![]);
+        }
+        let platform = target.platform()?;
+        let identity = target.identity()?;
+
         let client = make_client();
         let uri: http::Uri = match format!(
             "{}account:{}@{}/notes?tags=NFT",
-            C.upstream.rss3_service.url, self.identity, self.platform
+            C.upstream.rss3_service.url, identity, platform
         )
         .parse()
         {
@@ -137,9 +144,7 @@ impl Fetcher for Rss3 {
             }
         };
 
-        //println!("url {:?}", uri.to_string());
         let mut resp = client.get(uri).await?;
-        //println!("resp {:?}", resp.status());
 
         if !resp.status().is_success() {
             let body: ErrorResponse = parse_body(&mut resp).await?;
@@ -150,7 +155,6 @@ impl Fetcher for Rss3 {
         }
 
         let body: Rss3Response = parse_body(&mut resp).await?;
-
         if body.total == 0 {
             return Err(Error::General(
                 format!("rss3 Result Get Error"),
@@ -158,20 +162,23 @@ impl Fetcher for Rss3 {
             ));
         }
 
-        // parse
         let futures: Vec<_> = body
             .list
             .into_iter()
-            .filter(|p| p.metadata.to == self.identity.to_lowercase())
+            .filter(|p| p.metadata.to == identity.to_lowercase())
             .map(|p| save_item(p))
             .collect();
-        let _results = join_all(futures).await;
-        //let parse_body: Vec<Connection> = results.into_iter().filter_map(|i| i).collect();
+        let next_targets: TargetProcessedList = join_all(futures)
+            .await
+            .into_iter()
+            .flat_map(|result| result.unwrap_or(vec![]))
+            .collect();
 
-        Ok(vec![])
+        Ok(next_targets)
     }
 
-    fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(vec![Platform::Ethereum], vec![])];
+    fn can_fetch(target: &Target) -> bool {
+        // TODO: add NFT support
+        target.in_platform_supported(vec![Platform::Ethereum])
     }
 }

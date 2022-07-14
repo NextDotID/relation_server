@@ -88,10 +88,6 @@ impl ContractQuery {
         #[graphql(
             desc = "ID of this Contract. For ENS, this is the name of the token (abc.eth). For other Contract, this is the token ID in contract."
         )]
-        // id: String,
-        // #[graphql(
-        //     desc = "On which chain does this Contract exist? See `available_chains` for all chains supported by RelationService."
-        // )]
         chain: Chain,
         #[graphql(
             desc = "Contract address of this Contract. Usually `0xHEX_STRING`. For ENS, this can be omitted."

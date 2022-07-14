@@ -1,13 +1,14 @@
 mod tests {
-    use crate::{error::Error, upstream::aggregation::Aggregation, upstream::Fetcher};
+    use crate::{
+        error::Error,
+        upstream::{aggregation::Aggregation, Target},
+        upstream::{Fetcher, Platform},
+    };
 
     #[tokio::test]
     async fn test_smoke_aggregation() -> Result<(), Error> {
-        let ag: Aggregation = Aggregation {
-            platform: "twitter".to_string(),
-            identity: "0000".to_string(),
-        };
-        let res = ag.fetch().await?;
+        let target = Target::Identity(Platform::Twitter, "0000".to_string());
+        let res = Aggregation::fetch(&target).await?;
         assert_ne!(res.len(), 0);
         //println!("{:?}", res);
 

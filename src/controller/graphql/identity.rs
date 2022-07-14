@@ -1,6 +1,7 @@
 use crate::error::{Error, Result};
 use crate::graph::vertex::{ContractRecord, Identity, IdentityRecord, Vertex};
-use crate::upstream::{fetch_all, DataSource, Platform};
+use crate::upstream::{fetch_all, DataSource, Platform, Target};
+
 use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
 use log::debug;
@@ -153,17 +154,18 @@ impl IdentityQuery {
     ) -> Result<Option<IdentityRecord>> {
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let platform: Platform = platform.parse()?;
+        let target = Target::Identity(platform.clone(), identity.clone());
         // FIXME: Still kinda dirty. Should be in an background queue/worker-like shape.
         match Identity::find_by_platform_identity(&db, &platform, &identity).await? {
             None => {
-                fetch_all(&platform, &identity).await?;
+                fetch_all(target).await?;
                 Identity::find_by_platform_identity(&db, &platform, &identity).await
             }
             Some(found) => {
                 if found.is_outdated() {
                     debug!("{}/{} is outdated. Refetching...", platform, identity);
                     tokio::spawn(async move {
-                        let _ = fetch_all(&platform, &identity).await;
+                        let _ = fetch_all(target).await;
                     });
                 }
                 Ok(Some(found))

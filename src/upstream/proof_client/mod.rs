@@ -5,7 +5,7 @@ use crate::config::C;
 use crate::error::Error;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, IdentityProcessList, Platform};
+use crate::upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 
 use async_trait::async_trait;
@@ -22,7 +22,7 @@ pub struct ProofQueryResponse {
 
 #[derive(Deserialize, Debug)]
 pub struct ProofPersona {
-    pub persona: String,
+    pub avatar: String,
     pub proofs: Vec<ProofRecord>,
 }
 
@@ -49,29 +49,24 @@ pub struct ErrorResponse {
     pub message: String,
 }
 
-pub struct ProofClient {
-    pub platform: String,
-    pub identity: String,
-}
+pub struct ProofClient {}
 
 #[async_trait]
 impl Fetcher for ProofClient {
-    async fn fetch(&self) -> Result<IdentityProcessList, Error> {
+    async fn fetch(target: &Target) -> Result<TargetProcessedList, Error> {
+        if !Self::can_fetch(target) {
+            return Ok(vec![]);
+        }
+
         let client = make_client();
-        let uri: http::Uri = match format!(
+        let platform = target.platform()?;
+        let identity = target.identity()?;
+        let uri: http::Uri = format!(
             "{}/v1/proof?platform={}&identity={}",
-            C.upstream.proof_service.url, self.platform, self.identity
+            C.upstream.proof_service.url, platform, identity
         )
         .parse()
-        {
-            Ok(n) => n,
-            Err(err) => {
-                return Err(Error::ParamError(format!(
-                    "Uri format Error: {}",
-                    err.to_string()
-                )))
-            }
-        };
+        .map_err(|_err| Error::ParamError(format!("Uri format Error")))?;
         let mut resp = client.get(uri).await?;
 
         if !resp.status().is_success() {
@@ -93,9 +88,9 @@ impl Fetcher for ProofClient {
                 return Err(Error::NoResult);
             }
         };
-        let next_id_identity = proofs.persona;
+        let next_id_identity = proofs.avatar;
         let db = new_db_connection().await?;
-        let mut res: IdentityProcessList = Vec::new();
+        let mut next_targets: TargetProcessedList = vec![];
 
         for p in proofs.proofs.into_iter() {
             let from: Identity = Identity {
@@ -133,7 +128,7 @@ impl Fetcher for ProofClient {
             };
             let to_record = to.create_or_update(&db).await?;
 
-            res.push((to_platform.clone().unwrap(), p.identity.clone()));
+            next_targets.push(Target::Identity(to_platform.unwrap(), p.identity));
 
             let pf: Proof = Proof {
                 uuid: Uuid::new_v4(),
@@ -146,23 +141,15 @@ impl Fetcher for ProofClient {
             };
             pf.connect(&db, &from_record, &to_record).await?;
         }
-        Ok(res)
+        Ok(next_targets)
     }
 
-    fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(
-            vec![
-                Platform::Ethereum,
-                Platform::Twitter,
-                Platform::NextID,
-                Platform::Github,
-            ],
-            vec![
-                Platform::Ethereum,
-                Platform::Twitter,
-                Platform::NextID,
-                Platform::Github,
-            ],
-        )];
+    fn can_fetch(target: &Target) -> bool {
+        target.in_platform_supported(vec![
+            Platform::Ethereum,
+            Platform::Twitter,
+            Platform::NextID,
+            Platform::Github,
+        ])
     }
 }

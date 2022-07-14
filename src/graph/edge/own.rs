@@ -10,7 +10,6 @@ use crate::{
     error::Error,
     graph::vertex::{Contract, Identity},
     upstream::DataSource,
-    util::naive_now,
 };
 
 use super::Edge;

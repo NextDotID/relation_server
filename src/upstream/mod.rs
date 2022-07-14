@@ -4,28 +4,133 @@ mod knn3;
 mod proof_client;
 mod rss3;
 mod sybil_list;
-use futures::{stream, StreamExt};
 
-use crate::error::Error;
-use crate::upstream::proof_client::ProofClient;
-use crate::upstream::sybil_list::SybilList;
-use crate::upstream::{aggregation::Aggregation, keybase::Keybase, knn3::Knn3, rss3::Rss3};
+use crate::{
+    error::Error,
+    graph::vertex::contract::{Chain, ContractCategory},
+    upstream::{
+        aggregation::Aggregation, keybase::Keybase, knn3::Knn3, proof_client::ProofClient,
+        rss3::Rss3, sybil_list::SybilList,
+    },
+};
 use async_trait::async_trait;
-use log::{debug, info, trace, warn};
+use futures::future::join_all;
+use http::StatusCode;
+use log::{debug, info, trace};
 use serde::{Deserialize, Serialize};
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
-use strum_macros::{Display, EnumString};
+use strum_macros::{Display, EnumIter, EnumString};
 
 /// List when processing identities.
-type IdentityProcessList = Vec<(Platform, String)>;
+type TargetProcessedList = Vec<Target>;
+
+/// Target to fetch.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Target {
+    /// Identity with given platform and identity.
+    Identity(Platform, String),
+
+    /// NFT with given chain, category and NFT_ID.
+    NFT(Chain, ContractCategory, String),
+}
+impl Default for Target {
+    fn default() -> Self {
+        Target::Identity(Platform::default(), "".to_string())
+    }
+}
+impl Target {
+    /// Judge if this target is in supported platforms list given by upstream.
+    pub fn in_platform_supported(&self, platforms: Vec<Platform>) -> bool {
+        match self {
+            Self::NFT(_, _, _) => false,
+            Self::Identity(platform, _) => platforms.contains(platform),
+        }
+    }
+
+    /// Judge if this target is in supported NFT category / chain list given by upstream.
+    pub fn in_nft_supported(
+        &self,
+        nft_categories: Vec<ContractCategory>,
+        nft_chains: Vec<Chain>,
+    ) -> bool {
+        match self {
+            Self::Identity(_, _) => false,
+            Self::NFT(chain, category, _) => {
+                nft_categories.contains(category) && nft_chains.contains(chain)
+            }
+        }
+    }
+
+    pub fn platform(&self) -> Result<Platform, Error> {
+        match self {
+            Self::Identity(platform, _) => Ok(platform.clone()),
+            Self::NFT(_, _, _) => Err(Error::General(
+                "Target: Get platform error: Not an Identity".into(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )),
+        }
+    }
+
+    pub fn identity(&self) -> Result<String, Error> {
+        match self {
+            Self::Identity(_, identity) => Ok(identity.clone()),
+            Self::NFT(_, _, _) => Err(Error::General(
+                "Target: Get identity error: Not an Identity".into(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )),
+        }
+    }
+
+    pub fn nft_chain(&self) -> Result<Chain, Error> {
+        match self {
+            Self::Identity(_, _) => Err(Error::General(
+                "Target: Get nft chain error: Not an NFT".into(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )),
+            Self::NFT(chain, _, _) => Ok(chain.clone()),
+        }
+    }
+
+    pub fn nft_category(&self) -> Result<ContractCategory, Error> {
+        match self {
+            Self::Identity(_, _) => Err(Error::General(
+                "Target: Get nft category error: Not an NFT".into(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )),
+            Self::NFT(_, category, _) => Ok(category.clone()),
+        }
+    }
+
+    pub fn nft_id(&self) -> Result<String, Error> {
+        match self {
+            Self::Identity(_, _) => Err(Error::General(
+                "Target: Get nft id error: Not an NFT".into(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )),
+            Self::NFT(_, _, nft_id) => Ok(nft_id.clone()),
+        }
+    }
+}
+impl std::fmt::Display for Target {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Identity(platform, identity) => write!(f, "Identity/{}/{}", platform, identity),
+            Self::NFT(chain, category, nft_id) => {
+                write!(f, "NFT/{}/{}/{}", chain, category, nft_id)
+            }
+        }
+    }
+}
 
 /// All identity platform.
-#[derive(Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq, EnumIter)]
+/// TODO: move this definition into `graph/vertex/identity`, since it is not specific to upstream.
+#[derive(
+    Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq, EnumIter, Default,
+)]
 pub enum Platform {
     /// Twitter
     #[strum(serialize = "twitter")]
     #[serde(rename = "twitter")]
+    #[default]
     Twitter,
 
     /// Ethereum wallet `0x[a-f0-9]{40}`
@@ -55,7 +160,9 @@ pub enum Platform {
 }
 
 /// All data respource platform.
-#[derive(Serialize, Deserialize, Debug, Clone, Display, EnumString, PartialEq, EnumIter)]
+#[derive(
+    Serialize, Deserialize, Debug, Clone, Display, EnumString, PartialEq, EnumIter, Default,
+)]
 pub enum DataSource {
     /// https://github.com/Uniswap/sybil-list/blob/master/verified.json
     #[strum(serialize = "sybil")]
@@ -93,13 +200,8 @@ pub enum DataSource {
     /// Unknown
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
+    #[default]
     Unknown,
-}
-
-impl Default for DataSource {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 /// All asymmetric cryptography algorithm supported by RelationService.
@@ -118,80 +220,28 @@ pub enum Curve {
 #[async_trait]
 pub trait Fetcher {
     /// Fetch data from given source.
-    async fn fetch(&self) -> Result<IdentityProcessList, Error>;
+    async fn fetch(target: &Target) -> Result<TargetProcessedList, Error>;
 
-    /// Ability for this upstream.
-    /// `Vec<(AcceptedPlatformsAsInput, ResultOfPlatforms)>`
-    fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)>;
-}
-
-#[derive(EnumIter, Debug, PartialEq)]
-enum Upstream {
-    Keybase,
-    NextID,
-    SybilList,
-    Aggregation,
-    Knn3,
-    Rss3,
-}
-
-struct UpstreamFactory;
-
-impl UpstreamFactory {
-    fn new_fetcher(
-        u: &Upstream,
-        platform: &String,
-        identity: &String,
-    ) -> Box<dyn Fetcher + Sync + Send> {
-        match u {
-            Upstream::Keybase => Box::new(Keybase {
-                platform: platform.clone(),
-                identity: identity.clone(),
-            }),
-            Upstream::NextID => Box::new(ProofClient {
-                platform: platform.clone(),
-                identity: identity.clone(),
-            }),
-            Upstream::SybilList => Box::new(SybilList {
-                platform: platform.parse().expect("SybilList: invalid platform"),
-                identity: identity.clone(),
-            }),
-            Upstream::Aggregation => Box::new(Aggregation {
-                platform: platform.clone(),
-                identity: identity.clone(),
-            }),
-            Upstream::Knn3 => Box::new(Knn3 {
-                platform: platform.clone(),
-                identity: identity.clone(),
-            }),
-            Upstream::Rss3 => Box::new(Rss3 {
-                platform: platform.clone(),
-                identity: identity.clone(),
-            }),
-        }
-    }
+    /// Determine if this upstream can fetch this target.
+    fn can_fetch(target: &Target) -> bool;
 }
 
 /// Find all available (platform, identity) in all `Upstream`s.
-pub async fn fetch_all(platform: &Platform, identity: &String) -> Result<(), Error> {
-    info!("fetch_all : {}  {}", platform, identity);
-    let mut up_next: IdentityProcessList = vec![(platform.clone(), identity.clone())];
-    let mut processed: IdentityProcessList = vec![];
+pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
+    info!("fetch_all : {}", initial_target);
+    let mut up_next: TargetProcessedList = vec![initial_target];
+    let mut processed: TargetProcessedList = vec![];
     while up_next.len() > 0 {
         debug!("fetch_all::up_next | {:?}", up_next);
-        let (next_platform, next_identity) = up_next.pop().unwrap();
-        let fetched = fetch_one(&next_platform, &next_identity).await?;
-        processed.push((next_platform, next_identity));
-        fetched.clone().into_iter().for_each(|f| {
-            if processed.iter().all(|p| p.0 != f.0 || p.1 != f.1) {
-                trace!(
-                    "fetch_all::iter | Fetched {} {} | pushed into up_next",
-                    f.0,
-                    f.1
-                );
-                up_next.push((f.0, f.1));
+        let target = up_next.pop().unwrap();
+        let fetched = fetch_one(&target).await?;
+        processed.push(target.clone());
+        fetched.into_iter().for_each(|f| {
+            if processed.contains(&f) {
+                trace!("fetch_all::iter | Fetched {} | duplicated", f);
             } else {
-                trace!("fetch_all::iter | Fetched {} {} | duplicated", f.0, f.1);
+                trace!("fetch_all::iter | Fetched {} | pushed into up_next", f);
+                up_next.push(f.clone());
             }
         });
     }
@@ -199,51 +249,54 @@ pub async fn fetch_all(platform: &Platform, identity: &String) -> Result<(), Err
     Ok(())
 }
 
-/// doing fetching from one upstream
-async fn fetching(source: Upstream, platform: &Platform, identity: &String) -> IdentityProcessList {
-    let fetcher = UpstreamFactory::new_fetcher(&source, &platform.to_string(), identity);
-    let ability = fetcher.ability();
-    let mut res: IdentityProcessList = Vec::new();
-    for (platforms, _) in ability.into_iter() {
-        if platforms.iter().any(|i| i == platform) {
-            debug!(
-                "fetch_one | Fetching {} / {} from {:?}",
-                platform, identity, source
-            );
-            match fetcher.fetch().await {
-                Ok(resp) => {
-                    debug!(
-                        "fetch_one | Fetched ({} / {} from {:?}): {:?}",
-                        platform, identity, source, resp
-                    );
-                    res.extend(resp);
-                }
-                Err(err) => {
-                    warn!(
-                        "fetch_one | Failed to fetch ({} / {} from {:?}): {:?}",
-                        platform, identity, source, err
-                    );
-                    continue;
-                }
-            };
-        }
-    }
-    res
-}
+// async fn fetching(source: Upstream, platform: &Platform, identity: &str) -> TargetProcessedList {
+//     let fetcher = source.get_fetcher(platform, &identity);
+//     let ability = fetcher.ability();
+//     let mut res: TargetProcessedList = Vec::new();
+//     for (platforms, _) in ability.into_iter() {
+//         if platforms.iter().any(|i| i == platform) {
+//             debug!(
+//                 "fetch_one | Fetching {} / {} from {:?}",
+//                 platform, identity, source
+//             );
+//             match fetcher.fetch().await {
+//                 Ok(resp) => {
+//                     debug!(
+//                         "fetch_one | Fetched ({} / {} from {:?}): {:?}",
+//                         platform, identity, source, resp
+//                     );
+//                     res.extend(resp);
+//                 }
+//                 Err(err) => {
+//                     warn!(
+//                         "fetch_one | Failed to fetch ({} / {} from {:?}): {:?}",
+//                         platform, identity, source, err
+//                     );
+//                     continue;
+//                 }
+//             };
+//         }
+//     }
+//     res
+// }
 
 /// Find one (platform, identity) pair in all upstreams.
 /// Returns identities just fetched for next iter..
-pub async fn fetch_one(
-    platform: &Platform,
-    identity: &String,
-) -> Result<IdentityProcessList, Error> {
-    let ups = Upstream::iter().collect::<Vec<_>>();
-    let numbers = ups.len();
-    let results: IdentityProcessList = stream::iter(ups)
-        .map(|u| fetching(u, platform, identity))
-        .buffer_unordered(numbers)
-        .concat()
-        .await;
+pub async fn fetch_one(target: &Target) -> Result<TargetProcessedList, Error> {
+    // FIXME: Yeah yeah I know it's stupid.
+    let results: TargetProcessedList = join_all(vec![
+        Aggregation::fetch(target),
+        SybilList::fetch(target),
+        Keybase::fetch(target),
+        ProofClient::fetch(target),
+        Rss3::fetch(target),
+        Knn3::fetch(target),
+    ])
+    .await
+    .into_iter()
+    .flat_map(|res| res.unwrap_or(vec![]))
+    .collect();
+
 
     Ok(results)
 }
@@ -259,11 +312,11 @@ pub async fn prefetch() -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use crate::error::Error;
-    use crate::upstream::{fetch_all, fetch_one, Platform};
+    use crate::upstream::{fetch_all, fetch_one, Platform, Target};
 
     #[tokio::test]
     async fn test_fetcher_result() -> Result<(), Error> {
-        let result = fetch_all(&Platform::Twitter, &"0xsannie".into()).await?;
+        let result = fetch_all(Target::Identity(Platform::Twitter, "0xsannie".into())).await?;
         assert_eq!(result, ());
 
         Ok(())
@@ -271,7 +324,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_one_result() -> Result<(), Error> {
-        let result = fetch_one(&Platform::Twitter, &"0xsannie".into()).await?;
+        let result = fetch_one(&Target::Identity(Platform::Twitter, "0xsannie".into())).await?;
         assert_ne!(result.len(), 0);
 
         Ok(())

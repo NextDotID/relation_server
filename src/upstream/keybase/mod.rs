@@ -4,13 +4,15 @@ use crate::config::C;
 use crate::error::Error;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, IdentityProcessList, Platform};
+use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
 use crate::util::{make_client, naive_now, parse_body};
 use async_trait::async_trait;
 use serde::Deserialize;
 
 use std::str::FromStr;
 use uuid::Uuid;
+
+use super::Target;
 
 #[derive(Deserialize, Debug)]
 pub struct KeybaseResponse {
@@ -69,18 +71,22 @@ pub struct ErrorResponse {
     pub message: String,
 }
 
-pub struct Keybase {
-    pub platform: String,
-    pub identity: String,
-}
+#[derive(Default)]
+pub struct Keybase {}
 
 #[async_trait]
 impl Fetcher for Keybase {
-    async fn fetch(&self) -> Result<IdentityProcessList, Error> {
+    async fn fetch(target: &Target) -> Result<TargetProcessedList, Error> {
+        if !Self::can_fetch(target) {
+            return Ok(vec![]);
+        }
+
         let client = make_client();
         let uri: http::Uri = match format!(
             "{}?{}={}&fields=proofs_summary",
-            C.upstream.keybase_service.url, self.platform, self.identity
+            C.upstream.keybase_service.url,
+            target.platform()?,
+            target.identity()?
         )
         .parse()
         {
@@ -94,7 +100,6 @@ impl Fetcher for Keybase {
         };
 
         let mut resp = client.get(uri).await?;
-
         if !resp.status().is_success() {
             let body: ErrorResponse = parse_body(&mut resp).await?;
             return Err(Error::General(
@@ -104,7 +109,6 @@ impl Fetcher for Keybase {
         }
 
         let mut body: KeybaseResponse = parse_body(&mut resp).await?;
-
         if body.status.code != 0 {
             return Err(Error::General(
                 format!("Keybase Result Get Error: {}", body.status.name),
@@ -121,7 +125,7 @@ impl Fetcher for Keybase {
         let user_id = person_info.id;
         let user_name = person_info.basics.username;
         let db = new_db_connection().await?;
-        let mut res: IdentityProcessList = Vec::new();
+        let mut next_targets: TargetProcessedList = Vec::new();
 
         for p in person_info.proofs_summary.all.into_iter() {
             let from: Identity = Identity {
@@ -152,11 +156,6 @@ impl Fetcher for Keybase {
                 updated_at: naive_now(),
             };
             let to_record = to.create_or_update(&db).await?;
-            res.push((
-                Platform::from_str(p.proof_type.as_str()).unwrap(),
-                p.nametag.clone(),
-            ));
-
             let pf: Proof = Proof {
                 uuid: Uuid::new_v4(),
                 source: DataSource::Keybase,
@@ -165,15 +164,17 @@ impl Fetcher for Keybase {
                 updated_at: naive_now(),
             };
             pf.connect(&db, &from_record, &to_record).await?;
+
+            next_targets.push(Target::Identity(
+                Platform::from_str(&p.proof_type).unwrap(),
+                p.nametag,
+            ));
         }
 
-        Ok(res)
+        Ok(next_targets)
     }
 
-    fn ability(&self) -> Vec<(Vec<Platform>, Vec<Platform>)> {
-        return vec![(
-            vec![Platform::Twitter, Platform::Github],
-            vec![Platform::Keybase, Platform::Twitter, Platform::Github],
-        )];
+    fn can_fetch(target: &Target) -> bool {
+        target.in_platform_supported(vec![Platform::Twitter, Platform::Github])
     }
 }
