@@ -176,7 +176,7 @@ pub struct Contract {
     /// What kind of Contract is it?
     pub category: ContractCategory,
     /// Contract address
-    pub contract: String,
+    pub address: String,
     /// On which chain?
     pub chain: Chain,
     /// Token symbol
@@ -190,7 +190,7 @@ impl Default for Contract {
         Self {
             uuid: Uuid::new_v4(),
             category: Default::default(),
-            contract: Default::default(),
+            address: Default::default(),
             chain: Default::default(),
             symbol: Default::default(),
             updated_at: naive_now(),
@@ -343,7 +343,7 @@ mod tests {
             let mut nft = Contract::default();
             nft.category = ContractCategory::ENS;
             nft.chain = Chain::Ethereum;
-            nft.contract = config.fake();
+            nft.address = config.fake();
             nft.symbol = Some("ENS".into());
 
             nft

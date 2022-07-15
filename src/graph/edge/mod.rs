@@ -1,8 +1,8 @@
-pub mod own;
+pub mod hold;
 pub mod proof;
 // mod pubkey_derivation;
 
-pub use own::{Own, OwnRecord};
+pub use hold::{Own, OwnRecord};
 pub use proof::{Proof, ProofRecord};
 
 use aragog::{DatabaseConnection, DatabaseRecord, Record};

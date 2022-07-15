@@ -1,5 +1,4 @@
 mod tests {
-    use warp::addr;
     use crate::upstream::Target;
     use crate::{error::Error, upstream::proof_client::ProofClient, upstream::Fetcher};
     use crate::{

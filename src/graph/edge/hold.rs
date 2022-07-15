@@ -15,8 +15,8 @@ use crate::{
 use super::Edge;
 
 #[derive(Clone, Deserialize, Serialize, Record, Debug)]
-#[collection_name = "Owns"]
-pub struct Own {
+#[collection_name = "Holds"]
+pub struct Hold {
     /// UUID of this record.
     pub uuid: Uuid,
     /// Data source (upstream) which provides this info.
@@ -28,11 +28,12 @@ pub struct Own {
     /// In most case, it is a `"0xVERY_LONG_HEXSTRING"`.
     /// Maybe this is not provided by `source`, so we set it as `Option<>` here.
     pub transaction: Option<String>,
-    /// Token ID in contract. Basiclly `uint256.to_string()`.
-    pub token_id: String,
-    /// When this connection is built.
-    /// if it doesn't provide by `source`, use fetch time instead
-    pub connected_at: NaiveDateTime,
+    /// TokenID / ens domain / anything can be used as an ID to specify the held object . `.
+    pub id: String,
+    /// When the transaction happened
+    pub created_at: Option<NaiveDateTime>,
+    /// When this hold relation is fetched by us RelationService.
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
