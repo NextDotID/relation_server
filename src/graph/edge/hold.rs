@@ -37,37 +37,37 @@ pub struct Hold {
 }
 
 #[derive(Clone, Deserialize, Serialize)]
-pub struct OwnRecord(DatabaseRecord<EdgeRecord<Own>>);
+pub struct HoldRecord(DatabaseRecord<EdgeRecord<Hold>>);
 
-impl std::ops::Deref for OwnRecord {
-    type Target = DatabaseRecord<EdgeRecord<Own>>;
+impl std::ops::Deref for HoldRecord {
+    type Target = DatabaseRecord<EdgeRecord<Hold>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl std::ops::DerefMut for OwnRecord {
+impl std::ops::DerefMut for HoldRecord {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl From<DatabaseRecord<EdgeRecord<Own>>> for OwnRecord {
-    fn from(record: DatabaseRecord<EdgeRecord<Own>>) -> Self {
+impl From<DatabaseRecord<EdgeRecord<Hold>>> for HoldRecord {
+    fn from(record: DatabaseRecord<EdgeRecord<Hold>>) -> Self {
         Self(record)
     }
 }
 
-impl Own {
+impl Hold {
     pub async fn find_by_from_to(
         db: &DatabaseConnection,
         from: &DatabaseRecord<Identity>,
         to: &DatabaseRecord<Contract>,
-    ) -> Result<Option<OwnRecord>, Error> {
+    ) -> Result<Option<HoldRecord>, Error> {
         let filter = Filter::new(Comparison::field("_from").equals_str(from.id()))
             .and(Comparison::field("_to").equals_str(to.id()));
-        let query = EdgeRecord::<Own>::query().filter(filter);
+        let query = EdgeRecord::<Hold>::query().filter(filter);
         let result: QueryResult<EdgeRecord<Self>> = query.call(db).await?;
         if result.len() == 0 {
             Ok(None)
@@ -78,7 +78,7 @@ impl Own {
 }
 
 #[async_trait::async_trait]
-impl Edge<Identity, Contract, OwnRecord> for Own {
+impl Edge<Identity, Contract, HoldRecord> for Hold {
     /// Returns UUID of self.
     fn uuid(&self) -> Option<Uuid> {
         Some(self.uuid)
@@ -90,7 +90,7 @@ impl Edge<Identity, Contract, OwnRecord> for Own {
         db: &DatabaseConnection,
         from: &DatabaseRecord<Identity>,
         to: &DatabaseRecord<Contract>,
-    ) -> Result<OwnRecord, Error> {
+    ) -> Result<HoldRecord, Error> {
         let found = Self::find_by_from_to(db, from, to).await?;
         match found {
             Some(edge) => Ok(edge.into()),
@@ -104,8 +104,8 @@ impl Edge<Identity, Contract, OwnRecord> for Own {
     async fn find_by_uuid(
         db: &DatabaseConnection,
         uuid: &Uuid,
-    ) -> Result<Option<OwnRecord>, Error> {
-        let result: QueryResult<EdgeRecord<Own>> = EdgeRecord::<Own>::query()
+    ) -> Result<Option<HoldRecord>, Error> {
+        let result: QueryResult<EdgeRecord<Hold>> = EdgeRecord::<Hold>::query()
             .filter(Comparison::field("uuid").equals_str(uuid).into())
             .call(db)
             .await?;
@@ -125,14 +125,15 @@ mod tests {
 
     use super::*;
 
-    impl Dummy<Faker> for Own {
+    impl Dummy<Faker> for Hold {
         fn dummy_with_rng<R: rand::Rng + ?Sized>(config: &Faker, _rng: &mut R) -> Self {
             Self {
                 uuid: Uuid::new_v4(),
                 source: DataSource::Unknown,
                 transaction: config.fake(),
-                token_id: config.fake(),
-                connected_at: naive_now(),
+                id: config.fake(),
+                created_at: Some(naive_now()),
+                updated_at: naive_now(),
             }
         }
     }

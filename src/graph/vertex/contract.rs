@@ -225,7 +225,7 @@ impl Vertex<ContractRecord> for Contract {
 
     /// Create or update an Contract info by (chain, contract, nft_id).
     async fn create_or_update(&self, db: &DatabaseConnection) -> Result<ContractRecord, Error> {
-        let found = Self::find_by_chain_contract(db, &self.chain, &self.contract).await?;
+        let found = Self::find_by_chain_contract(db, &self.chain, &self.address).await?;
         match found {
             None => {
                 let mut to_be_created = self.clone();
@@ -292,19 +292,20 @@ impl From<DatabaseRecord<Contract>> for ContractRecord {
 
 impl ContractRecord {
     /// Which wallet (`Identity`) does this Contract belong to?
-    pub async fn belongs_to(
-        &self,
-        db: &DatabaseConnection,
-    ) -> Result<Option<IdentityRecord>, Error> {
-        let query = self.inbound_query(1, 1, "Owns");
+    /// TODO rewrite belongs_to
+    // pub async fn belongs_to(
+    //     &self,
+    //     db: &DatabaseConnection,
+    // ) -> Result<Option<IdentityRecord>, Error> {
+    //     let query = self.inbound_query(1, 1, "Holds");
 
-        let result: QueryResult<Identity> = Identity::get(&query, db).await?;
-        if result.len() == 0 {
-            Ok(None)
-        } else {
-            Ok(Some(result.first().unwrap().to_owned().into()))
-        }
-    }
+    //     let result: QueryResult<Identity> = Identity::get(&query, db).await?;
+    //     if result.len() == 0 {
+    //         Ok(None)
+    //     } else {
+    //         Ok(Some(result.first().unwrap().to_owned().into()))
+    //     }
+    // }
 
     /// What other Contracts does this Contract's owner has?
     pub async fn neighbors(&self, db: &DatabaseConnection) -> Result<Vec<ContractRecord>, Error> {
@@ -327,7 +328,7 @@ impl ContractRecord {
 mod tests {
     use fake::{Dummy, Fake, Faker};
 
-    use crate::graph::{edge::Own, new_db_connection};
+    use crate::graph::{edge::Hold, new_db_connection};
 
     use super::*;
 
@@ -360,17 +361,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_belongs_to() -> Result<(), Error> {
-        let db = new_db_connection().await?;
-        let nft = Contract::create_dummy(&db).await?;
-        let identity = Identity::create_dummy(&db).await?;
-        let own: Own = Faker.fake();
-        DatabaseRecord::link(&identity, &nft, &db, own).await?;
-        let identity_found = nft.belongs_to(&db).await?.expect("Connection not found");
-        assert_eq!(identity.uuid, identity_found.uuid);
+    // TODO 
+    // async fn test_belongs_to() -> Result<(), Error> {
+    //     let db = new_db_connection().await?;
+    //     let nft_contract = Contract::create_dummy(&db).await?;
+    //     let identity = Identity::create_dummy(&db).await?;
+    //     let hold: Hold = Faker.fake();
+    //     DatabaseRecord::link(&identity, &nft_contract, &db, hold).await?;
+    //     let identity_found = nft.belongs_to(&db).await?.expect("Connection not found");
+    //     assert_eq!(identity.uuid, identity_found.uuid);
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     #[tokio::test]
     async fn test_neighbors() -> Result<(), Error> {
@@ -378,10 +380,10 @@ mod tests {
         let identity = Identity::create_dummy(&db).await?;
         // Create 2 Identity -> Contract connections
         let nft1 = Contract::create_dummy(&db).await?;
-        let own1: Own = Faker.fake();
+        let own1: Hold = Faker.fake();
         DatabaseRecord::link(&identity, &nft1, &db, own1).await?;
         let nft2 = Contract::create_dummy(&db).await?;
-        let own2: Own = Faker.fake();
+        let own2: Hold = Faker.fake();
         DatabaseRecord::link(&identity, &nft2, &db, own2).await?;
 
         let neighbors = nft1.neighbors(&db).await?;

@@ -2,7 +2,7 @@ pub mod hold;
 pub mod proof;
 // mod pubkey_derivation;
 
-pub use hold::{Own, OwnRecord};
+pub use hold::{Hold, HoldRecord};
 pub use proof::{Proof, ProofRecord};
 
 use aragog::{DatabaseConnection, DatabaseRecord, Record};

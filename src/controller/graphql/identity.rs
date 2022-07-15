@@ -163,10 +163,11 @@ impl IdentityQuery {
             }
             Some(found) => {
                 if found.is_outdated() {
-                    debug!("{}/{} is outdated. Refetching...", platform, identity);
-                    tokio::spawn(async move {
-                        let _ = fetch_all(target).await;
-                    });
+                    debug!(
+                        "Identity: {}/{} is outdated. Refetching...",
+                        platform, identity
+                    );
+                    tokio::spawn(async move { fetch_all(target).await });
                 }
                 Ok(Some(found))
             }

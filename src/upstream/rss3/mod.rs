@@ -3,7 +3,7 @@ use crate::{
     config::C,
     error::Error,
     graph::{
-        edge::Own,
+        edge::hold::Hold,
         new_db_connection,
         vertex::{contract::Chain, contract::ContractCategory, Identity, Contract},
         Edge, Vertex,
@@ -91,10 +91,11 @@ async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
 
     let chain = Chain::from_str(p.metadata.network.as_str()).unwrap();
     let nft_category = ContractCategory::from_str(p.metadata.contract_type.as_str()).unwrap();
+    
     let to: Contract = Contract {
         uuid: Uuid::new_v4(),
         category: nft_category.clone(),
-        contract: p.metadata.collection_address.clone().to_lowercase(),
+        address: p.metadata.collection_address.clone().to_lowercase(),
         chain: Chain::from_str(p.metadata.network.as_str()).unwrap(),
         symbol: Some(p.metadata.token_symbol.clone()),
         updated_at: naive_now(),
@@ -102,14 +103,16 @@ async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
 
     let to_record = to.create_or_update(&db).await?;
 
-    let ownership: Own = Own {
+    let ownership: Hold = Hold {
         uuid: Uuid::new_v4(),
         source: DataSource::Rss3,
         transaction: Some(p.metadata.proof.clone()),
-        token_id: p.metadata.token_id.clone(),
-        connected_at: naive_now(),
+        id: p.metadata.token_id.clone(),
+        created_at: Some(created_at_naive),
+        updated_at: naive_now(),
     };
 
+    // TODO connect also need to consider it should be create or update
     ownership.connect(&db, &from_record, &to_record).await?;
 
     Ok(vec![Target::NFT(

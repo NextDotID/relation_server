@@ -1,7 +1,7 @@
 mod tests;
 
 use crate::config::C;
-use crate::graph::edge::Own;
+use crate::graph::edge::hold::Hold;
 use crate::graph::vertex::{contract::Chain, contract::ContractCategory, Contract};
 use crate::graph::{Edge, Vertex};
 use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList, Target};
@@ -89,20 +89,22 @@ impl Fetcher for Knn3 {
             let to: Contract = Contract {
                 uuid: Uuid::new_v4(),
                 category: ContractCategory::ENS,
-                contract: ContractCategory::ENS.default_contract_address().unwrap(),
+                address: ContractCategory::ENS.default_contract_address().unwrap(),
                 chain: Chain::Ethereum,
                 symbol: None,
                 updated_at: naive_now(),
             };
             let to_record = to.create_or_update(&db).await?;
 
-            let ownership: Own = Own {
+            let ownership: Hold = Hold {
                 uuid: Uuid::new_v4(),
                 transaction: None,
-                token_id: ens.to_string(),
+                id: ens.to_string(),
                 source: DataSource::Knn3,
-                connected_at: naive_now(),
+                created_at: None,
+                updated_at:naive_now(),
             };
+            // TODO connect also need to consider it should be create or update
             ownership.connect(&db, &from_record, &to_record).await?;
         }
         Ok(ens_vec

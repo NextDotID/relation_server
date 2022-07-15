@@ -1,7 +1,7 @@
 use crate::{
     error::Error,
     graph::{
-        edge::{Own, Proof},
+        edge::{Hold, Proof},
         vertex::Vertex,
     },
     upstream::{DataSource, Platform},
@@ -206,7 +206,7 @@ impl IdentityRecord {
         if self.0.record.platform != Platform::Ethereum {
             return Ok(vec![]);
         }
-        let result: QueryResult<Contract> = Query::outbound(1, 1, Own::COLLECTION_NAME, self.id())
+        let result: QueryResult<Contract> = Query::outbound(1, 1, Hold::COLLECTION_NAME, self.id())
             .call(db)
             .await?;
         Ok(result.iter().map(|r| r.to_owned().into()).collect())
