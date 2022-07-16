@@ -17,57 +17,57 @@ use strum_macros::{Display, EnumIter, EnumString};
 use uuid::Uuid;
 
 #[derive(
-    Default, Clone, Serialize, Deserialize, Debug, Display, PartialEq, EnumString, EnumIter,
+    Default,
+    Clone,
+    Copy,
+    Serialize,
+    Deserialize,
+    Debug,
+    Display,
+    PartialEq,
+    Eq,
+    async_graphql::Enum,
+    EnumString,
+    EnumIter,
 )]
 pub enum Chain {
     #[default]
-    #[strum(serialize = "ethereum")]
     #[serde(rename = "ethereum")]
+    #[strum(serialize = "ethereum")]
+    #[graphql(name = "ethereum")]
     Ethereum,
     #[serde(rename = "rinkeby")]
     #[strum(serialize = "rinkeby")]
+    #[graphql(name = "rinkeby")]
     Rinkeby,
     #[serde(rename = "ropsten")]
     #[strum(serialize = "ropsten")]
+    #[graphql(name = "ropsten")]
     Ropsten,
     #[serde(rename = "kovan")]
     #[strum(serialize = "kovan")]
+    #[graphql(name = "kovan")]
     Kovan,
     #[serde(rename = "bsc")]
     #[strum(serialize = "bsc")]
+    #[graphql(name = "bsc")]
     BinanceSmartChain,
     #[serde(rename = "polygon")]
     #[strum(serialize = "polygon")]
+    #[graphql(name = "polygon")]
     Polygon,
     #[serde(rename = "polygon_testnet")]
     #[strum(serialize = "polygon_testnet")]
+    #[graphql(name = "polygon_testnet")]
     PolygonTestnet,
     #[serde(rename = "solana")]
     #[strum(serialize = "solana")]
+    #[graphql(name = "solana")]
     Solana,
     #[serde(rename = "conflux_espace")]
     #[strum(serialize = "conflux_espace")]
+    #[graphql(name = "conflux_espace")]
     ConfluxESpace,
-}
-
-#[Scalar]
-impl ScalarType for Chain {
-    fn parse(value: Value) -> InputValueResult<Self> {
-        match value {
-            Value::String(s) => {
-                let nft_category: Chain = s.parse().or(Err(InputValueError::custom(format!(
-                    "Non-supported Chain: {}",
-                    s
-                ))))?;
-                Ok(nft_category)
-            }
-            _ => Err(InputValueError::expected_type(value)),
-        }
-    }
-
-    fn to_value(&self) -> Value {
-        Value::String(self.to_string())
-    }
 }
 
 /// Internal chain implementation / framework.
@@ -100,55 +100,48 @@ impl Chain {
             ConfluxESpace => ChainType::EVM(71),
         }
     }
-
-    pub(crate) fn iter() -> _ {
-        todo!()
-    }
 }
 
 #[derive(
-    Default, Clone, Serialize, Deserialize, EnumString, Display, Debug, EnumIter, PartialEq,
+    Default,
+    Clone,
+    Copy,
+    Serialize,
+    Deserialize,
+    EnumString,
+    Display,
+    Debug,
+    EnumIter,
+    PartialEq,
+    Eq,
+    async_graphql::Enum,
 )]
 pub enum ContractCategory {
     #[default]
     #[strum(serialize = "ENS")]
     #[serde(rename = "ENS")]
+    #[graphql(name = "ENS")]
     ENS,
 
     #[strum(serialize = "ERC721")]
     #[serde(rename = "ERC721")]
+    #[graphql(name = "ERC721")]
     ERC721,
 
     #[strum(serialize = "ERC1155")]
     #[serde(rename = "ERC1155")]
+    #[graphql(name = "ERC1155")]
     ERC1155,
 
     #[strum(serialize = "POAP")]
     #[serde(rename = "POAP")]
+    #[graphql(name = "POAP")]
     POAP,
 
     #[serde(rename = "unknown")]
+    #[graphql(name = "unknown")]
     #[strum(serialize = "unknown")]
     Unknown,
-}
-
-#[Scalar]
-impl ScalarType for ContractCategory {
-    fn parse(value: Value) -> InputValueResult<Self> {
-        match value {
-            Value::String(s) => {
-                let nft_category: ContractCategory = s.parse().or(Err(InputValueError::custom(
-                    format!("Non-supported Contract Category: {}", s),
-                )))?;
-                Ok(nft_category)
-            }
-            _ => Err(InputValueError::expected_type(value)),
-        }
-    }
-
-    fn to_value(&self) -> Value {
-        Value::String(self.to_string())
-    }
 }
 
 impl ContractCategory {

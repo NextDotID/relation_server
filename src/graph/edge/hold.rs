@@ -2,14 +2,18 @@ use aragog::{
     query::{Comparison, Filter, QueryResult},
     DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
-use chrono::NaiveDateTime;
+use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
     error::Error,
-    graph::vertex::{Contract, Identity},
+    graph::vertex::{
+        contract::{Chain, ContractCategory},
+        Contract, Identity,
+    },
     upstream::DataSource,
+    util::naive_now,
 };
 
 use super::Edge;
@@ -80,6 +84,16 @@ impl Hold {
             Ok(Some(result.first().unwrap().clone().into()))
         }
     }
+
+    pub async fn find_by_id_chain_category(
+        db: &DatabaseConnection,
+        id: &str,
+        chain: &Chain,
+        category: &ContractCategory,
+        address: &str,
+    ) -> Result<Option<HoldRecord>, Error> {
+        todo!()
+    }
 }
 
 #[async_trait::async_trait]
@@ -120,6 +134,15 @@ impl Edge<Identity, Contract, HoldRecord> for Hold {
         } else {
             Ok(Some(result.first().unwrap().to_owned().into()))
         }
+    }
+
+    fn is_outdated(&self) -> bool {
+        let outdated_in = Duration::hours(8);
+        self.updated_at
+            .clone()
+            .checked_add_signed(outdated_in)
+            .unwrap()
+            .lt(&naive_now())
     }
 }
 

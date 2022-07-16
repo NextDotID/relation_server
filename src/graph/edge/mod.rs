@@ -36,4 +36,7 @@ where
         db: &DatabaseConnection,
         uuid: &Uuid,
     ) -> Result<Option<RecordType>, Error>;
+
+    /// Judge if this record is outdated.
+    fn is_outdated(&self) -> bool;
 }

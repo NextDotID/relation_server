@@ -1,4 +1,3 @@
-mod contract;
 mod hold;
 mod identity;
 mod proof;

@@ -2,7 +2,7 @@ use aragog::{
     query::{Comparison, Filter, QueryResult},
     DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
-use chrono::NaiveDateTime;
+use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -105,6 +105,15 @@ impl Edge<Identity, Identity, ProofRecord> for Proof {
                 .await?
                 .into()),
         }
+    }
+
+    fn is_outdated(&self) -> bool {
+        let outdated_in = Duration::days(1);
+        self.updated_at
+            .clone()
+            .checked_add_signed(outdated_in)
+            .unwrap()
+            .lt(&naive_now())
     }
 }
 
