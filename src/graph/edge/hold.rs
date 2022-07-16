@@ -14,6 +14,7 @@ use crate::{
 
 use super::Edge;
 
+/// HODL™
 #[derive(Clone, Deserialize, Serialize, Record, Debug)]
 #[collection_name = "Holds"]
 pub struct Hold {
@@ -26,13 +27,15 @@ pub struct Hold {
     /// Transaction info of this connection.
     /// i.e. in which `tx` the Contract is transferred / minted.
     /// In most case, it is a `"0xVERY_LONG_HEXSTRING"`.
-    /// Maybe this is not provided by `source`, so we set it as `Option<>` here.
+    /// It happens that this info is not provided by `source`, so we treat it as `Option<>`.
     pub transaction: Option<String>,
-    /// TokenID / ens domain / anything can be used as an ID to specify the held object . `.
+    /// NFT_ID in contract / ENS domain / anything can be used as an unique ID to specify the held object.
+    /// It must be one here.
+    /// Tips: NFT_ID of ENS is a hash of domain. So domain can be used as NFT_ID.
     pub id: String,
-    /// When the transaction happened
+    /// When the transaction happened. May not be provided by upstream.
     pub created_at: Option<NaiveDateTime>,
-    /// When this hold relation is fetched by us RelationService.
+    /// When this HODL™ relation is fetched by us RelationService.
     pub updated_at: NaiveDateTime,
 }
 
@@ -60,13 +63,15 @@ impl From<DatabaseRecord<EdgeRecord<Hold>>> for HoldRecord {
 }
 
 impl Hold {
-    pub async fn find_by_from_to(
+    pub async fn find_by_from_to_source(
         db: &DatabaseConnection,
         from: &DatabaseRecord<Identity>,
         to: &DatabaseRecord<Contract>,
+        source: &DataSource,
     ) -> Result<Option<HoldRecord>, Error> {
         let filter = Filter::new(Comparison::field("_from").equals_str(from.id()))
-            .and(Comparison::field("_to").equals_str(to.id()));
+            .and(Comparison::field("_to").equals_str(to.id()))
+            .and(Comparison::field("source").equals_str(source));
         let query = EdgeRecord::<Hold>::query().filter(filter);
         let result: QueryResult<EdgeRecord<Self>> = query.call(db).await?;
         if result.len() == 0 {
@@ -91,7 +96,7 @@ impl Edge<Identity, Contract, HoldRecord> for Hold {
         from: &DatabaseRecord<Identity>,
         to: &DatabaseRecord<Contract>,
     ) -> Result<HoldRecord, Error> {
-        let found = Self::find_by_from_to(db, from, to).await?;
+        let found = Self::find_by_from_to_source(db, from, to, &self.source).await?;
         match found {
             Some(edge) => Ok(edge.into()),
             None => Ok(DatabaseRecord::link(from, to, db, self.clone())
