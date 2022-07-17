@@ -1,5 +1,4 @@
-use std::{convert::Infallible, net::SocketAddr};
-
+use aragog::{AuthMode, DatabaseConnection, OperationOptions};
 use async_graphql::{
     http::{playground_source, GraphQLPlaygroundConfig},
     EmptyMutation, EmptySubscription, Schema,
@@ -8,7 +7,12 @@ use async_graphql_warp::{GraphQLBadRequest, GraphQLResponse};
 use env_logger::Env;
 use http::StatusCode;
 use log::warn;
-use relation_server::{config, controller::graphql::Query, error::Result, graph};
+use relation_server::{
+    config::{self, C},
+    controller::graphql::Query,
+    error::Result,
+};
+use std::{convert::Infallible, net::SocketAddr};
 use warp::{http::Response as HttpResponse, Filter, Rejection};
 
 #[tokio::main]
@@ -17,8 +21,14 @@ async fn main() -> Result<()> {
         .try_init()
         .expect("Failed to initialize logger");
 
-    // TODO: not sure if sharing one DB connection instance won't cause data race.
-    let db = graph::new_db_connection().await?;
+    let db = DatabaseConnection::builder()
+        .with_credentials(&C.db.host, &C.db.db, &C.db.username, &C.db.password)
+        .with_auth_mode(AuthMode::Basic)
+        .with_operation_options(OperationOptions::default())
+        .with_schema_path(&C.db.schema_path)
+        .apply_schema() // Only apply database migration here.
+        .build()
+        .await?;
     let schema = Schema::build(Query::default(), EmptyMutation, EmptySubscription)
         .data(db)
         .finish();

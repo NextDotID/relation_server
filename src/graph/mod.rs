@@ -32,7 +32,6 @@ pub async fn new_db_connection() -> Result<DatabaseConnection, Error> {
         .with_auth_mode(AuthMode::Basic)
         .with_operation_options(OperationOptions::default())
         .with_schema_path(&C.db.schema_path)
-        .apply_schema() // TODO: run it only on cold start of the server, or manually triggered it
         .build()
         .await?;
     Ok(connection)
