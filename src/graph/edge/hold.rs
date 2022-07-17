@@ -1,5 +1,5 @@
 use aragog::{
-    query::{Comparison, Filter, QueryResult},
+    query::{Comparison, Filter, Query, QueryResult},
     DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
 use chrono::{Duration, NaiveDateTime};
@@ -92,10 +92,20 @@ impl Hold {
         category: &ContractCategory,
         address: &str,
     ) -> Result<Option<HoldRecord>, Error> {
-        let filter = Filter::new(Comparison::field("id").equals_str(id))
-            .and(Comparison::field("chain").equals_str(chain.to_string()))
-            .and(Comparison::field("category").equals_str(category.to_string()))
+        // TODO: Really should merge these 2 queries into one.
+        let contract_query = Filter::new(Comparison::field("chain").equals_str(chain))
+            .and(Comparison::field("category").equals_str(category))
             .and(Comparison::field("address").equals_str(address));
+        let contract_result: QueryResult<Contract> = Query::new(Contract::COLLECTION_NAME)
+            .filter(contract_query)
+            .call(db)
+            .await?;
+        if contract_result.len() == 0 {
+            return Ok(None);
+        }
+
+        let filter = Filter::new(Comparison::field("id").equals_str(id))
+            .and(Comparison::field("_to").equals_str(contract_result.first().unwrap().id()));
         let query = EdgeRecord::<Hold>::query().filter(filter);
         let result: QueryResult<EdgeRecord<Self>> = query.call(db).await?;
         if result.len() == 0 {
