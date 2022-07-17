@@ -33,8 +33,8 @@ pub struct EthQueryVars<'a> {
 }
 
 #[derive(Serialize)]
-pub struct ENSQueryVars<'a> {
-    ens: &'a str,
+pub struct ENSQueryVars {
+    ens: Vec<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -155,14 +155,16 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
 
 async fn fetch_eth_wallet_by_ens(id: &str) -> Result<TargetProcessedList, Error> {
     let query = r#"
-        query AddressByENSQuery($ens: String!){
+        query AddressByENSQuery($ens: [String]){
             addrs(where: { ens: $ens }) {
                 address
             }
         }
     "#;
     let client = Client::new(C.upstream.knn3_service.url.clone());
-    let vars = ENSQueryVars { ens: id };
+    let vars = ENSQueryVars {
+        ens: vec![id.to_string()],
+    };
     let response = client
         .query_with_vars::<EnsQueryResponse, _>(query, vars)
         .await;
