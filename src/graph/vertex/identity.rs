@@ -1,7 +1,7 @@
 use crate::{
     error::Error,
     graph::{
-        edge::{Hold, Proof},
+        edge::{Hold, HoldRecord, Proof},
         vertex::Vertex,
     },
     upstream::{DataSource, Platform},
@@ -9,14 +9,12 @@ use crate::{
 };
 use aragog::{
     query::{Comparison, Filter, Query, QueryResult},
-    DatabaseConnection, DatabaseRecord, Record,
+    DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-use super::{Contract, ContractRecord};
 
 #[derive(Debug, Clone, Deserialize, Serialize, Record)]
 #[collection_name = "Identities"]
@@ -202,13 +200,15 @@ impl IdentityRecord {
     }
 
     /// Returns all Contracts owned by this identity. Empty list if `self.platform != Ethereum`.
-    pub async fn nfts(&self, db: &DatabaseConnection) -> Result<Vec<ContractRecord>, Error> {
+    pub async fn nfts(&self, db: &DatabaseConnection) -> Result<Vec<HoldRecord>, Error> {
         if self.0.record.platform != Platform::Ethereum {
             return Ok(vec![]);
         }
-        let result: QueryResult<Contract> = Query::outbound(1, 1, Hold::COLLECTION_NAME, self.id())
-            .call(db)
-            .await?;
+
+        let query = EdgeRecord::<Hold>::query().filter(Filter::new(
+            Comparison::field("_from").equals_str(self.id()),
+        ));
+        let result: QueryResult<EdgeRecord<Hold>> = query.call(db).await?;
         Ok(result.iter().map(|r| r.to_owned().into()).collect())
     }
 }

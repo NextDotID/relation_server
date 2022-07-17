@@ -92,7 +92,17 @@ impl Hold {
         category: &ContractCategory,
         address: &str,
     ) -> Result<Option<HoldRecord>, Error> {
-        todo!()
+        let filter = Filter::new(Comparison::field("id").equals_str(id))
+            .and(Comparison::field("chain").equals_str(chain.to_string()))
+            .and(Comparison::field("category").equals_str(category.to_string()))
+            .and(Comparison::field("address").equals_str(address));
+        let query = EdgeRecord::<Hold>::query().filter(filter);
+        let result: QueryResult<EdgeRecord<Self>> = query.call(db).await?;
+        if result.len() == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(result.first().unwrap().clone().into()))
+        }
     }
 }
 

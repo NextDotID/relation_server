@@ -1,16 +1,8 @@
-use crate::{
-    error::Error,
-    graph::{
-        vertex::identity::{Identity, IdentityRecord},
-        Vertex,
-    },
-    util::naive_now,
-};
+use crate::{error::Error, graph::Vertex, util::naive_now};
 use aragog::{
-    query::{Comparison, Filter, QueryResult},
+    query::{Comparison, Filter},
     DatabaseConnection, DatabaseRecord, Record,
 };
-use async_graphql::{InputValueError, InputValueResult, Scalar, ScalarType, Value};
 use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};

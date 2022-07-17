@@ -1,4 +1,5 @@
 use crate::error::{Error, Result};
+use crate::graph::edge::HoldRecord;
 use crate::graph::vertex::{Identity, IdentityRecord, Vertex};
 use crate::upstream::{fetch_all, DataSource, Platform, Target};
 
@@ -122,12 +123,12 @@ impl IdentityRecord {
         .await
     }
 
-    // Contracts owned by this identity.
-    // For now, there's only `platform: ethereum` identity has Contracts.
-    // async fn nft(&self, ctx: &Context<'_>) -> Result<Vec<ContractRecord>> {
-    //     let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-    //     self.nfts(db).await
-    // }
+    /// NFTs owned by this identity.
+    /// For now, there's only `platform: ethereum` identity has NFTs.
+    async fn nft(&self, ctx: &Context<'_>) -> Result<Vec<HoldRecord>> {
+        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        self.nfts(db).await
+    }
 }
 
 #[derive(Default)]
