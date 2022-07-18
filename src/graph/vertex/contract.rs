@@ -197,7 +197,7 @@ impl Contract {
     ) -> Result<Option<ContractRecord>, Error> {
         let query = Self::query().filter(
             Filter::new(Comparison::field("chain").equals_str(chain))
-                .and(Comparison::field("contract").equals_str(contract)),
+                .and(Comparison::field("address").equals_str(contract)),
         );
         let result = Self::get(&query, db).await?;
         if result.len() == 0 {
