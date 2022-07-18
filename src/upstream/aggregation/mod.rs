@@ -2,18 +2,16 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::{edge::Proof, vertex::Identity};
+use crate::graph::{edge::Proof, edge::Hold};
+use crate::graph::vertex::{Identity, Contract, contract::ContractCategory};
 use crate::graph::{new_db_connection, Edge, Vertex};
-use crate::upstream::{DataSource, Platform};
-use async_trait::async_trait;
-use serde::Deserialize;
-
-use crate::upstream::{Fetcher, TargetProcessedList};
+use crate::upstream::{DataSource, Platform, Chain, Fetcher, TargetProcessedList};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use futures::future::join_all;
 use std::str::FromStr;
 use uuid::Uuid;
-
+use async_trait::async_trait;
+use serde::Deserialize;
 use super::Target;
 
 #[derive(Deserialize, Debug)]
@@ -81,6 +79,28 @@ async fn save_item(p: Record) -> Option<Target> {
     };
     pf.connect(&db, &from_record, &to_record).await.ok()?;
 
+    if p.ens.is_some() {
+        let to_contract_identity: Contract = Contract {
+            uuid: Uuid::new_v4(),
+            category: ContractCategory::ENS,
+            address: ContractCategory::ENS.default_contract_address().unwrap(),
+            chain: Chain::Ethereum,
+            symbol: None,
+            updated_at: naive_now(),
+        };
+        let to_nft_record = to_contract_identity.create_or_update(&db).await.ok()?;
+
+        let ownership: Hold = Hold {
+            uuid: Uuid::new_v4(),
+            transaction: None,
+            id: p.ens.unwrap(),
+            source: DataSource::from_str(p.source.as_str()).unwrap_or(DataSource::Unknown),
+            created_at:None,
+            updated_at: naive_now(),
+        };
+        ownership.connect(&db, &from_record, &to_nft_record).await.ok()?;
+    }
+
     return Some(Target::Identity(
         Platform::from_str(p.web3_platform.as_str()).unwrap(),
         p.web3_addr.clone(),
@@ -94,6 +114,7 @@ impl Fetcher for Aggregation {
         let mut page = 1;
 
         let mut res: TargetProcessedList = Vec::new();
+
         let platform = target.platform()?;
         let identity = target.identity()?;
         loop {
