@@ -67,15 +67,16 @@ impl From<DatabaseRecord<EdgeRecord<Hold>>> for HoldRecord {
 }
 
 impl Hold {
-    pub async fn find_by_from_to_source(
+    /// Find a hold record by from, to and NFT_ID.
+    pub async fn find_by_from_to_id(
         db: &DatabaseConnection,
         from: &DatabaseRecord<Identity>,
         to: &DatabaseRecord<Contract>,
-        source: &DataSource,
+        id: &str,
     ) -> Result<Option<HoldRecord>, Error> {
         let filter = Filter::new(Comparison::field("_from").equals_str(from.id()))
             .and(Comparison::field("_to").equals_str(to.id()))
-            .and(Comparison::field("source").equals_str(source));
+            .and(Comparison::field("id").equals_str(id));
         let query = EdgeRecord::<Hold>::query().filter(filter);
         let result: QueryResult<EdgeRecord<Self>> = query.call(db).await?;
         if result.len() == 0 {
@@ -85,27 +86,21 @@ impl Hold {
         }
     }
 
-    pub async fn find_by_id_chain_category(
+    /// Find a hold record by Chain, NFT_ID and NFT Address.
+    pub async fn find_by_id_chain_address(
         db: &DatabaseConnection,
         id: &str,
         chain: &Chain,
-        category: &ContractCategory,
         address: &str,
     ) -> Result<Option<HoldRecord>, Error> {
         // TODO: Really should merge these 2 queries into one.
-        let contract_query = Filter::new(Comparison::field("chain").equals_str(chain))
-            .and(Comparison::field("category").equals_str(category))
-            .and(Comparison::field("address").equals_str(address));
-        let contract_result: QueryResult<Contract> = Query::new(Contract::COLLECTION_NAME)
-            .filter(contract_query)
-            .call(db)
-            .await?;
-        if contract_result.len() == 0 {
+        let contract = Contract::find_by_chain_address(db, chain, address).await?;
+        if contract.is_none() {
             return Ok(None);
         }
 
         let filter = Filter::new(Comparison::field("id").equals_str(id))
-            .and(Comparison::field("_to").equals_str(contract_result.first().unwrap().id()));
+            .and(Comparison::field("_to").equals_str(contract.unwrap().id()));
         let query = EdgeRecord::<Hold>::query().filter(filter);
         let result: QueryResult<EdgeRecord<Self>> = query.call(db).await?;
         if result.len() == 0 {
@@ -130,7 +125,7 @@ impl Edge<Identity, Contract, HoldRecord> for Hold {
         from: &DatabaseRecord<Identity>,
         to: &DatabaseRecord<Contract>,
     ) -> Result<HoldRecord, Error> {
-        let found = Self::find_by_from_to_source(db, from, to, &self.source).await?;
+        let found = Self::find_by_from_to_id(db, from, to, &self.id).await?;
         match found {
             Some(edge) => Ok(edge.into()),
             None => Ok(DatabaseRecord::link(from, to, db, self.clone())
@@ -168,7 +163,7 @@ impl Edge<Identity, Contract, HoldRecord> for Hold {
 
 #[cfg(test)]
 mod tests {
-    use crate::util::naive_now;
+    use crate::{graph::new_db_connection, util::naive_now};
     use fake::{Dummy, Fake, Faker};
 
     use super::*;
@@ -184,5 +179,22 @@ mod tests {
                 updated_at: naive_now(),
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_find_by_id_chain_address() -> Result<(), Error> {
+        let db = new_db_connection().await?;
+        let identity = Identity::create_dummy(&db).await?;
+        let contract = Contract::create_dummy(&db).await?;
+        let hold: Hold = Faker.fake();
+        let hold_record = hold.connect(&db, &identity, &contract).await?;
+        let found =
+            Hold::find_by_id_chain_address(&db, &hold.id, &contract.chain, &contract.address)
+                .await
+                .expect("Should find a Hold record without error")
+                .expect("Should find a Hold record, not Empty");
+        assert_eq!(found.key(), hold_record.key());
+
+        Ok(())
     }
 }

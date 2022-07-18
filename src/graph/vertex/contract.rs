@@ -190,14 +190,14 @@ impl Default for Contract {
 }
 
 impl Contract {
-    pub async fn find_by_chain_contract(
+    pub async fn find_by_chain_address(
         db: &DatabaseConnection,
         chain: &Chain,
-        contract: &String,
+        address: &str,
     ) -> Result<Option<ContractRecord>, Error> {
         let query = Self::query().filter(
             Filter::new(Comparison::field("chain").equals_str(chain))
-                .and(Comparison::field("address").equals_str(contract)),
+                .and(Comparison::field("address").equals_str(address)),
         );
         let result = Self::get(&query, db).await?;
         if result.len() == 0 {
@@ -216,7 +216,7 @@ impl Vertex<ContractRecord> for Contract {
 
     /// Create or update an Contract info by (chain, contract, nft_id).
     async fn create_or_update(&self, db: &DatabaseConnection) -> Result<ContractRecord, Error> {
-        let found = Self::find_by_chain_contract(db, &self.chain, &self.address).await?;
+        let found = Self::find_by_chain_address(db, &self.chain, &self.address).await?;
         match found {
             None => {
                 let mut to_be_created = self.clone();
@@ -312,6 +312,17 @@ mod tests {
         let created = Contract::create_dummy(&db).await?;
         assert!(created.key().len() > 0);
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_contract_find_by_chain_address() -> Result<(), Error> {
+        let db = new_db_connection().await?;
+        let created = Contract::create_dummy(&db).await?;
+        let found = Contract::find_by_chain_address(&db, &created.chain, &created.address)
+            .await?
+            .expect("contract should be found");
+        assert_eq!(found.key(), created.key());
         Ok(())
     }
 }

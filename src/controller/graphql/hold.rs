@@ -137,8 +137,7 @@ impl HoldQuery {
             .or(category.default_contract_address())
             .ok_or(Error::GraphQLError("Contract address is required.".into()))?;
         let target = Target::NFT(chain.clone(), category, id.clone());
-        match Hold::find_by_id_chain_category(db, &id, &chain, &category, &contract_address).await?
-        {
+        match Hold::find_by_id_chain_address(db, &id, &chain, &contract_address).await? {
             Some(hold) => {
                 if hold.is_outdated() {
                     tokio::spawn(async move { fetch_all(target).await });
@@ -148,7 +147,7 @@ impl HoldQuery {
 
             None => {
                 fetch_all(target).await?;
-                Hold::find_by_id_chain_category(db, &id, &chain, &category, &contract_address).await
+                Hold::find_by_id_chain_address(db, &id, &chain, &contract_address).await
             }
         }
     }

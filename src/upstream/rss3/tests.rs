@@ -23,7 +23,7 @@ mod tests {
             Identity::find_by_platform_identity(&db, &Platform::Ethereum, &target.identity()?)
                 .await?
                 .expect("Record not found");
-        let contract = Contract::find_by_chain_contract(
+        let contract = Contract::find_by_chain_address(
             &db,
             &Chain::Polygon,
             &"0x8f9772d0ed34bd0293098a439912f0f6d6e78e3f".to_string(),
