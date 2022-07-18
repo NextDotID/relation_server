@@ -20,7 +20,12 @@ async fn main() -> Result<()> {
     env_logger::Builder::from_env(Env::default().default_filter_or("debug"))
         .try_init()
         .expect("Failed to initialize logger");
+    let middleware_cors = warp::cors()
+        .allow_any_origin() // : maybe more strict CORS in production?
+        .allow_methods(vec!["GET", "POST"])
+        .allow_headers(vec!["Accept", "Content-Type", "Length"]);
 
+    // TODO: Not sure reuse of this connection instance will cause data race.
     let db = DatabaseConnection::builder()
         .with_credentials(&C.db.host, &C.db.db, &C.db.username, &C.db.password)
         .with_auth_mode(AuthMode::Basic)
@@ -33,22 +38,24 @@ async fn main() -> Result<()> {
         .data(db)
         .finish();
 
-    let graphql_post = async_graphql_warp::graphql(schema).and_then(
-        |(schema, request): (
-            Schema<Query, EmptyMutation, EmptySubscription>,
-            async_graphql::Request,
-        )| async move {
-            Ok::<_, Infallible>(GraphQLResponse::from(schema.execute(request).await))
-        },
-    );
+    let graphql_post = async_graphql_warp::graphql(schema)
+        .and_then(
+            |(schema, request): (
+                Schema<Query, EmptyMutation, EmptySubscription>,
+                async_graphql::Request,
+            )| async move {
+                Ok::<_, Infallible>(GraphQLResponse::from(schema.execute(request).await))
+            },
+        )
+        .with(middleware_cors);
 
-    let graphql_playground = warp::path::end().and(warp::get()).map(|| {
+    let playground = warp::path::end().and(warp::get()).map(|| {
         HttpResponse::builder()
             .header("content-type", "text/html")
             .body(playground_source(GraphQLPlaygroundConfig::new("/")))
     });
 
-    let routes = graphql_playground
+    let routes = playground
         .or(graphql_post)
         .recover(|err: Rejection| async move {
             if let Some(GraphQLBadRequest(err)) = err.find() {
