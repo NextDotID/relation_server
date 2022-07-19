@@ -12,10 +12,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_knn3() -> Result<(), Error> {
-
         let target = Target::Identity(
             Platform::Ethereum,
-            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".to_string().to_lowercase(),
+            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
+                .to_string()
+                .to_lowercase(),
         );
         Knn3::fetch(&target).await?;
 
@@ -25,7 +26,7 @@ mod tests {
                 .await?
                 .expect("Record not found");
 
-        let ens = Contract::find_by_chain_contract(
+        let ens = Contract::find_by_chain_address(
             &db,
             &Chain::Ethereum,
             &ContractCategory::ENS.default_contract_address().unwrap(),
