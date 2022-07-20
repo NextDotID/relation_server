@@ -122,6 +122,77 @@ impl From<Rss3Chain> for Chain {
 
 pub struct Rss3 {}
 
+#[async_trait]
+impl Fetcher for Rss3 {
+    async fn fetch(target: &Target) -> Result<TargetProcessedList, Error> {
+        if !Self::can_fetch(target) {
+            return Ok(vec![]);
+        }
+
+        match target {
+            Target::Identity(platform, identity) => fetch_nfts_by_account(platform, identity).await,
+            Target::NFT(_, _, _, _) => todo!(),
+        }
+    }
+
+    fn can_fetch(target: &Target) -> bool {
+        // TODO: add NFT support
+        target.in_platform_supported(vec![Platform::Ethereum])
+    }
+}
+
+async fn fetch_nfts_by_account(
+    platform: &Platform,
+    identity: &str,
+) -> Result<TargetProcessedList, Error> {
+    let client = make_client();
+    let uri: http::Uri = match format!(
+        "{}account:{}@{}/notes?tags=NFT",
+        C.upstream.rss3_service.url, identity, platform
+    )
+    .parse()
+    {
+        Ok(n) => n,
+        Err(err) => {
+            return Err(Error::ParamError(format!(
+                "Uri format Error: {}",
+                err.to_string()
+            )))
+        }
+    };
+    let mut resp = client.get(uri).await?;
+    if !resp.status().is_success() {
+        let body: ErrorResponse = parse_body(&mut resp).await?;
+        return Err(Error::General(
+            format!("Rss3 Result Get Error: {}", body.message),
+            resp.status(),
+        ));
+    }
+
+    let body: Rss3Response = parse_body(&mut resp).await?;
+    if body.total == 0 {
+        return Err(Error::General(
+            format!("rss3 Result Get Error"),
+            resp.status(),
+        ));
+    }
+
+    let futures: Vec<_> = body
+        .list
+        .into_iter()
+        .filter(|p| p.metadata.to == identity.to_lowercase())
+        .map(|p| save_item(p))
+        .collect();
+    
+    let next_targets: TargetProcessedList = join_all(futures)
+        .await
+        .into_iter()
+        .flat_map(|result| result.unwrap_or(vec![]))
+        .collect();
+
+    Ok(next_targets)
+}
+
 async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
     let creataed_at = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
     let created_at_naive = NaiveDateTime::from_timestamp(creataed_at.timestamp(), 0);
@@ -168,75 +239,4 @@ async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
         p.metadata.collection_address.clone(),
         p.metadata.token_id.clone(),
     )])
-}
-
-#[async_trait]
-impl Fetcher for Rss3 {
-    async fn fetch(target: &Target) -> Result<TargetProcessedList, Error> {
-        if !Self::can_fetch(target) {
-            return Ok(vec![]);
-        }
-
-        match target {
-            Target::Identity(platform, identity) => fetch_nfts_by_account(platform, identity).await,
-            Target::NFT(_, _, _, _) => todo!(),
-        }
-    }
-
-    fn can_fetch(target: &Target) -> bool {
-        // TODO: add NFT support
-        target.in_platform_supported(vec![Platform::Ethereum])
-    }
-}
-
-async fn fetch_nfts_by_account(
-    platform: &Platform,
-    identity: &str,
-) -> Result<TargetProcessedList, Error> {
-    let client = make_client();
-    let uri: http::Uri = match format!(
-        "{}account:{}@{}/notes?tags=NFT",
-        C.upstream.rss3_service.url, identity, platform
-    )
-    .parse()
-    {
-        Ok(n) => n,
-        Err(err) => {
-            return Err(Error::ParamError(format!(
-                "Uri format Error: {}",
-                err.to_string()
-            )))
-        }
-    };
-    let mut resp = client.get(uri).await?;
-
-    if !resp.status().is_success() {
-        let body: ErrorResponse = parse_body(&mut resp).await?;
-        return Err(Error::General(
-            format!("Rss3 Result Get Error: {}", body.message),
-            resp.status(),
-        ));
-    }
-
-    let body: Rss3Response = parse_body(&mut resp).await?;
-    if body.total == 0 {
-        return Err(Error::General(
-            format!("rss3 Result Get Error"),
-            resp.status(),
-        ));
-    }
-
-    let futures: Vec<_> = body
-        .list
-        .into_iter()
-        .filter(|p| p.metadata.to == identity.to_lowercase())
-        .map(|p| save_item(p))
-        .collect();
-    let next_targets: TargetProcessedList = join_all(futures)
-        .await
-        .into_iter()
-        .flat_map(|result| result.unwrap_or(vec![]))
-        .collect();
-
-    Ok(next_targets)
 }

@@ -2,6 +2,7 @@ mod tests {
     use crate::{
         error::Error,
         graph::{
+            edge::Hold,
             new_db_connection,
             vertex::contract::Chain,
             vertex::Identity,
@@ -34,9 +35,14 @@ mod tests {
         .await?
         .unwrap();
 
-        // let res = ens.belongs_to(&db).await.unwrap();
-
-        // assert_eq!(owner.uuid, res.unwrap().uuid);
+        let _ = Hold::find_by_id_chain_address(
+            &db,
+            "vitalik.eth",
+            &Chain::Ethereum,
+            &ContractCategory::ENS.default_contract_address().unwrap(),
+        )
+        .await?
+        .expect("Record not found");
         Ok(())
     }
 
