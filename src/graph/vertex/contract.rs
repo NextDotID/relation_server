@@ -141,7 +141,11 @@ impl ContractCategory {
         use ContractCategory::*;
         match self {
             // TODO: ENS has a complicated contract structure, which cannot determine the "main" contract easily.
-            ENS => Some("0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85".to_string().to_lowercase()),
+            ENS => Some(
+                "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85"
+                    .to_string()
+                    .to_lowercase(),
+            ),
             _ => None,
         }
     }

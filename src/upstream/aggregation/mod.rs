@@ -1,18 +1,21 @@
 mod tests;
 
+use super::Target;
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::{edge::Proof, edge::Hold};
-use crate::graph::vertex::{Identity, Contract, contract::ContractCategory};
-use crate::graph::{new_db_connection, Edge, Vertex};
-use crate::upstream::{DataSource, Platform, Chain, Fetcher, TargetProcessedList};
+use crate::graph::vertex::{contract::ContractCategory, Contract, Identity};
+use crate::graph::{
+    create_identity_to_contract_records, create_identity_to_identity_records, new_db_connection,
+    Edge, Vertex,
+};
+use crate::graph::{edge::Hold, edge::Proof};
+use crate::upstream::{Chain, DataSource, Fetcher, Platform, TargetProcessedList};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
+use async_trait::async_trait;
 use futures::future::join_all;
+use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
-use async_trait::async_trait;
-use serde::Deserialize;
-use super::Target;
 
 #[derive(Deserialize, Debug)]
 pub struct Pagination {
@@ -55,8 +58,6 @@ async fn save_item(p: Record) -> Option<Target> {
         updated_at: naive_now(),
     };
 
-    let from_record = from.create_or_update(&db).await.ok()?;
-
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::from_str(p.web3_platform.as_str()).unwrap(),
@@ -68,7 +69,6 @@ async fn save_item(p: Record) -> Option<Target> {
         profile_url: None,
         updated_at: naive_now(),
     };
-    let to_record = to.create_or_update(&db).await.ok()?;
 
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
@@ -77,7 +77,8 @@ async fn save_item(p: Record) -> Option<Target> {
         created_at: Some(timestamp_to_naive(p.create_timestamp.parse().unwrap())),
         updated_at: timestamp_to_naive(p.modify_timestamp.parse().unwrap()),
     };
-    pf.connect(&db, &from_record, &to_record).await.ok()?;
+
+    let _ = create_identity_to_identity_records(&db, &from, &to, &pf).await;
 
     if p.ens.is_some() {
         let to_contract_identity: Contract = Contract {
@@ -88,17 +89,17 @@ async fn save_item(p: Record) -> Option<Target> {
             symbol: None,
             updated_at: naive_now(),
         };
-        let to_nft_record = to_contract_identity.create_or_update(&db).await.ok()?;
+        //let to_nft_record = to_contract_identity.create_or_update(&db).await.ok()?;
 
-        let ownership: Hold = Hold {
+        let hold: Hold = Hold {
             uuid: Uuid::new_v4(),
             transaction: None,
             id: p.ens.unwrap(),
             source: DataSource::from_str(p.source.as_str()).unwrap_or(DataSource::Unknown),
-            created_at:None,
+            created_at: None,
             updated_at: naive_now(),
         };
-        ownership.connect(&db, &from_record, &to_nft_record).await.ok()?;
+        let _ = create_identity_to_contract_records(&db, &from, &to_contract_identity, &hold).await;
     }
 
     return Some(Target::Identity(
@@ -107,9 +108,15 @@ async fn save_item(p: Record) -> Option<Target> {
     ));
 }
 
+async fn get_eth_info_by_twitter() {}
+
 #[async_trait]
 impl Fetcher for Aggregation {
     async fn fetch(target: &Target) -> Result<TargetProcessedList, Error> {
+        if !Self::can_fetch(target) {
+            return Ok(vec![]);
+        }
+
         let client = make_client();
         let mut page = 1;
 

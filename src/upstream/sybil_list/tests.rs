@@ -27,7 +27,6 @@ mod tests {
                 .await?
                 .expect("Record not found");
         assert_eq!(found.updated_at.timestamp(), naive_now().timestamp());
-
         assert_eq!(
             Target::Identity(Platform::Twitter, "MonetSupply".into()),
             *fetched.first().unwrap()

@@ -8,7 +8,7 @@ use crate::upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList
 use crate::util::naive_now;
 use crate::{
     error::Error,
-    graph::{new_db_connection, vertex::Identity},
+    graph::{create_identity_to_contract_records, new_db_connection, vertex::Identity},
 };
 use aragog::DatabaseConnection;
 use async_trait::async_trait;
@@ -58,7 +58,7 @@ impl Fetcher for Knn3 {
 
         match target {
             Target::Identity(_, identity) => fetch_ens_by_eth_wallet(identity).await,
-            Target::NFT(_, _, id) => fetch_eth_wallet_by_ens(id).await,
+            Target::NFT(_, _, _, id) => fetch_eth_wallet_by_ens(id).await,
         }
     }
 
@@ -66,18 +66,6 @@ impl Fetcher for Knn3 {
         target.in_platform_supported(vec![Platform::Ethereum])
             || target.in_nft_supported(vec![ContractCategory::ENS], vec![Chain::Ethereum])
     }
-}
-
-async fn create_records(
-    db: &DatabaseConnection,
-    from: &Identity,
-    to: &Contract,
-    hold: &Hold,
-) -> Result<(), Error> {
-    let from_record = from.create_or_update(db).await?;
-    let to_record = to.create_or_update(db).await?;
-    hold.connect(db, &from_record, &to_record).await?;
-    Ok(())
 }
 
 /// Use ethereum address to fetch NFTs (especially ENS).
@@ -144,12 +132,19 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
             created_at: None,
             updated_at: naive_now(),
         };
-        create_records(&db, &from, &to, &ownership).await?;
+        create_identity_to_contract_records(&db, &from, &to, &ownership).await?;
     }
     Ok(ens_vec
         .ens
         .iter()
-        .map(|ens| Target::NFT(Chain::Ethereum, ContractCategory::ENS, ens.clone()))
+        .map(|ens| {
+            Target::NFT(
+                Chain::Ethereum,
+                ContractCategory::ENS,
+                ContractCategory::ENS.default_contract_address().unwrap(),
+                ens.clone(),
+            )
+        })
         .collect())
 }
 
@@ -213,7 +208,7 @@ async fn fetch_eth_wallet_by_ens(id: &str) -> Result<TargetProcessedList, Error>
         updated_at: naive_now(),
     };
     let db = new_db_connection().await?;
-    create_records(&db, &from, &to, &hold).await?;
+    create_identity_to_contract_records(&db, &from, &to, &hold).await?;
 
     Ok(vec![Target::Identity(Platform::Ethereum, address)])
 }

@@ -1,8 +1,9 @@
 mod tests {
     use crate::{
         error::Error,
+        graph::edge::Hold,
         graph::new_db_connection,
-        graph::{vertex::contract::Chain, vertex::Contract, vertex::Identity},
+        graph::vertex::{contract::Chain, Contract, Identity},
         upstream::rss3::Rss3,
         upstream::Platform,
         upstream::{Fetcher, Target},
@@ -12,11 +13,10 @@ mod tests {
     async fn test_smoke_nft_rss3() -> Result<(), Error> {
         let target = Target::Identity(
             Platform::Ethereum,
-            "0x6875e13A6301040388F61f5DBa5045E1bE01c657"
-                .to_string()
-                .to_lowercase(),
+            "0x6875e13A6301040388F61f5DBa5045E1bE01c657".to_lowercase(),
         );
-        Rss3::fetch(&target).await?;
+        let _ = Rss3::fetch(&target).await?;
+
         let db = new_db_connection().await?;
 
         let owner =
@@ -31,9 +31,10 @@ mod tests {
         .await?
         .unwrap();
 
-        // FIXME: fix this testcase
-        // let res = contract.belongs_to(&db).await.unwrap();
-        // assert_eq!(owner.identity, res.unwrap().identity);
+        let _ = Hold::find_by_from_to_id(&db, &owner, &contract, "1")
+            .await
+            .expect("Record not found");
+
         Ok(())
     }
 }
