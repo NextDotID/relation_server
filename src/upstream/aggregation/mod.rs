@@ -110,7 +110,6 @@ async fn fetch_connections_by_platform_identity(
         .flat_map(|result| result.unwrap_or(vec![]))
         .collect();
         next_targets.extend(targets);
-        println!("next_targets {:?}\n", next_targets);
 
         if body.pagination.current == body.pagination.next {
             break;
