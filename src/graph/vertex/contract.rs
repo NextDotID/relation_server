@@ -28,38 +28,76 @@ pub enum Chain {
     #[strum(serialize = "ethereum")]
     #[graphql(name = "ethereum")]
     Ethereum,
+
     #[serde(rename = "rinkeby")]
     #[strum(serialize = "rinkeby")]
     #[graphql(name = "rinkeby")]
     Rinkeby,
+
     #[serde(rename = "ropsten")]
     #[strum(serialize = "ropsten")]
     #[graphql(name = "ropsten")]
     Ropsten,
+
     #[serde(rename = "kovan")]
     #[strum(serialize = "kovan")]
     #[graphql(name = "kovan")]
     Kovan,
+
     #[serde(rename = "bsc")]
     #[strum(serialize = "bsc")]
     #[graphql(name = "bsc")]
     BinanceSmartChain,
+
     #[serde(rename = "polygon")]
     #[strum(serialize = "polygon")]
     #[graphql(name = "polygon")]
     Polygon,
+
     #[serde(rename = "polygon_testnet")]
     #[strum(serialize = "polygon_testnet")]
     #[graphql(name = "polygon_testnet")]
     PolygonTestnet,
+
     #[serde(rename = "solana")]
     #[strum(serialize = "solana")]
     #[graphql(name = "solana")]
     Solana,
+
     #[serde(rename = "conflux_espace")]
     #[strum(serialize = "conflux_espace")]
     #[graphql(name = "conflux_espace")]
     ConfluxESpace,
+
+    #[serde(rename = "ethereum_classic")]
+    #[strum(serialize = "ethereum_classic")]
+    #[graphql(name = "ethereum_classic")]
+    EthereumClassic,
+
+    #[serde(rename = "zksync")]
+    #[strum(serialize = "zksync")]
+    #[graphql(name = "zksync")]
+    Zksync,
+
+    #[serde(rename = "xdai")]
+    #[strum(serialize = "xdai")]
+    #[graphql(name = "xdai")]
+    Xdai,
+
+    #[serde(rename = "arweave")]
+    #[strum(serialize = "arweave")]
+    #[graphql(name = "arweave")]
+    Arweave,
+
+    #[serde(rename = "arbitrum")]
+    #[strum(serialize = "arbitrum")]
+    #[graphql(name = "arbitrum")]
+    Arbitrum,
+
+    #[serde(rename = "optimism")]
+    #[strum(serialize = "optimism")]
+    #[graphql(name = "optimism")]
+    Optimism,
 }
 
 /// Internal chain implementation / framework.
@@ -141,9 +179,7 @@ impl ContractCategory {
         use ContractCategory::*;
         match self {
             // TODO: ENS has a complicated contract structure, which cannot determine the "main" contract easily.
-            ENS => Some(
-                "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85".to_lowercase(),
-            ),
+            ENS => Some("0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85".to_lowercase()),
             _ => None,
         }
     }

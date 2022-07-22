@@ -8,7 +8,7 @@ use crate::upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList
 use crate::util::naive_now;
 use crate::{
     error::Error,
-    graph::{create_identity_to_contract_records, new_db_connection, vertex::Identity},
+    graph::{create_identity_to_contract_record, new_db_connection, vertex::Identity},
 };
 use aragog::DatabaseConnection;
 use async_trait::async_trait;
@@ -132,7 +132,7 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
             created_at: None,
             updated_at: naive_now(),
         };
-        create_identity_to_contract_records(&db, &from, &to, &ownership).await?;
+        create_identity_to_contract_record(&db, &from, &to, &ownership).await?;
     }
     Ok(ens_vec
         .ens
@@ -208,7 +208,7 @@ async fn fetch_eth_wallet_by_ens(id: &str) -> Result<TargetProcessedList, Error>
         updated_at: naive_now(),
     };
     let db = new_db_connection().await?;
-    create_identity_to_contract_records(&db, &from, &to, &hold).await?;
+    create_identity_to_contract_record(&db, &from, &to, &hold).await?;
 
     Ok(vec![Target::Identity(Platform::Ethereum, address)])
 }

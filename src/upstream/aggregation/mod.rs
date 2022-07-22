@@ -5,7 +5,7 @@ use crate::config::C;
 use crate::error::Error;
 use crate::graph::vertex::{contract::ContractCategory, Contract, Identity};
 use crate::graph::{
-    create_identity_to_contract_records, create_identity_to_identity_records, new_db_connection,
+    create_identity_to_contract_record, create_identity_to_identity_record, new_db_connection,
     Edge, Vertex,
 };
 use crate::graph::{edge::Hold, edge::Proof};
@@ -71,7 +71,6 @@ async fn fetch_connections_by_platform_identity(
     let mut page = 1;
 
     let mut next_targets: TargetProcessedList = Vec::new();
-    
 
     loop {
         let uri: http::Uri = match format!(
@@ -99,16 +98,12 @@ async fn fetch_connections_by_platform_identity(
             break;
         }
 
-        let futures: Vec<_> = body
-        .records
-        .into_iter()
-        .map(|p| save_item(p))
-        .collect();
-    let targets: TargetProcessedList = join_all(futures)
-        .await
-        .into_iter()
-        .flat_map(|result| result.unwrap_or(vec![]))
-        .collect();
+        let futures: Vec<_> = body.records.into_iter().map(|p| save_item(p)).collect();
+        let targets: TargetProcessedList = join_all(futures)
+            .await
+            .into_iter()
+            .flat_map(|result| result.unwrap_or(vec![]))
+            .collect();
         next_targets.extend(targets);
 
         if body.pagination.current == body.pagination.next {
@@ -117,7 +112,6 @@ async fn fetch_connections_by_platform_identity(
         page = body.pagination.next;
     }
 
-    
     Ok(next_targets)
 }
 
@@ -137,7 +131,8 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         updated_at: naive_now(),
     };
 
-    let to_platform = Platform::from_str(p.web3_platform.as_str()).unwrap();
+    let to_platform = Platform::from_str(p.web3_platform.as_str()).unwrap_or_default();
+
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: to_platform.clone(),
@@ -158,7 +153,7 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         updated_at: timestamp_to_naive(p.modify_timestamp.parse().unwrap()),
     };
 
-    let _ = create_identity_to_identity_records(&db, &from, &to, &pf).await;
+    let _ = create_identity_to_identity_record(&db, &from, &to, &pf).await;
 
     targets.push(Target::Identity(to_platform.clone(), p.web3_addr.clone()));
 
@@ -181,11 +176,9 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
             created_at: None,
             updated_at: naive_now(),
         };
-        let _ =
-            create_identity_to_contract_records(&db, &from, &to_contract_identity, &hold)
-                .await;
+        let _ = create_identity_to_contract_record(&db, &from, &to_contract_identity, &hold).await;
 
-            targets.push(Target::NFT(
+        targets.push(Target::NFT(
             Chain::Ethereum,
             ContractCategory::ENS,
             ContractCategory::ENS.default_contract_address().unwrap(),
@@ -193,5 +186,4 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         ));
     }
     Ok(targets)
-
 }

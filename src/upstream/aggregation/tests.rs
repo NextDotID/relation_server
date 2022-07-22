@@ -9,6 +9,7 @@ mod tests {
         upstream::{aggregation::Aggregation, Target},
         upstream::{Fetcher, Platform},
     };
+    use std::str::FromStr;
 
     #[tokio::test]
     async fn test_smoke_aggregation() -> Result<(), Error> {

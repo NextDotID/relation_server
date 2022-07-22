@@ -42,7 +42,7 @@ pub async fn new_db_connection() -> Result<DatabaseConnection, Error> {
     Ok(connection)
 }
 
-pub async fn create_identity_to_contract_records(
+pub async fn create_identity_to_contract_record(
     db: &DatabaseConnection,
     from: &Identity,
     to: &Contract,
@@ -54,7 +54,7 @@ pub async fn create_identity_to_contract_records(
     Ok(())
 }
 
-pub async fn create_identity_to_identity_records(
+pub async fn create_identity_to_identity_record(
     db: &DatabaseConnection,
     from: &Identity,
     to: &Identity,

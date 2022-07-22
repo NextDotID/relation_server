@@ -3,7 +3,7 @@ use crate::{
     config::C,
     error::Error,
     graph::{
-        create_identity_to_contract_records,
+        create_identity_to_contract_record,
         edge::hold::Hold,
         new_db_connection,
         vertex::{contract::Chain, contract::ContractCategory, Contract, Identity},
@@ -15,6 +15,7 @@ use crate::{
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime};
 use futures::future::join_all;
+use http::uri::InvalidUri;
 use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -109,13 +110,13 @@ impl From<Rss3Chain> for Chain {
         match network {
             Rss3Chain::Ethereum => return Chain::Ethereum,
             Rss3Chain::Polygon => return Chain::Polygon,
-            Rss3Chain::EthereumClassic => todo!(),
+            Rss3Chain::EthereumClassic => Chain::EthereumClassic,
             Rss3Chain::BinanceSmartChain => Chain::BinanceSmartChain,
-            Rss3Chain::Zksync => todo!(),
-            Rss3Chain::Xdai => todo!(),
-            Rss3Chain::Arweave => todo!(),
-            Rss3Chain::Arbitrum => todo!(),
-            Rss3Chain::Optimism => todo!(),
+            Rss3Chain::Zksync => Chain::Zksync,
+            Rss3Chain::Xdai => Chain::Xdai,
+            Rss3Chain::Arweave => Chain::Arweave,
+            Rss3Chain::Arbitrum => Chain::Arbitrum,
+            Rss3Chain::Optimism => Chain::Optimism,
         }
     }
 }
@@ -146,20 +147,16 @@ async fn fetch_nfts_by_account(
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
     let client = make_client();
-    let uri: http::Uri = match format!(
+    let uri: http::Uri = format!(
         "{}account:{}@{}/notes?tags=NFT",
         C.upstream.rss3_service.url, identity, platform
     )
     .parse()
-    {
-        Ok(n) => n,
-        Err(err) => {
-            return Err(Error::ParamError(format!(
-                "Uri format Error: {}",
-                err.to_string()
-            )))
-        }
-    };
+    .map_err(|_err: InvalidUri| {
+        Error::ParamError(format!("Uri format Error {}", _err.to_string()))
+    })?;
+
+    //.parse().map_err(|err| { Error::ParamError(...) })?;
     let mut resp = client.get(uri).await?;
     if !resp.status().is_success() {
         let body: ErrorResponse = parse_body(&mut resp).await?;
@@ -183,7 +180,7 @@ async fn fetch_nfts_by_account(
         .filter(|p| p.metadata.to == identity.to_lowercase())
         .map(|p| save_item(p))
         .collect();
-    
+
     let next_targets: TargetProcessedList = join_all(futures)
         .await
         .into_iter()
@@ -231,7 +228,7 @@ async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
         created_at: Some(created_at_naive),
         updated_at: naive_now(),
     };
-    create_identity_to_contract_records(&db, &from, &to, &hold).await?;
+    create_identity_to_contract_record(&db, &from, &to, &hold).await?;
 
     Ok(vec![Target::NFT(
         chain,

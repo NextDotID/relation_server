@@ -2,7 +2,7 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::{create_identity_to_identity_records, Edge, Vertex};
+use crate::graph::{create_identity_to_identity_record, Edge, Vertex};
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
 use crate::util::{make_client, naive_now, parse_body};
@@ -178,7 +178,7 @@ async fn fetch_connections_by_platform_identity(
             updated_at: naive_now(),
         };
 
-        let _ = create_identity_to_identity_records(&db, &from, &to, &pf).await?;
+        let _ = create_identity_to_identity_record(&db, &from, &to, &pf).await?;
 
         next_targets.push(Target::Identity(
             Platform::from_str(&p.proof_type).unwrap(),
