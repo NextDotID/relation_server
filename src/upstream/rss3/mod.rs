@@ -3,9 +3,10 @@ use crate::{
     config::C,
     error::Error,
     graph::{
+        create_identity_to_contract_record,
         edge::hold::Hold,
         new_db_connection,
-        vertex::{contract::Chain, contract::ContractCategory, Identity, Contract},
+        vertex::{contract::Chain, contract::ContractCategory, Contract, Identity},
         Edge, Vertex,
     },
     upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList},
@@ -14,6 +15,7 @@ use crate::{
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime};
 use futures::future::join_all;
+use http::uri::InvalidUri;
 use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -52,7 +54,7 @@ pub struct MetaData {
     pub from: String,
     #[serde(default)]
     pub log_index: String,
-    pub network: String,
+    pub network: Rss3Chain,
     pub proof: String,
     pub to: String,
     #[serde(default)]
@@ -68,7 +70,125 @@ pub struct ErrorResponse {
     pub message: String,
 }
 
+/*
+ethereum, ethereum_classic,
+binance_smart_chain, polygon, zksync, xdai,
+arweave, arbitrum, optimism, fantom, avalanche, crossbell
+*/
+#[derive(Deserialize, Debug)]
+pub enum Rss3Chain {
+    #[serde(rename = "ethereum")]
+    Ethereum,
+
+    #[serde(rename = "ethereum_classic")]
+    EthereumClassic,
+
+    #[serde(rename = "binance_smart_chain")]
+    BinanceSmartChain,
+
+    #[serde(rename = "polygon")]
+    Polygon,
+
+    #[serde(rename = "zksync")]
+    Zksync,
+
+    #[serde(rename = "xdai")]
+    Xdai,
+
+    #[serde(rename = "arweave")]
+    Arweave,
+
+    #[serde(rename = "arbitrum")]
+    Arbitrum,
+
+    #[serde(rename = "optimism")]
+    Optimism,
+}
+
+impl From<Rss3Chain> for Chain {
+    fn from(network: Rss3Chain) -> Self {
+        match network {
+            Rss3Chain::Ethereum => return Chain::Ethereum,
+            Rss3Chain::Polygon => return Chain::Polygon,
+            Rss3Chain::EthereumClassic => Chain::EthereumClassic,
+            Rss3Chain::BinanceSmartChain => Chain::BinanceSmartChain,
+            Rss3Chain::Zksync => Chain::Zksync,
+            Rss3Chain::Xdai => Chain::Xdai,
+            Rss3Chain::Arweave => Chain::Arweave,
+            Rss3Chain::Arbitrum => Chain::Arbitrum,
+            Rss3Chain::Optimism => Chain::Optimism,
+        }
+    }
+}
+
 pub struct Rss3 {}
+
+#[async_trait]
+impl Fetcher for Rss3 {
+    async fn fetch(target: &Target) -> Result<TargetProcessedList, Error> {
+        if !Self::can_fetch(target) {
+            return Ok(vec![]);
+        }
+
+        match target {
+            Target::Identity(platform, identity) => fetch_nfts_by_account(platform, identity).await,
+            Target::NFT(_, _, _, _) => todo!(),
+        }
+    }
+
+    fn can_fetch(target: &Target) -> bool {
+        // TODO: add NFT support
+        target.in_platform_supported(vec![Platform::Ethereum])
+    }
+}
+
+async fn fetch_nfts_by_account(
+    platform: &Platform,
+    identity: &str,
+) -> Result<TargetProcessedList, Error> {
+    let client = make_client();
+    let uri: http::Uri = format!(
+        "{}account:{}@{}/notes?tags=NFT",
+        C.upstream.rss3_service.url, identity, platform
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| {
+        Error::ParamError(format!("Uri format Error {}", _err.to_string()))
+    })?;
+
+    //.parse().map_err(|err| { Error::ParamError(...) })?;
+    let mut resp = client.get(uri).await?;
+    if !resp.status().is_success() {
+        let body: ErrorResponse = parse_body(&mut resp).await?;
+        return Err(Error::General(
+            format!("Rss3 Result Get Error: {}", body.message),
+            resp.status(),
+        ));
+    }
+
+    let body: Rss3Response = parse_body(&mut resp).await?;
+    if body.total == 0 {
+        return Err(Error::General(
+            format!("rss3 Result Get Error"),
+            resp.status(),
+        ));
+    }
+
+    let futures: Vec<_> = body
+        .list
+        .into_iter()
+        .filter(|p| p.metadata.to == identity.to_lowercase())
+        .map(|p| save_item(p))
+        .collect();
+
+    let next_targets: TargetProcessedList = join_all(futures)
+        .await
+        .into_iter()
+        .flat_map(|result| result.unwrap_or(vec![]))
+        .collect();
+
+    Ok(next_targets)
+}
 
 async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
     let creataed_at = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
@@ -87,23 +207,20 @@ async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
         profile_url: None,
         updated_at: naive_now(),
     };
-    let from_record = from.create_or_update(&db).await?;
 
-    let chain = Chain::from_str(p.metadata.network.as_str()).unwrap();
+    let chain: Chain = p.metadata.network.into();
     let nft_category = ContractCategory::from_str(p.metadata.contract_type.as_str()).unwrap();
-    
+
     let to: Contract = Contract {
         uuid: Uuid::new_v4(),
         category: nft_category.clone(),
         address: p.metadata.collection_address.clone().to_lowercase(),
-        chain: Chain::from_str(p.metadata.network.as_str()).unwrap(),
+        chain: chain,
         symbol: Some(p.metadata.token_symbol.clone()),
         updated_at: naive_now(),
     };
 
-    let to_record = to.create_or_update(&db).await?;
-
-    let ownership: Hold = Hold {
+    let hold: Hold = Hold {
         uuid: Uuid::new_v4(),
         source: DataSource::Rss3,
         transaction: Some(p.metadata.proof.clone()),
@@ -111,77 +228,12 @@ async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
         created_at: Some(created_at_naive),
         updated_at: naive_now(),
     };
-
-    // TODO connect also need to consider it should be create or update
-    ownership.connect(&db, &from_record, &to_record).await?;
+    create_identity_to_contract_record(&db, &from, &to, &hold).await?;
 
     Ok(vec![Target::NFT(
         chain,
         nft_category.clone(),
+        p.metadata.collection_address.clone(),
         p.metadata.token_id.clone(),
     )])
-}
-
-#[async_trait]
-impl Fetcher for Rss3 {
-    async fn fetch(target: &Target) -> Result<TargetProcessedList, Error> {
-        if !Self::can_fetch(target) {
-            return Ok(vec![]);
-        }
-        let platform = target.platform()?;
-        let identity = target.identity()?;
-
-        let client = make_client();
-        let uri: http::Uri = match format!(
-            "{}account:{}@{}/notes?tags=NFT",
-            C.upstream.rss3_service.url, identity, platform
-        )
-        .parse()
-        {
-            Ok(n) => n,
-            Err(err) => {
-                return Err(Error::ParamError(format!(
-                    "Uri format Error: {}",
-                    err.to_string()
-                )))
-            }
-        };
-
-        let mut resp = client.get(uri).await?;
-
-        if !resp.status().is_success() {
-            let body: ErrorResponse = parse_body(&mut resp).await?;
-            return Err(Error::General(
-                format!("Rss3 Result Get Error: {}", body.message),
-                resp.status(),
-            ));
-        }
-
-        let body: Rss3Response = parse_body(&mut resp).await?;
-        if body.total == 0 {
-            return Err(Error::General(
-                format!("rss3 Result Get Error"),
-                resp.status(),
-            ));
-        }
-
-        let futures: Vec<_> = body
-            .list
-            .into_iter()
-            .filter(|p| p.metadata.to == identity.to_lowercase())
-            .map(|p| save_item(p))
-            .collect();
-        let next_targets: TargetProcessedList = join_all(futures)
-            .await
-            .into_iter()
-            .flat_map(|result| result.unwrap_or(vec![]))
-            .collect();
-
-        Ok(next_targets)
-    }
-
-    fn can_fetch(target: &Target) -> bool {
-        // TODO: add NFT support
-        target.in_platform_supported(vec![Platform::Ethereum])
-    }
 }

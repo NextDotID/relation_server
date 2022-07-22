@@ -29,8 +29,8 @@ pub enum Target {
     /// Identity with given platform and identity.
     Identity(Platform, String),
 
-    /// NFT with given chain, category and NFT_ID.
-    NFT(Chain, ContractCategory, String),
+    /// NFT with given chain, category and contract_address, NFT_ID.
+    NFT(Chain, ContractCategory, String, String),
 }
 impl Default for Target {
     fn default() -> Self {
@@ -41,7 +41,7 @@ impl Target {
     /// Judge if this target is in supported platforms list given by upstream.
     pub fn in_platform_supported(&self, platforms: Vec<Platform>) -> bool {
         match self {
-            Self::NFT(_, _, _) => false,
+            Self::NFT(_, _, _, _) => false,
             Self::Identity(platform, _) => platforms.contains(platform),
         }
     }
@@ -54,7 +54,7 @@ impl Target {
     ) -> bool {
         match self {
             Self::Identity(_, _) => false,
-            Self::NFT(chain, category, _) => {
+            Self::NFT(chain, category, _, _) => {
                 nft_categories.contains(category) && nft_chains.contains(chain)
             }
         }
@@ -63,7 +63,7 @@ impl Target {
     pub fn platform(&self) -> Result<Platform, Error> {
         match self {
             Self::Identity(platform, _) => Ok(platform.clone()),
-            Self::NFT(_, _, _) => Err(Error::General(
+            Self::NFT(_, _, _, _) => Err(Error::General(
                 "Target: Get platform error: Not an Identity".into(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             )),
@@ -73,7 +73,7 @@ impl Target {
     pub fn identity(&self) -> Result<String, Error> {
         match self {
             Self::Identity(_, identity) => Ok(identity.clone()),
-            Self::NFT(_, _, _) => Err(Error::General(
+            Self::NFT(_, _, _, _) => Err(Error::General(
                 "Target: Get identity error: Not an Identity".into(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             )),
@@ -86,7 +86,7 @@ impl Target {
                 "Target: Get nft chain error: Not an NFT".into(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             )),
-            Self::NFT(chain, _, _) => Ok(chain.clone()),
+            Self::NFT(chain, _, _, _) => Ok(chain.clone()),
         }
     }
 
@@ -96,7 +96,7 @@ impl Target {
                 "Target: Get nft category error: Not an NFT".into(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             )),
-            Self::NFT(_, category, _) => Ok(category.clone()),
+            Self::NFT(_, category, _, _) => Ok(category.clone()),
         }
     }
 
@@ -106,7 +106,7 @@ impl Target {
                 "Target: Get nft id error: Not an NFT".into(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             )),
-            Self::NFT(_, _, nft_id) => Ok(nft_id.clone()),
+            Self::NFT(_, _, _, nft_id) => Ok(nft_id.clone()),
         }
     }
 }
@@ -114,8 +114,8 @@ impl std::fmt::Display for Target {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Identity(platform, identity) => write!(f, "Identity/{}/{}", platform, identity),
-            Self::NFT(chain, category, nft_id) => {
-                write!(f, "NFT/{}/{}/{}", chain, category, nft_id)
+            Self::NFT(chain, category, address, nft_id) => {
+                write!(f, "NFT/{}/{}/{}/{}", chain, category, address, nft_id)
             }
         }
     }
@@ -141,8 +141,6 @@ pub enum Platform {
     /// Twitter
     #[strum(serialize = "twitter")]
     #[serde(rename = "twitter")]
-    #[graphql(name = "twitter")]
-    #[default]
     Twitter,
 
     /// Ethereum wallet `0x[a-f0-9]{40}`
@@ -172,7 +170,7 @@ pub enum Platform {
     /// Unknown
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
-    #[graphql(name = "unknown")]
+    #[default]
     Unknown,
 }
 
