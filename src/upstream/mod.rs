@@ -124,7 +124,18 @@ impl std::fmt::Display for Target {
 /// All identity platform.
 /// TODO: move this definition into `graph/vertex/identity`, since it is not specific to upstream.
 #[derive(
-    Serialize, Deserialize, Debug, EnumString, Clone, Display, PartialEq, EnumIter, Default,
+    Serialize,
+    Deserialize,
+    Debug,
+    EnumString,
+    Clone,
+    Copy,
+    Display,
+    PartialEq,
+    Eq,
+    EnumIter,
+    Default,
+    async_graphql::Enum,
 )]
 pub enum Platform {
     /// Twitter
@@ -135,21 +146,25 @@ pub enum Platform {
     /// Ethereum wallet `0x[a-f0-9]{40}`
     #[strum(serialize = "ethereum", serialize = "eth")]
     #[serde(rename = "ethereum")]
+    #[graphql(name = "ethereum")]
     Ethereum,
 
     /// NextID
     #[strum(serialize = "nextid")]
     #[serde(rename = "nextid")]
+    #[graphql(name = "nextid")]
     NextID,
 
     /// Keybase
     #[strum(serialize = "keybase")]
     #[serde(rename = "keybase")]
+    #[graphql(name = "keybase")]
     Keybase,
 
     /// Github
     #[strum(serialize = "github")]
     #[serde(rename = "github")]
+    #[graphql(name = "github")]
     Github,
 
     /// Unknown

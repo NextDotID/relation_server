@@ -51,10 +51,10 @@ impl IdentityRecord {
         self.uuid.map(|u| u.to_string())
     }
 
-    /// Platform.  See `avaliable_platforms` for a list of platforms
-    /// supported by RelationService.
-    async fn platform(&self) -> String {
-        self.platform.to_string()
+    /// Platform.  See `avaliablePlatforms` or schema definition for a
+    /// list of platforms supported by RelationService.
+    async fn platform(&self) -> Platform {
+        self.platform.clone()
     }
 
     /// Identity on target platform.  Username or database primary key
