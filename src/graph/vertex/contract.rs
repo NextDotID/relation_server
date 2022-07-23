@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
 use uuid::Uuid;
 
+/// List of chains supported by RelationService.
 #[derive(
     Default,
     Clone,
@@ -23,47 +24,83 @@ use uuid::Uuid;
     EnumIter,
 )]
 pub enum Chain {
+    /// The Blockchain.
     #[default]
     #[serde(rename = "ethereum")]
     #[strum(serialize = "ethereum")]
     #[graphql(name = "ethereum")]
     Ethereum,
 
+    /// Deprecated since `The Merge`.
     #[serde(rename = "rinkeby")]
     #[strum(serialize = "rinkeby")]
     #[graphql(name = "rinkeby")]
     Rinkeby,
 
+    /// Deprecated since `The Merge`.
     #[serde(rename = "ropsten")]
     #[strum(serialize = "ropsten")]
     #[graphql(name = "ropsten")]
     Ropsten,
 
+    /// Deprecated since `The Merge`.
     #[serde(rename = "kovan")]
     #[strum(serialize = "kovan")]
     #[graphql(name = "kovan")]
     Kovan,
 
+    /// A cross-client proof-of-authority testing network for Ethereum.
+    /// https://goerli.net
+    #[serde(rename = "goerli")]
+    #[strum(serialize = "goerli")]
+    #[graphql(name = "goerli")]
+    Goerli,
+
+    /// Sepolia is expected to undergo `The Merge` to proof-of-stake in summer 2022.
+    /// https://sepolia.dev
+    #[serde(rename = "sepolia")]
+    #[strum(serialize = "sepolia")]
+    #[graphql(name = "sepolia")]
+    Sepolia,
+
+    /// BNB Smart Chain (BSC) (Previously Binance Smart Chain) - EVM compatible, consensus layers, and with hubs to multi-chains.
+    /// https://www.binance.com/en/support/announcement/854415cf3d214371a7b60cf01ead0918
     #[serde(rename = "bsc")]
     #[strum(serialize = "bsc")]
     #[graphql(name = "bsc")]
-    BinanceSmartChain,
+    BNBSmartChain,
 
+    /// Polygon is a decentralised Ethereum scaling platform that enables developers to build scalable user-friendly dApps with low transaction fees without ever sacrificing on security.
+    /// https://polygon.technology
     #[serde(rename = "polygon")]
     #[strum(serialize = "polygon")]
     #[graphql(name = "polygon")]
     Polygon,
 
-    #[serde(rename = "polygon_testnet")]
-    #[strum(serialize = "polygon_testnet")]
-    #[graphql(name = "polygon_testnet")]
-    PolygonTestnet,
+    /// Polygon Testnet
+    /// https://mumbai.polygonscan.com
+    #[serde(rename = "mumbai")]
+    #[strum(serialize = "mumbai")]
+    #[graphql(name = "mumbai")]
+    Mumbai,
 
+    /// Solana is a decentralized blockchain built to enable scalable, user-friendly apps for the world.
+    /// https://solana.com
     #[serde(rename = "solana")]
     #[strum(serialize = "solana")]
     #[graphql(name = "solana")]
     Solana,
 
+    /// Conflux is a new secure and reliable public blockchain with very high performance and scalability.
+    /// https://developer.confluxnetwork.org
+    #[serde(rename = "conflux")]
+    #[strum(serialize = "conflux")]
+    #[graphql(name = "conflux")]
+    Conflux,
+
+    /// Conflux has a virtual machine that is similar to the EVM.
+    /// https://evm.confluxscan.io
+    /// https://developer.confluxnetwork.org/conflux-doc/docs/EVM-Space/intro_of_evm_space
     #[serde(rename = "conflux_espace")]
     #[strum(serialize = "conflux_espace")]
     #[graphql(name = "conflux_espace")]
@@ -74,26 +111,36 @@ pub enum Chain {
     #[graphql(name = "ethereum_classic")]
     EthereumClassic,
 
+    /// https://zksync.io
     #[serde(rename = "zksync")]
     #[strum(serialize = "zksync")]
     #[graphql(name = "zksync")]
-    Zksync,
+    ZKSync,
 
-    #[serde(rename = "xdai")]
-    #[strum(serialize = "xdai")]
-    #[graphql(name = "xdai")]
-    Xdai,
+    /// Gnosis Chain provides stability, scalability and an extendable beacon chain framework.
+    /// Established in 2018 as the xDai Chain, the updated Gnosis Chain gives devs the tools and resources they need to create enhanced user experiences and optimized applications.
+    /// https://developers.gnosischain.com
+    #[serde(rename = "gnosis")]
+    #[strum(serialize = "gnosis")]
+    #[graphql(name = "gnosis")]
+    Gnosis,
 
+    /// Arweave enables you to store documents and applications forever.
+    /// https://www.arweave.org
     #[serde(rename = "arweave")]
     #[strum(serialize = "arweave")]
     #[graphql(name = "arweave")]
     Arweave,
 
+    /// Arbitrum One
+    /// http://arbiscan.io
     #[serde(rename = "arbitrum")]
     #[strum(serialize = "arbitrum")]
     #[graphql(name = "arbitrum")]
     Arbitrum,
 
+    /// Optimism is a low-cost and lightning-fast Ethereum L2 blockchain.
+    /// https://www.optimism.io
     #[serde(rename = "optimism")]
     #[strum(serialize = "optimism")]
     #[graphql(name = "optimism")]
@@ -103,9 +150,15 @@ pub enum Chain {
 /// Internal chain implementation / framework.
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum ChainType {
-    /// EVM (with chain ID)
+    /// EVM (with its chain ID)
     EVM(u128),
     Solana,
+    /// Seems like an Layer2 of Ethereum?
+    ZKSync,
+    /// Arweave
+    Arweave,
+    /// Basiclly an EVM, but with different address serializer, transaction packaging and genesis contracts.
+    Conflux,
 }
 impl Default for ChainType {
     fn default() -> Self {
@@ -123,11 +176,20 @@ impl Chain {
             Rinkeby => ChainType::EVM(4),
             Ropsten => ChainType::EVM(3),
             Kovan => ChainType::EVM(42),
-            BinanceSmartChain => ChainType::EVM(56),
+            Goerli => ChainType::EVM(5),
+            Sepolia => ChainType::EVM(11155111),
+            BNBSmartChain => ChainType::EVM(56),
             Polygon => ChainType::EVM(137),
-            PolygonTestnet => ChainType::EVM(80001),
+            Mumbai => ChainType::EVM(80001),
             Solana => ChainType::Solana,
+            Conflux => ChainType::Conflux,
             ConfluxESpace => ChainType::EVM(71),
+            EthereumClassic => ChainType::EVM(61),
+            ZKSync => ChainType::ZKSync,
+            Gnosis => ChainType::EVM(100),
+            Arweave => ChainType::Arweave,
+            Arbitrum => ChainType::EVM(42161),
+            Optimism => ChainType::EVM(10),
         }
     }
 }
