@@ -112,20 +112,18 @@ impl Vertex<IdentityRecord> for Identity {
                 to_be_created.updated_at = naive_now();
                 let mut need_refetch: bool = false;
 
-                {
-                    // Must do this to avoid "future cannot be sent between threads safely" complain from compiler.
-                    match DatabaseRecord::create(to_be_created, db).await {
-                        Ok(created) => return Ok(created.into()),
-                        // An exception is raised from ArangoDB complaining about unique index violation.
-                        // Refetch it later (after leaving this block).
-                        // Since `bool` is `Send`able.
-                        Err(aragog::Error::Conflict(_)) => {
-                            need_refetch = true;
-                        }
-                        Err(err) => {
-                            return Err(err.into());
-                        }
-                    };
+                // Must do this to avoid "future cannot be sent between threads safely" complain from compiler.
+                match DatabaseRecord::create(to_be_created, db).await {
+                    Ok(created) => return Ok(created.into()),
+                    // An exception is raised from ArangoDB complaining about unique index violation.
+                    // Refetch it later (after leaving this block).
+                    // Since `bool` is `Send`able.
+                    Err(aragog::Error::Conflict(_)) => {
+                        need_refetch = true;
+                    }
+                    Err(err) => {
+                        return Err(err.into());
+                    }
                 };
 
                 if need_refetch {
