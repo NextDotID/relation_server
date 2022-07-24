@@ -13,6 +13,7 @@ use aragog::{
 };
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
+use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -109,9 +110,33 @@ impl Vertex<IdentityRecord> for Identity {
                 to_be_created.uuid = to_be_created.uuid.or(Some(Uuid::new_v4()));
                 to_be_created.added_at = naive_now();
                 to_be_created.updated_at = naive_now();
-                let created = DatabaseRecord::create(to_be_created, db).await?;
-                Ok(created.into())
+                let mut need_refetch: bool = false;
+
+                {
+                    // Must do this to avoid "future cannot be sent between threads safely" complain from compiler.
+                    match DatabaseRecord::create(to_be_created, db).await {
+                        Ok(created) => return Ok(created.into()),
+                        // An exception is raised from ArangoDB complaining about unique index violation.
+                        // Refetch it later (after leaving this block).
+                        // Since `bool` is `Send`able.
+                        Err(aragog::Error::Conflict(_)) => {
+                            need_refetch = true;
+                        }
+                        Err(err) => {
+                            return Err(err.into());
+                        }
+                    };
+                };
+
+                if need_refetch {
+                    let found =
+                        Self::find_by_platform_identity(db, &self.platform, &self.identity).await?;
+                    Ok(found.expect("Not found after an race condition in create_or_update"))
+                } else {
+                    Err(Error::General("Impossible: no refetch triggered nor record found / created in create_or_update".into(), StatusCode::INTERNAL_SERVER_ERROR))
+                }
             }
+
             Some(mut found) => {
                 // Update
                 found.display_name = self.display_name.clone();
@@ -215,8 +240,11 @@ impl IdentityRecord {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use aragog::DatabaseConnection;
     use fake::{Dummy, Fake, Faker};
+    use tokio::{join, time::sleep};
     use uuid::Uuid;
 
     use super::{Identity, IdentityRecord};
@@ -258,6 +286,45 @@ mod tests {
         let result = identity.create_or_update(&db).await?;
         assert!(result.uuid.is_some());
         assert!(result.key().len() > 0);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_duplicated_create() -> Result<(), Error> {
+        let identity: Identity = Faker.fake();
+        let db = new_db_connection().await?;
+        let result = identity.create_or_update(&db).await?;
+        let result2 = identity
+            .create_or_update(&db)
+            .await
+            .expect("Should created / found successfully");
+        assert_eq!(result.key(), result2.key());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_race_condition_create() -> Result<(), Error> {
+        let identity: Identity = Faker.fake();
+        let identity2 = identity.clone();
+        let db = new_db_connection().await?;
+        let db2 = db.clone();
+        let session1 = async move {
+            identity
+                .create_or_update(&db)
+                .await
+                .expect("Should not return error.")
+        };
+        let session2 = async move {
+            identity2
+                .create_or_update(&db2)
+                .await
+                .expect("Should not return error (2nd).")
+        };
+
+        let (created1, created2) = join!(session1, session2);
+        assert_eq!(created1.key(), created2.key());
 
         Ok(())
     }

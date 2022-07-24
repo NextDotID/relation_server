@@ -1,0 +1,21 @@
+# The migration files contain two sections:
+# - up: The commands to execute on migration
+# - down: The commands to execute on rollback (optional)
+# check https://docs.rs/aragog_cli for complete documentation and examples
+---
+up:
+- create_index:
+    name: PlatformIdentityUniqueness
+    collection: Identities
+    fields:
+    - platform
+    - identity
+    settings:                 # Mandatory settings
+      type: persistent        # Mandatory index type (hash, persistent, ttl, geospatial, fulltext, skiplist)
+      unique: true
+      sparse: true            # Allow null value to appear more than once.
+      deduplicate: false
+down:
+- delete_index:
+    name: PlatformIdentityUniqueness
+    collection: Identities
