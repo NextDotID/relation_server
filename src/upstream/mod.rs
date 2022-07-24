@@ -141,6 +141,7 @@ pub enum Platform {
     /// Twitter
     #[strum(serialize = "twitter")]
     #[serde(rename = "twitter")]
+    #[graphql(name = "twitter")]
     Twitter,
 
     /// Ethereum wallet `0x[a-f0-9]{40}`
@@ -170,6 +171,7 @@ pub enum Platform {
     /// Unknown
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
+    #[graphql(name = "unknown")]
     #[default]
     Unknown,
 }
