@@ -97,6 +97,10 @@ impl Default for ConfigCategory {
 
 /// Fetch and parse runtime ENV.
 pub fn app_env() -> ENV {
+    if cfg!(test) {
+        return ENV::Testing;
+    }
+
     std::env::var("RELATION_SERVER_ENV")
         .unwrap_or_else(|_| "development".into())
         .into()
