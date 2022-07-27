@@ -16,8 +16,8 @@ pub fn naive_now() -> NaiveDateTime {
 }
 
 /// Convert timestamp into NaiveDateTime struct.
-pub fn timestamp_to_naive(ts: i64) -> NaiveDateTime {
-    NaiveDateTime::from_timestamp(ts, 0)
+pub fn timestamp_to_naive(ts: i64, ms: u32) -> NaiveDateTime {
+    NaiveDateTime::from_timestamp(ts, ms * 1000000)
 }
 
 pub fn make_client() -> Client<HttpsConnector<HttpConnector>> {
