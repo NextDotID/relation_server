@@ -13,7 +13,7 @@ mod tests {
     async fn test_smoke_nft_rss3() -> Result<(), Error> {
         let target = Target::Identity(
             Platform::Ethereum,
-            "0x6875e13A6301040388F61f5DBa5045E1bE01c657".to_lowercase(),
+            "0x0bd793ea8334a77b2bfd604dbaedca11ea094306".to_lowercase(),
         );
         let _ = Rss3::fetch(&target).await?;
 
@@ -25,8 +25,8 @@ mod tests {
                 .expect("Record not found");
         let contract = Contract::find_by_chain_address(
             &db,
-            &Chain::Polygon,
-            &"0x8f9772d0ed34bd0293098a439912f0f6d6e78e3f".to_string(),
+            &Chain::Ethereum,
+            "0x249aeaa7fa06a63ea5389b72217476db881294df",
         )
         .await?
         .unwrap();

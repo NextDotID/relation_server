@@ -209,7 +209,6 @@ impl Chain {
     async_graphql::Enum,
 )]
 pub enum ContractCategory {
-    #[default]
     #[strum(serialize = "ENS")]
     #[serde(rename = "ENS")]
     #[graphql(name = "ENS")]
@@ -230,6 +229,7 @@ pub enum ContractCategory {
     #[graphql(name = "POAP")]
     POAP,
 
+    #[default]
     #[serde(rename = "unknown")]
     #[graphql(name = "unknown")]
     #[strum(serialize = "unknown")]

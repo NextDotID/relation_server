@@ -22,47 +22,57 @@ use uuid::Uuid;
 
 #[derive(Deserialize, Debug)]
 pub struct Rss3Response {
-    pub version: String,
-    #[serde(default)]
-    pub date_updated: String,
-    pub identifier: String,
     pub total: i64,
-    pub list: Vec<Item>,
+    pub result: Vec<ResultItem>,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Item {
-    pub date_created: String,
+pub struct ResultItem {
     #[serde(default)]
-    pub date_updated: String,
-    pub related_urls: Vec<String>,
-    pub tags: Vec<String>,
+    pub timestamp: String,
     #[serde(default)]
-    pub title: String,
-    pub source: String,
+    pub hash: String,
+    pub index: i64,
+    pub address_from: String,
+    #[serde(default)]
+    pub address_to: String,
+    pub network: Rss3Chain,
+    pub tag: String,
+    pub success: bool,
+    pub actions: Vec<ActionItem>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ActionItem {
+    pub tag: String,
+
+    //pub typeStr: String,
+    //pub timestamp: String,
+    #[serde(default)]
+    pub hash: String,
+    pub index: i64,
+    pub address_from: String,
+    #[serde(default)]
+    pub address_to: String,
     pub metadata: MetaData,
+    #[serde(default)]
+    pub related_urls: Vec<String>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct MetaData {
     #[serde(default)]
-    pub collection_address: String,
-    #[serde(default)]
-    pub collection_name: String,
-    #[serde(default)]
-    pub contract_type: String,
-    pub from: String,
-    #[serde(default)]
-    pub log_index: String,
-    pub network: Rss3Chain,
-    pub proof: String,
-    pub to: String,
-    #[serde(default)]
     pub token_id: String,
     #[serde(default)]
+    pub token_value: String,
+    #[serde(default)]
     pub token_address: String,
+    #[serde(default)]
     pub token_standard: String,
-    pub token_symbol: String,
+    #[serde(default)]
+    pub symbol: String,
+    #[serde(default)]
+    pub contract_address: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -137,7 +147,6 @@ impl Fetcher for Rss3 {
     }
 
     fn can_fetch(target: &Target) -> bool {
-        // TODO: add NFT support
         target.in_platform_supported(vec![Platform::Ethereum])
     }
 }
@@ -148,16 +157,16 @@ async fn fetch_nfts_by_account(
 ) -> Result<TargetProcessedList, Error> {
     let client = make_client();
     let uri: http::Uri = format!(
-        "{}account:{}@{}/notes?tags=NFT",
-        C.upstream.rss3_service.url, identity, platform
+        "{}/{}?tag=collectible",
+        C.upstream.rss3_service.url, identity
     )
     .parse()
     .map_err(|_err: InvalidUri| {
         Error::ParamError(format!("Uri format Error {}", _err.to_string()))
     })?;
 
-    //.parse().map_err(|err| { Error::ParamError(...) })?;
     let mut resp = client.get(uri).await?;
+
     if !resp.status().is_success() {
         let body: ErrorResponse = parse_body(&mut resp).await?;
         return Err(Error::General(
@@ -167,6 +176,7 @@ async fn fetch_nfts_by_account(
     }
 
     let body: Rss3Response = parse_body(&mut resp).await?;
+
     if body.total == 0 {
         return Err(Error::General(
             format!("rss3 Result Get Error"),
@@ -174,66 +184,65 @@ async fn fetch_nfts_by_account(
         ));
     }
 
-    let futures: Vec<_> = body
-        .list
-        .into_iter()
-        .filter(|p| p.metadata.to == identity.to_lowercase())
-        .map(|p| save_item(p))
-        .collect();
+    let mut next_targets: TargetProcessedList = vec![];
+    for p in body.result.into_iter() {
+        let creataed_at = DateTime::parse_from_rfc3339(&p.timestamp).unwrap();
+        let created_at_naive = NaiveDateTime::from_timestamp(creataed_at.timestamp(), 0);
 
-    let next_targets: TargetProcessedList = join_all(futures)
-        .await
-        .into_iter()
-        .flat_map(|result| result.unwrap_or(vec![]))
-        .collect();
+        let db = new_db_connection().await?;
 
+        let from: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Ethereum,
+            identity: identity.to_owned().to_string(),
+            created_at: Some(created_at_naive),
+            display_name: p.address_to.to_lowercase(),
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+        };
+
+        let chain: Chain = p.network.into();
+        for i in p.actions.iter() {
+            if i.index == -1 || i.address_to != identity.to_string() {
+                continue;
+            }
+            let nft_category =
+                ContractCategory::from_str(i.to_owned().metadata.token_standard.as_str())
+                    .unwrap_or_default();
+
+            let to: Contract = Contract {
+                uuid: Uuid::new_v4(),
+                category: nft_category.clone(),
+                address: i
+                    .to_owned()
+                    .metadata
+                    .contract_address
+                    .clone()
+                    .to_lowercase(),
+                chain: chain,
+                symbol: Some(i.to_owned().metadata.symbol.clone()),
+                updated_at: naive_now(),
+            };
+
+            let hold: Hold = Hold {
+                uuid: Uuid::new_v4(),
+                source: DataSource::Rss3,
+                transaction: Some(p.hash.clone()),
+                id: i.to_owned().metadata.token_id.clone(),
+                created_at: Some(created_at_naive),
+                updated_at: naive_now(),
+            };
+            create_identity_to_contract_record(&db, &from, &to, &hold).await?;
+
+            next_targets.push(Target::NFT(
+                chain,
+                nft_category.clone(),
+                i.to_owned().metadata.token_address.clone(),
+                i.to_owned().metadata.token_id.clone(),
+            ));
+        }
+    }
     Ok(next_targets)
-}
-
-async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
-    let creataed_at = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
-    let created_at_naive = NaiveDateTime::from_timestamp(creataed_at.timestamp(), 0);
-
-    let db = new_db_connection().await?;
-
-    let from: Identity = Identity {
-        uuid: Some(Uuid::new_v4()),
-        platform: Platform::Ethereum,
-        identity: p.metadata.to.to_lowercase(),
-        created_at: Some(created_at_naive),
-        display_name: p.metadata.to.to_lowercase(),
-        added_at: naive_now(),
-        avatar_url: None,
-        profile_url: None,
-        updated_at: naive_now(),
-    };
-
-    let chain: Chain = p.metadata.network.into();
-    let nft_category = ContractCategory::from_str(p.metadata.contract_type.as_str()).unwrap();
-
-    let to: Contract = Contract {
-        uuid: Uuid::new_v4(),
-        category: nft_category.clone(),
-        address: p.metadata.collection_address.clone().to_lowercase(),
-        chain: chain,
-        symbol: Some(p.metadata.token_symbol.clone()),
-        updated_at: naive_now(),
-    };
-
-    let hold: Hold = Hold {
-        uuid: Uuid::new_v4(),
-        source: DataSource::Rss3,
-        transaction: Some(p.metadata.proof.clone()),
-        id: p.metadata.token_id.clone(),
-        created_at: Some(created_at_naive),
-        updated_at: naive_now(),
-    };
-    create_identity_to_contract_record(&db, &from, &to, &hold).await?;
-
-    Ok(vec![Target::NFT(
-        chain,
-        nft_category.clone(),
-        p.metadata.collection_address.clone(),
-        p.metadata.token_id.clone(),
-    )])
 }
