@@ -119,7 +119,8 @@ async fn fetch_connections_by_platform_identity(
             platform: Platform::NextID,
             identity: next_id_identity.clone(),
             created_at: Some(timestamp_to_naive(
-                p.created_at.to_string().parse().unwrap(),
+                p.created_at.to_string().parse::<i64>().unwrap(),
+                0,
             )),
             display_name: next_id_identity.clone(),
             added_at: naive_now(),
@@ -140,6 +141,7 @@ async fn fetch_connections_by_platform_identity(
             identity: p.identity.to_string(),
             created_at: Some(timestamp_to_naive(
                 p.created_at.to_string().parse().unwrap(),
+                0,
             )),
             display_name: p.identity.clone(),
             added_at: naive_now(),
@@ -157,6 +159,7 @@ async fn fetch_connections_by_platform_identity(
             record_id: None,
             created_at: Some(timestamp_to_naive(
                 p.created_at.to_string().parse().unwrap(),
+                0,
             )),
             updated_at: naive_now(),
         };

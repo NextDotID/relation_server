@@ -83,11 +83,15 @@ async fn save_item(
     };
     let to_record = to.create_or_update(&db).await.ok()?;
 
+    let create_ms_time: u32 = (item.twitter.timestamp % 1000).try_into().unwrap();
     let proof: Proof = Proof {
         uuid: Uuid::new_v4(),
         source: DataSource::SybilList,
         record_id: Some(item.twitter.tweet_id),
-        created_at: Some(timestamp_to_naive(item.twitter.timestamp / 1000)), // millisecond
+        created_at: Some(timestamp_to_naive(
+            item.twitter.timestamp / 1000,
+            create_ms_time,
+        )), // millisecond
         updated_at: naive_now(),
     };
 

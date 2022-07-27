@@ -145,12 +145,25 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         updated_at: naive_now(),
     };
 
+    let create_ms_time: u32 = (p.create_timestamp.parse::<i64>().unwrap() % 1000)
+        .try_into()
+        .unwrap();
+    let update_ms_time: u32 = (p.modify_timestamp.parse::<i64>().unwrap() % 1000)
+        .try_into()
+        .unwrap();
+
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
         source: DataSource::from_str(p.source.as_str()).unwrap_or(DataSource::Unknown),
         record_id: Some(p.id.clone()),
-        created_at: Some(timestamp_to_naive(p.create_timestamp.parse().unwrap())),
-        updated_at: timestamp_to_naive(p.modify_timestamp.parse().unwrap()),
+        created_at: Some(timestamp_to_naive(
+            p.create_timestamp.parse::<i64>().unwrap() / 1000,
+            create_ms_time,
+        )),
+        updated_at: timestamp_to_naive(
+            p.modify_timestamp.parse::<i64>().unwrap() / 1000,
+            update_ms_time,
+        ),
     };
 
     let _ = create_identity_to_identity_record(&db, &from, &to, &pf).await;

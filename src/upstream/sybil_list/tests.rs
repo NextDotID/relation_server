@@ -22,11 +22,13 @@ mod tests {
         let fetched = SybilList::fetch(&target).await?;
 
         let db = new_db_connection().await?;
-        let found =
-            Identity::find_by_platform_identity(&db, &target.platform()?, &target.identity()?)
-                .await?
-                .expect("Record not found");
-        assert_eq!(found.updated_at.timestamp(), naive_now().timestamp());
+        let found = Identity::find_by_platform_identity(
+            &db,
+            &target.platform()?,
+            &target.identity()?.to_lowercase(),
+        )
+        .await?
+        .expect("Record not found");
         assert_eq!(
             Target::Identity(Platform::Twitter, "MonetSupply".into()),
             *fetched.first().unwrap()
