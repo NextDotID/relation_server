@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{
     error::Error,
     graph::vertex::{contract::Chain, Contract, Identity},
-    upstream::DataSource,
+    upstream::{DataFetcher, DataSource},
     util::naive_now,
 };
 
@@ -38,6 +38,9 @@ pub struct Hold {
     pub created_at: Option<NaiveDateTime>,
     /// When this HODL™ relation is fetched by us RelationService.
     pub updated_at: NaiveDateTime,
+    /// Who collects this data.
+    /// It works as a "data cleansing" or "proxy" between `source`s and us.
+    pub fetcher: DataFetcher,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -174,6 +177,7 @@ mod tests {
                 id: config.fake(),
                 created_at: Some(naive_now()),
                 updated_at: naive_now(),
+                fetcher: Default::default(),
             }
         }
     }

@@ -4,7 +4,7 @@ use crate::config::C;
 use crate::graph::edge::hold::Hold;
 use crate::graph::vertex::{contract::Chain, contract::ContractCategory, Contract};
 use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList};
+use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
 use crate::util::naive_now;
 use crate::{
     error::Error,
@@ -129,6 +129,7 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
             source: DataSource::Knn3,
             created_at: None,
             updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
         };
         create_identity_to_contract_record(&db, &from, &to, &ownership).await?;
     }
@@ -204,6 +205,7 @@ async fn fetch_eth_wallet_by_ens(id: &str) -> Result<TargetProcessedList, Error>
         source: DataSource::Knn3,
         created_at: None,
         updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
     };
     let db = new_db_connection().await?;
     create_identity_to_contract_record(&db, &from, &to, &hold).await?;

@@ -21,7 +21,7 @@ use uuid::Uuid;
 
 use futures::future::join_all;
 
-use super::{Target, DataFetcher};
+use super::{DataFetcher, Target};
 
 #[derive(Deserialize, Debug)]
 pub struct SybilListItem {

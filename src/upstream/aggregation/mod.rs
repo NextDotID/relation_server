@@ -1,6 +1,6 @@
 mod tests;
 
-use super::{Target, DataFetcher};
+use super::{DataFetcher, Target};
 use crate::config::C;
 use crate::error::Error;
 use crate::graph::vertex::{contract::ContractCategory, Contract, Identity};
@@ -189,6 +189,7 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
             source: DataSource::from_str(p.source.as_str()).unwrap_or(DataSource::Unknown),
             created_at: None,
             updated_at: naive_now(),
+            fetcher: DataFetcher::AggregationService,
         };
         let _ = create_identity_to_contract_record(&db, &from, &to_contract_identity, &hold).await;
 

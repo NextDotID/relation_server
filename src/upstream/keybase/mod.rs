@@ -12,7 +12,7 @@ use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
 
-use super::{Target, DataFetcher};
+use super::{DataFetcher, Target};
 
 #[derive(Deserialize, Debug)]
 pub struct KeybaseResponse {

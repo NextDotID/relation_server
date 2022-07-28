@@ -20,6 +20,8 @@ use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
 
+use super::DataFetcher;
+
 #[derive(Deserialize, Debug)]
 pub struct Rss3Response {
     pub version: String,
@@ -227,6 +229,7 @@ async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
         id: p.metadata.token_id.clone(),
         created_at: Some(created_at_naive),
         updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
     };
     create_identity_to_contract_record(&db, &from, &to, &hold).await?;
 
