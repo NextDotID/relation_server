@@ -6,7 +6,6 @@ use crate::error::Error;
 use crate::graph::vertex::{contract::ContractCategory, Contract, Identity};
 use crate::graph::{
     create_identity_to_contract_record, create_identity_to_identity_record, new_db_connection,
-    Edge, Vertex,
 };
 use crate::graph::{edge::Hold, edge::Proof};
 use crate::upstream::{Chain, DataSource, Fetcher, Platform, TargetProcessedList};
@@ -83,7 +82,7 @@ async fn fetch_connections_by_platform_identity(
             Err(err) => {
                 return Err(Error::ParamError(format!(
                     "Uri format Error: {}",
-                    err.to_string()
+                    err
                 )))
             }
         };
@@ -94,15 +93,15 @@ async fn fetch_connections_by_platform_identity(
         }
 
         let body: Response = parse_body(&mut resp).await?;
-        if body.records.len() == 0 {
+        if body.records.is_empty() {
             break;
         }
 
-        let futures: Vec<_> = body.records.into_iter().map(|p| save_item(p)).collect();
+        let futures: Vec<_> = body.records.into_iter().map(save_item).collect();
         let targets: TargetProcessedList = join_all(futures)
             .await
             .into_iter()
-            .flat_map(|result| result.unwrap_or(vec![]))
+            .flat_map(|result| result.unwrap_or_default())
             .collect();
         next_targets.extend(targets);
 
@@ -135,7 +134,7 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
 
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
-        platform: to_platform.clone(),
+        platform: to_platform,
         identity: p.web3_addr.clone(),
         created_at: None,
         display_name: p.web3_addr.clone(),
@@ -169,7 +168,7 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
 
     let _ = create_identity_to_identity_record(&db, &from, &to, &pf).await;
 
-    targets.push(Target::Identity(to_platform.clone(), p.web3_addr.clone()));
+    targets.push(Target::Identity(to_platform, p.web3_addr.clone()));
 
     if p.ens.is_some() {
         let to_contract_identity: Contract = Contract {

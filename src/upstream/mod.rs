@@ -64,7 +64,7 @@ impl Target {
 
     pub fn platform(&self) -> Result<Platform, Error> {
         match self {
-            Self::Identity(platform, _) => Ok(platform.clone()),
+            Self::Identity(platform, _) => Ok(*platform),
             Self::NFT(_, _, _, _) => Err(Error::General(
                 "Target: Get platform error: Not an Identity".into(),
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -88,7 +88,7 @@ impl Target {
                 "Target: Get nft chain error: Not an NFT".into(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             )),
-            Self::NFT(chain, _, _, _) => Ok(chain.clone()),
+            Self::NFT(chain, _, _, _) => Ok(*chain),
         }
     }
 
@@ -98,7 +98,7 @@ impl Target {
                 "Target: Get nft category error: Not an NFT".into(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             )),
-            Self::NFT(_, category, _, _) => Ok(category.clone()),
+            Self::NFT(_, category, _, _) => Ok(*category),
         }
     }
 
@@ -300,7 +300,7 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
     info!(target: "fetch_all", "{}", initial_target);
     let mut up_next: TargetProcessedList = vec![initial_target];
     let mut processed: TargetProcessedList = vec![];
-    while up_next.len() > 0 {
+    while !up_next.is_empty() {
         debug!("fetch_all::up_next | {:?}", up_next);
         let target = up_next.pop().unwrap();
         let fetched = fetch_one(&target).await?;
@@ -310,7 +310,7 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
                 trace!("fetch_all::iter | Fetched {} | duplicated", f);
             } else {
                 trace!("fetch_all::iter | Fetched {} | pushed into up_next", f);
-                up_next.push(f.clone());
+                up_next.push(f);
             }
         });
     }
@@ -363,7 +363,7 @@ pub async fn fetch_one(target: &Target) -> Result<TargetProcessedList, Error> {
     ])
     .await
     .into_iter()
-    .flat_map(|res| res.unwrap_or(vec![]))
+    .flat_map(|res| res.unwrap_or_default())
     .collect();
 
     Ok(results)

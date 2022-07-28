@@ -13,7 +13,7 @@ use crate::{
     util::naive_now,
 };
 
-pub const COLLECTION_NAME: &'static str = "Proofs";
+pub const COLLECTION_NAME: &str = "Proofs";
 
 /// Edge to connect two `Identity`s.
 #[derive(Clone, Serialize, Deserialize, Record)]
@@ -104,7 +104,7 @@ impl Edge<Identity, Identity, ProofRecord> for Proof {
     ) -> Result<ProofRecord, Error> {
         let found = Self::find_by_from_to(db, from, to, &self.source, &self.record_id).await?;
         match found {
-            Some(edge) => Ok(edge.into()),
+            Some(edge) => Ok(edge),
             None => Ok(DatabaseRecord::link(from, to, db, self.clone())
                 .await?
                 .into()),
@@ -114,7 +114,6 @@ impl Edge<Identity, Identity, ProofRecord> for Proof {
     fn is_outdated(&self) -> bool {
         let outdated_in = Duration::days(1);
         self.updated_at
-            .clone()
             .checked_add_signed(outdated_in)
             .unwrap()
             .lt(&naive_now())

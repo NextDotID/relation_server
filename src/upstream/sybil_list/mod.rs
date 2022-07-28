@@ -68,7 +68,7 @@ async fn save_item(
         profile_url: None,
         updated_at: naive_now(),
     };
-    let from_record = from.create_or_update(&db).await.ok()?;
+    let from_record = from.create_or_update(db).await.ok()?;
 
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -81,7 +81,7 @@ async fn save_item(
         profile_url: None,
         updated_at: naive_now(),
     };
-    let to_record = to.create_or_update(&db).await.ok()?;
+    let to_record = to.create_or_update(db).await.ok()?;
 
     let create_ms_time: u32 = (item.twitter.timestamp % 1000).try_into().unwrap();
     let proof: Proof = Proof {
@@ -96,7 +96,7 @@ async fn save_item(
         fetcher: DataFetcher::RelationService,
     };
 
-    proof.connect(&db, &from_record, &to_record).await.ok()?;
+    proof.connect(db, &from_record, &to_record).await.ok()?;
     Some((Platform::Twitter, item.twitter.handle))
 }
 
@@ -167,7 +167,7 @@ impl Fetcher for SybilList {
                     let next_target: DatabaseRecord<Identity> = found.record.to_record(&db).await?;
 
                     Ok(vec![Target::Identity(
-                        next_target.platform.clone(),
+                        next_target.platform,
                         next_target.identity.clone(),
                     )])
                 }
@@ -189,7 +189,7 @@ impl Fetcher for SybilList {
                         found.record.from_record(&db).await?;
 
                     Ok(vec![Target::Identity(
-                        next_target.platform.clone(),
+                        next_target.platform,
                         next_target.identity.clone(),
                     )])
                 }

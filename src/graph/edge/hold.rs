@@ -127,7 +127,7 @@ impl Edge<Identity, Contract, HoldRecord> for Hold {
     ) -> Result<HoldRecord, Error> {
         let found = Self::find_by_from_to_id(db, from, to, &self.id).await?;
         match found {
-            Some(edge) => Ok(edge.into()),
+            Some(edge) => Ok(edge),
             None => Ok(DatabaseRecord::link(from, to, db, self.clone())
                 .await?
                 .into()),
@@ -154,7 +154,6 @@ impl Edge<Identity, Contract, HoldRecord> for Hold {
     fn is_outdated(&self) -> bool {
         let outdated_in = Duration::hours(8);
         self.updated_at
-            .clone()
             .checked_add_signed(outdated_in)
             .unwrap()
             .lt(&naive_now())

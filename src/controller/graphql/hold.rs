@@ -143,7 +143,7 @@ impl HoldQuery {
             .or(category.default_contract_address())
             .ok_or(Error::GraphQLError("Contract address is required.".into()))?;
         let target = Target::NFT(
-            chain.clone(),
+            chain,
             category,
             contract_address.clone(),
             id.clone(),
@@ -153,7 +153,7 @@ impl HoldQuery {
                 if hold.is_outdated() {
                     tokio::spawn(async move { fetch_all(target).await });
                 }
-                Ok(Some(hold.into()))
+                Ok(Some(hold))
             }
 
             None => {

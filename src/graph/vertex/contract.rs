@@ -328,7 +328,7 @@ impl Vertex<ContractRecord> for Contract {
                 found.updated_at = naive_now();
                 found.symbol = self.symbol.clone();
                 found.save(db).await?;
-                Ok(found.into())
+                Ok(found)
             }
         }
     }
@@ -351,7 +351,6 @@ impl Vertex<ContractRecord> for Contract {
     fn is_outdated(&self) -> bool {
         let outdated_in = Duration::hours(1);
         self.updated_at
-            .clone()
             .checked_add_signed(outdated_in)
             .unwrap()
             .lt(&naive_now())
@@ -390,7 +389,7 @@ mod tests {
     impl Contract {
         pub async fn create_dummy(db: &DatabaseConnection) -> Result<ContractRecord, Error> {
             let nft: Contract = Faker.fake();
-            Ok(nft.create_or_update(db).await?.into())
+            nft.create_or_update(db).await
         }
     }
 
@@ -410,7 +409,7 @@ mod tests {
     async fn test_creation() -> Result<(), Error> {
         let db = new_db_connection().await?;
         let created = Contract::create_dummy(&db).await?;
-        assert!(created.key().len() > 0);
+        assert!(!created.key().is_empty());
 
         Ok(())
     }

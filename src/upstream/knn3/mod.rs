@@ -3,14 +3,14 @@ mod tests;
 use crate::config::C;
 use crate::graph::edge::hold::Hold;
 use crate::graph::vertex::{contract::Chain, contract::ContractCategory, Contract};
-use crate::graph::{Edge, Vertex};
+
 use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
 use crate::util::naive_now;
 use crate::{
     error::Error,
     graph::{create_identity_to_contract_record, new_db_connection, vertex::Identity},
 };
-use aragog::DatabaseConnection;
+
 use async_trait::async_trait;
 use gql_client::Client;
 use log::{info, warn};

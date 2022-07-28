@@ -140,11 +140,11 @@ impl Vertex<IdentityRecord> for Identity {
                 found.display_name = self.display_name.clone();
                 found.profile_url = self.profile_url.clone();
                 found.avatar_url = self.avatar_url.clone();
-                found.created_at = self.created_at.or(found.created_at.clone());
+                found.created_at = self.created_at.or(found.created_at);
                 found.updated_at = naive_now();
 
                 found.save(db).await?;
-                Ok(found.into())
+                Ok(found)
             }
         }
     }
@@ -166,7 +166,6 @@ impl Vertex<IdentityRecord> for Identity {
     fn is_outdated(&self) -> bool {
         let outdated_in = Duration::hours(1);
         self.updated_at
-            .clone()
             .checked_add_signed(outdated_in)
             .unwrap()
             .lt(&naive_now())
@@ -238,11 +237,11 @@ impl IdentityRecord {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    
 
     use aragog::DatabaseConnection;
     use fake::{Dummy, Fake, Faker};
-    use tokio::{join, time::sleep};
+    use tokio::{join};
     use uuid::Uuid;
 
     use super::{Identity, IdentityRecord};
@@ -257,7 +256,7 @@ mod tests {
         /// Create test dummy data in database.
         pub async fn create_dummy(db: &DatabaseConnection) -> Result<IdentityRecord, Error> {
             let identity: Identity = Faker.fake();
-            Ok(identity.create_or_update(db).await?.into())
+            identity.create_or_update(db).await
         }
     }
 
@@ -283,7 +282,7 @@ mod tests {
         let db = new_db_connection().await?;
         let result = identity.create_or_update(&db).await?;
         assert!(result.uuid.is_some());
-        assert!(result.key().len() > 0);
+        assert!(!result.key().is_empty());
 
         Ok(())
     }

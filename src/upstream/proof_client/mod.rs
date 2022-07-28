@@ -89,7 +89,7 @@ async fn fetch_connections_by_platform_identity(
         C.upstream.proof_service.url, platform, identity
     )
     .parse()
-    .map_err(|_err| Error::ParamError(format!("Uri format Error")))?;
+    .map_err(|_err| Error::ParamError("Uri format Error".to_string()))?;
     let mut resp = client.get(uri).await?;
 
     if !resp.status().is_success() {
@@ -139,7 +139,7 @@ async fn fetch_connections_by_platform_identity(
 
         let to: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
-            platform: to_platform.clone().unwrap(),
+            platform: to_platform.unwrap(),
             identity: p.identity.to_string(),
             created_at: Some(timestamp_to_naive(
                 p.created_at.to_string().parse().unwrap(),

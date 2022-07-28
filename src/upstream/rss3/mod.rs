@@ -7,7 +7,6 @@ use crate::{
         edge::hold::Hold,
         new_db_connection,
         vertex::{contract::Chain, contract::ContractCategory, Contract, Identity},
-        Edge, Vertex,
     },
     upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList},
     util::{make_client, naive_now, parse_body},
@@ -110,8 +109,8 @@ pub enum Rss3Chain {
 impl From<Rss3Chain> for Chain {
     fn from(network: Rss3Chain) -> Self {
         match network {
-            Rss3Chain::Ethereum => return Chain::Ethereum,
-            Rss3Chain::Polygon => return Chain::Polygon,
+            Rss3Chain::Ethereum => Chain::Ethereum,
+            Rss3Chain::Polygon => Chain::Polygon,
             Rss3Chain::EthereumClassic => Chain::EthereumClassic,
             Rss3Chain::BinanceSmartChain => Chain::BNBSmartChain,
             Rss3Chain::Zksync => Chain::ZKSync,
@@ -155,7 +154,7 @@ async fn fetch_nfts_by_account(
     )
     .parse()
     .map_err(|_err: InvalidUri| {
-        Error::ParamError(format!("Uri format Error {}", _err.to_string()))
+        Error::ParamError(format!("Uri format Error {}", _err))
     })?;
 
     //.parse().map_err(|err| { Error::ParamError(...) })?;
@@ -171,7 +170,7 @@ async fn fetch_nfts_by_account(
     let body: Rss3Response = parse_body(&mut resp).await?;
     if body.total == 0 {
         return Err(Error::General(
-            format!("rss3 Result Get Error"),
+            "rss3 Result Get Error".to_string(),
             resp.status(),
         ));
     }
@@ -180,13 +179,13 @@ async fn fetch_nfts_by_account(
         .list
         .into_iter()
         .filter(|p| p.metadata.to == identity.to_lowercase())
-        .map(|p| save_item(p))
+        .map(save_item)
         .collect();
 
     let next_targets: TargetProcessedList = join_all(futures)
         .await
         .into_iter()
-        .flat_map(|result| result.unwrap_or(vec![]))
+        .flat_map(|result| result.unwrap_or_default())
         .collect();
 
     Ok(next_targets)
@@ -215,9 +214,9 @@ async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
 
     let to: Contract = Contract {
         uuid: Uuid::new_v4(),
-        category: nft_category.clone(),
+        category: nft_category,
         address: p.metadata.collection_address.clone().to_lowercase(),
-        chain: chain,
+        chain,
         symbol: Some(p.metadata.token_symbol.clone()),
         updated_at: naive_now(),
     };
@@ -235,7 +234,7 @@ async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
 
     Ok(vec![Target::NFT(
         chain,
-        nft_category.clone(),
+        nft_category,
         p.metadata.collection_address.clone(),
         p.metadata.token_id.clone(),
     )])

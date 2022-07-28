@@ -33,7 +33,7 @@ impl IdentityRecord {
     async fn status(&self) -> Vec<DataStatus> {
         use DataStatus::*;
         let mut current: Vec<DataStatus> = vec![];
-        if self.key().len() > 0 {
+        if !self.key().is_empty() {
             current.push(Cached);
             if self.is_outdated() {
                 current.push(Outdated);
@@ -54,7 +54,7 @@ impl IdentityRecord {
     /// Platform.  See `avaliablePlatforms` or schema definition for a
     /// list of platforms supported by RelationService.
     async fn platform(&self) -> Platform {
-        self.platform.clone()
+        self.platform
     }
 
     /// Identity on target platform.  Username or database primary key
@@ -155,12 +155,12 @@ impl IdentityQuery {
     ) -> Result<Option<IdentityRecord>> {
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let platform: Platform = platform.parse()?;
-        let target = Target::Identity(platform.clone(), identity.clone());
+        let target = Target::Identity(platform, identity.clone());
         // FIXME: Still kinda dirty. Should be in an background queue/worker-like shape.
-        match Identity::find_by_platform_identity(&db, &platform, &identity).await? {
+        match Identity::find_by_platform_identity(db, &platform, &identity).await? {
             None => {
                 fetch_all(target).await?;
-                Identity::find_by_platform_identity(&db, &platform, &identity).await
+                Identity::find_by_platform_identity(db, &platform, &identity).await
             }
             Some(found) => {
                 if found.is_outdated() {

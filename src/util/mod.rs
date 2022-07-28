@@ -22,8 +22,8 @@ pub fn timestamp_to_naive(ts: i64, ms: u32) -> NaiveDateTime {
 
 pub fn make_client() -> Client<HttpsConnector<HttpConnector>> {
     let https = HttpsConnector::new();
-    let client = Client::builder().build::<_, hyper::Body>(https);
-    client
+    
+    Client::builder().build::<_, hyper::Body>(https)
 }
 
 pub async fn parse_body<T>(resp: &mut Response<Body>) -> Result<T, Error>
@@ -37,5 +37,5 @@ where
     }
     let body = std::str::from_utf8(&body_bytes).unwrap();
 
-    Ok(serde_json::from_str(&body)?)
+    Ok(serde_json::from_str(body)?)
 }
