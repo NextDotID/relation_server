@@ -6,6 +6,7 @@ mod rss3;
 mod sybil_list;
 #[cfg(test)]
 mod tests;
+mod the_graph;
 
 use crate::{
     error::Error,
@@ -233,6 +234,11 @@ pub enum DataSource {
     #[serde(rename = "ethLeaderboard")]
     #[graphql(name = "ethLeaderboard")]
     EthLeaderboard,
+
+    #[strum(serialize = "thegraph")]
+    #[serde(rename = "thegraph")]
+    #[graphql(name = "thegraph")]
+    TheGraph,
 
     /// Unknown
     #[strum(serialize = "unknown")]
