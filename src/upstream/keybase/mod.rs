@@ -12,7 +12,7 @@ use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
 
-use super::Target;
+use super::{Target, DataFetcher};
 
 #[derive(Deserialize, Debug)]
 pub struct KeybaseResponse {
@@ -176,6 +176,7 @@ async fn fetch_connections_by_platform_identity(
             record_id: Some(p.proof_id.clone()),
             created_at: None,
             updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
         };
 
         let _ = create_identity_to_identity_record(&db, &from, &to, &pf).await?;

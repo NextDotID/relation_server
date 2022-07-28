@@ -13,6 +13,8 @@ use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
 
+use super::DataFetcher;
+
 /// https://github.com/nextdotid/proof-server/blob/master/docs/api.apib
 #[derive(Deserialize, Debug)]
 pub struct ProofQueryResponse {
@@ -162,6 +164,7 @@ async fn fetch_connections_by_platform_identity(
                 0,
             )),
             updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
         };
         pf.connect(&db, &from_record, &to_record).await?;
     }

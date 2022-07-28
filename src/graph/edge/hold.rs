@@ -1,5 +1,5 @@
 use aragog::{
-    query::{Comparison, Filter, Query, QueryResult},
+    query::{Comparison, Filter, QueryResult},
     DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
 use chrono::{Duration, NaiveDateTime};
@@ -8,10 +8,7 @@ use uuid::Uuid;
 
 use crate::{
     error::Error,
-    graph::vertex::{
-        contract::{Chain, ContractCategory},
-        Contract, Identity,
-    },
+    graph::vertex::{contract::Chain, Contract, Identity},
     upstream::DataSource,
     util::naive_now,
 };

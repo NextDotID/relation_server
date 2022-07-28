@@ -83,9 +83,7 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
         addr: &identity.to_lowercase(), // Yes, KNN3 is case-sensitive.
     };
 
-    let resp = client
-        .query_with_vars::<EthQueryResponse, EthQueryVars>(query, vars)
-        .await;
+    let resp: Result<Option<EthQueryResponse>, _> = client.query_with_vars(query, vars).await;
     if resp.is_err() {
         warn!(
             "KNN3 fetch | Failed to fetch addrs: {}, err: {:?}",

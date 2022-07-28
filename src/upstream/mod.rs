@@ -4,6 +4,8 @@ mod knn3;
 mod proof_client;
 mod rss3;
 mod sybil_list;
+#[cfg(test)]
+mod tests;
 
 use crate::{
     error::Error,
@@ -220,7 +222,7 @@ pub enum DataSource {
     #[strum(serialize = "knn3")]
     #[serde(rename = "knn3")]
     #[graphql(name = "knn3")]
-    Knn3, // = "rss3",
+    Knn3, // = "knn3",
 
     #[strum(serialize = "cyberconnect")]
     #[serde(rename = "cyberconnect")]
@@ -238,6 +240,37 @@ pub enum DataSource {
     #[graphql(name = "unknown")]
     #[default]
     Unknown,
+}
+
+/// Who collects all the data.
+/// It works as a "data cleansing" or "proxy" between `Upstream`s and us.
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Display,
+    EnumString,
+    PartialEq,
+    Eq,
+    EnumIter,
+    Default,
+    Copy,
+    async_graphql::Enum,
+)]
+pub enum DataFetcher {
+    /// This server
+    #[strum(serialize = "relation_service")]
+    #[serde(rename = "relation_service")]
+    #[graphql(name = "relation_service")]
+    #[default]
+    RelationService,
+
+    /// Aggregation service
+    #[strum(serialize = "aggregation_service")]
+    #[serde(rename = "aggregation_service")]
+    #[graphql(name = "aggregation_service")]
+    AggregationService,
 }
 
 /// All asymmetric cryptography algorithm supported by RelationService.
@@ -264,7 +297,7 @@ pub trait Fetcher {
 
 /// Find all available (platform, identity) in all `Upstream`s.
 pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
-    info!("fetch_all : {}", initial_target);
+    info!(target: "fetch_all", "{}", initial_target);
     let mut up_next: TargetProcessedList = vec![initial_target];
     let mut processed: TargetProcessedList = vec![];
     while up_next.len() > 0 {
@@ -342,26 +375,4 @@ pub async fn prefetch() -> Result<(), Error> {
     sybil_list::prefetch().await?;
     info!("Prefetch completed.");
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::error::Error;
-    use crate::upstream::{fetch_all, fetch_one, Platform, Target};
-
-    #[tokio::test]
-    async fn test_fetcher_result() -> Result<(), Error> {
-        let result = fetch_all(Target::Identity(Platform::Twitter, "0xsannie".into())).await?;
-        assert_eq!(result, ());
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_fetch_one_result() -> Result<(), Error> {
-        let result = fetch_one(&Target::Identity(Platform::Twitter, "0xsannie".into())).await?;
-        assert_ne!(result.len(), 0);
-
-        Ok(())
-    }
 }

@@ -3,7 +3,10 @@ mod tests {
         error::Error,
         graph::edge::Hold,
         graph::new_db_connection,
-        graph::vertex::{contract::Chain, Contract, Identity},
+        graph::vertex::{
+            contract::{Chain, ContractCategory},
+            Contract, Identity,
+        },
         upstream::rss3::Rss3,
         upstream::Platform,
         upstream::{Fetcher, Target},

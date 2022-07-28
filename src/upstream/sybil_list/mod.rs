@@ -21,7 +21,7 @@ use uuid::Uuid;
 
 use futures::future::join_all;
 
-use super::Target;
+use super::{Target, DataFetcher};
 
 #[derive(Deserialize, Debug)]
 pub struct SybilListItem {
@@ -93,6 +93,7 @@ async fn save_item(
             create_ms_time,
         )), // millisecond
         updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
     };
 
     proof.connect(&db, &from_record, &to_record).await.ok()?;

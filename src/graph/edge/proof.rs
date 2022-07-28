@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{
     error::Error,
     graph::{vertex::Identity, Edge},
-    upstream::DataSource,
+    upstream::{DataFetcher, DataSource},
     util::naive_now,
 };
 
@@ -31,16 +31,20 @@ pub struct Proof {
     pub created_at: Option<NaiveDateTime>,
     /// When this connection is fetched by us RelationService.
     pub updated_at: NaiveDateTime,
+    /// Who collects this data.
+    /// It works as a "data cleansing" or "proxy" between `source`s and us.
+    pub fetcher: DataFetcher,
 }
 
 impl Default for Proof {
     fn default() -> Self {
         Self {
             uuid: Uuid::new_v4(),
-            source: DataSource::NextID,
+            source: DataSource::default(),
             record_id: None,
             created_at: None,
             updated_at: naive_now(),
+            fetcher: Default::default(),
         }
     }
 }
@@ -149,6 +153,7 @@ mod tests {
                 record_id: Some(config.fake()),
                 created_at: Some(config.fake()),
                 updated_at: naive_now(),
+                fetcher: Default::default(),
             }
         }
     }
