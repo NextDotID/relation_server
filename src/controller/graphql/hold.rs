@@ -7,7 +7,7 @@ use crate::{
             Contract, Identity, IdentityRecord,
         },
     },
-    upstream::{fetch_all, DataSource, Target},
+    upstream::{fetch_all, DataSource, Target, DataFetcher},
 };
 use aragog::{DatabaseConnection, DatabaseRecord};
 use async_graphql::{Context, Object};
@@ -93,6 +93,12 @@ impl HoldRecord {
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let identity: DatabaseRecord<Identity> = self.record.from_record(db).await?;
         Ok(identity.into())
+    }
+
+    /// Who collects this data.
+    /// It works as a "data cleansing" or "proxy" between `source`s and us.
+    async fn fetcher(&self) -> DataFetcher {
+        self.fetcher
     }
 }
 
