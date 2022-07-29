@@ -235,9 +235,9 @@ pub enum DataSource {
     #[graphql(name = "ethLeaderboard")]
     EthLeaderboard,
 
-    #[strum(serialize = "thegraph")]
-    #[serde(rename = "thegraph")]
-    #[graphql(name = "thegraph")]
+    #[strum(serialize = "the_graph")]
+    #[serde(rename = "the_graph")]
+    #[graphql(name = "the_graph")]
     TheGraph,
 
     /// Unknown

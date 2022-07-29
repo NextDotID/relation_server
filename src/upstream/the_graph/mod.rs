@@ -3,8 +3,7 @@ mod tests;
 use crate::config::C;
 use crate::graph::edge::hold::Hold;
 use crate::graph::vertex::{contract::Chain, contract::ContractCategory, Contract};
-use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList};
+use crate::upstream::{DataSource, DataFetcher, Platform, Fetcher, Target, TargetProcessedList};
 use crate::util::naive_now;
 use crate::{
     error::Error,
@@ -96,7 +95,7 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
 
     let client = Client::new(C.upstream.the_graph_service.url.clone());
     let vars = EthQueryVars {
-        addr: &identity.to_lowercase(), // Yes, KNN3 is case-sensitive.
+        addr: &identity.to_lowercase(),
     };
 
     let resp = client
@@ -156,6 +155,7 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
             source: DataSource::TheGraph,
             created_at: None,
             updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
         };
         create_identity_to_contract_record(&db, &from, &to, &ownership).await?;
         next_targets.push(Target::NFT(
@@ -258,6 +258,7 @@ async fn fetch_eth_wallet_by_ens(ens_str: &str) -> Result<TargetProcessedList, E
         source: DataSource::TheGraph,
         created_at: None,
         updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
     };
     let db = new_db_connection().await?;
     create_identity_to_contract_record(&db, &from, &to, &hold).await?;
