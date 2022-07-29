@@ -31,6 +31,8 @@ pub enum Error {
     ArangoDBError(#[from] aragog::Error),
     #[error("Parse error: {0}")]
     EnumParseError(#[from] strum::ParseError),
+    #[error("Parse Int error: {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
     #[error("GraphQL error: {0}")]
     GraphQLError(String),
 }
@@ -51,6 +53,7 @@ impl Error {
             Error::ArangoDBError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::EnumParseError(_) => StatusCode::BAD_REQUEST,
             Error::GraphQLError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::ParseIntError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::UuidError(_) => StatusCode::BAD_REQUEST,
         }
     }

@@ -37,7 +37,7 @@ pub struct Upstream {
     pub keybase_service: ConfigKeybaseService,
     pub knn3_service: ConfigKnn3Service,
     pub rss3_service: ConfigRss3Service,
-    pub the_graph_service: ConfigTheGraphService,
+    pub the_graph: ConfigUpstreamTheGraph,
 }
 
 #[derive(Clone, Deserialize, Default)]
@@ -86,8 +86,8 @@ pub struct ConfigRss3Service {
 }
 
 #[derive(Clone, Deserialize, Default)]
-pub struct ConfigTheGraphService {
-    pub url: String,
+pub struct ConfigUpstreamTheGraph {
+    pub ens: String,
 }
 
 #[derive(Clone, Deserialize)]

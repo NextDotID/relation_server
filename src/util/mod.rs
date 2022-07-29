@@ -15,6 +15,12 @@ pub fn naive_now() -> NaiveDateTime {
     chrono::Utc::now().naive_utc()
 }
 
+/// Parse `String` type, second-based timestamp to NaiveDateTime
+pub fn parse_timestamp(timestamp: &str) -> Result<NaiveDateTime, Error> {
+    let timestamp: i64 = timestamp.parse()?;
+    Ok(timestamp_to_naive(timestamp, 0))
+}
+
 /// Convert timestamp into NaiveDateTime struct.
 pub fn timestamp_to_naive(ts: i64, ms: u32) -> NaiveDateTime {
     NaiveDateTime::from_timestamp(ts, ms * 1000000)
@@ -22,7 +28,7 @@ pub fn timestamp_to_naive(ts: i64, ms: u32) -> NaiveDateTime {
 
 pub fn make_client() -> Client<HttpsConnector<HttpConnector>> {
     let https = HttpsConnector::new();
-    
+
     Client::builder().build::<_, hyper::Body>(https)
 }
 
