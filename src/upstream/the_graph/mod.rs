@@ -90,7 +90,7 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
     let resp = client
         .query_with_vars::<EthQueryResponse, EthQueryVars>(query, vars)
         .await;
-    //println!("resp {:?}", resp);
+
     if resp.is_err() {
         warn!(
             "The Graph fetch | Failed to fetch addrs: {}, err: {:?}",
@@ -194,10 +194,8 @@ async fn fetch_eth_wallet_by_ens(ens_str: &str) -> Result<TargetProcessedList, E
         );
         return Ok(vec![]);
     }
-    let db = new_db_connection().await?;
-    // let mut next_targets: TargetProcessedList = Vec::new();
 
-    // NOTE: not sure if this result must have one and only one.
+    // ens => addr use the first result
     let address = &res
         .domains
         .first()

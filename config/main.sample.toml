@@ -28,3 +28,6 @@ url = "https://mw.graphql.knn3.xyz/"
 [upstream.rss3_service]
 url = "https://pregod.rss3.dev/v0.4.0/"
 
+[upstream.the_graph_service]
+url = "https://api.thegraph.com/subgraphs/name/ensdomains/ens"
+

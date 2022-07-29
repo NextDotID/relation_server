@@ -8,16 +8,14 @@ mod tests {
             vertex::Identity,
             vertex::{contract::ContractCategory, Contract},
         },
-        upstream::{the_graph::TheGraph, Fetcher, Platform, Target, DataSource},
+        upstream::{the_graph::TheGraph, DataSource, Fetcher, Platform, Target},
     };
 
     #[tokio::test]
-    async fn test_the_graph_fetch_ens_by_addr() -> Result<(), Error> {
+    async fn test_the_graph() -> Result<(), Error> {
         let target = Target::Identity(
             Platform::Ethereum,
-            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045"
-                .to_string()
-                .to_lowercase(),
+            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".to_string(),
         );
         let targets = TheGraph::fetch(&target).await?;
         println!("targets {:?}", targets);
@@ -53,6 +51,7 @@ mod tests {
         )
         .await?
         .expect("Record not found");
+
         assert_eq!(hold.source, DataSource::TheGraph);
         Ok(())
     }
