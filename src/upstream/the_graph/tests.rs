@@ -66,11 +66,20 @@ mod tests {
         );
         let address_targets = TheGraph::fetch(&target).await?;
         println!("targets {:?}", address_targets);
+        assert!(address_targets.len() > 0);
+        assert_eq!(
+            address_targets.first().unwrap().identity().unwrap(),
+            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".to_string()
+        );
 
-        Identity::find_by_platform_identity(&db, &Platform::Ethereum, "0xd8da6bf26964af9d7eed9e03e53415d37aa96045")
-            .await
-            .expect("Fail to find identity")
-            .expect("Record not found");
+        Identity::find_by_platform_identity(
+            &db,
+            &Platform::Ethereum,
+            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
+        )
+        .await
+        .expect("Fail to find identity")
+        .expect("Record not found");
 
         Contract::find_by_chain_address(
             &db,
