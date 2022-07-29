@@ -31,8 +31,20 @@ pub struct EthQueryResponseDomains {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct Domain {
+    name: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct EthQueryResponseTransfers {
+    domain: Domain,
+    transactionID: String,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct EthQueryResponse {
     domains: Vec<EthQueryResponseDomains>,
+    transfers: Option<Vec<EthQueryResponseTransfers>>,
 }
 
 #[derive(Serialize)]
@@ -117,7 +129,6 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
         {
             continue;
         }
-
         let from: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
             platform: Platform::Ethereum,
@@ -169,6 +180,12 @@ async fn fetch_eth_wallet_by_ens(ens_str: &str) -> Result<TargetProcessedList, E
                   id
                 }
               }
+            transfers (where:{ domain_: { name : $ens}}) {
+                domain {
+                  name
+                }
+                transactionID
+              }
         }
     "#;
     let client = Client::new(C.upstream.the_graph_service.url.clone());
@@ -178,6 +195,7 @@ async fn fetch_eth_wallet_by_ens(ens_str: &str) -> Result<TargetProcessedList, E
     let response = client
         .query_with_vars::<EthQueryResponse, ENSQueryVars>(query, vars)
         .await;
+
     if response.is_err() {
         warn!(
             "The Graph fetch | Failed to fetch addrs using ENS: {}, error: {:?}",
@@ -187,6 +205,8 @@ async fn fetch_eth_wallet_by_ens(ens_str: &str) -> Result<TargetProcessedList, E
         return Ok(vec![]);
     }
     let res = response.unwrap().unwrap();
+
+
     if res.domains.is_empty() {
         info!(
             "The Graph fetch | ens: {} cannot find any result",
@@ -204,6 +224,13 @@ async fn fetch_eth_wallet_by_ens(ens_str: &str) -> Result<TargetProcessedList, E
         .as_ref()
         .unwrap()
         .id;
+
+    let mut tx_id = None;
+    if res.transfers.is_some() {
+        let transfers = res.transfers.unwrap();
+        let transfer = transfers.first().unwrap();
+        tx_id = Some(transfer.transactionID.clone());
+    }
 
     let from = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -226,7 +253,7 @@ async fn fetch_eth_wallet_by_ens(ens_str: &str) -> Result<TargetProcessedList, E
     };
     let hold = Hold {
         uuid: Uuid::new_v4(),
-        transaction: None,
+        transaction: tx_id,
         id: ens_str.to_string(),
         source: DataSource::TheGraph,
         created_at: None,
