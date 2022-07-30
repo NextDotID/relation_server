@@ -7,7 +7,7 @@ use crate::{
             Contract, Identity, IdentityRecord,
         },
     },
-    upstream::{fetch_all, DataSource, Target, DataFetcher},
+    upstream::{fetch_all, DataFetcher, DataSource, Target},
 };
 use aragog::{DatabaseConnection, DatabaseRecord};
 use async_graphql::{Context, Object};
@@ -142,12 +142,7 @@ impl HoldQuery {
         let contract_address = address
             .or(category.default_contract_address())
             .ok_or(Error::GraphQLError("Contract address is required.".into()))?;
-        let target = Target::NFT(
-            chain,
-            category,
-            contract_address.clone(),
-            id.clone(),
-        );
+        let target = Target::NFT(chain, category, contract_address.clone(), id.clone());
         match Hold::find_by_id_chain_address(db, &id, &chain, &contract_address).await? {
             Some(hold) => {
                 if hold.is_outdated() {

@@ -237,11 +237,10 @@ impl IdentityRecord {
 
 #[cfg(test)]
 mod tests {
-    
 
     use aragog::DatabaseConnection;
     use fake::{Dummy, Fake, Faker};
-    use tokio::{join};
+    use tokio::join;
     use uuid::Uuid;
 
     use super::{Identity, IdentityRecord};

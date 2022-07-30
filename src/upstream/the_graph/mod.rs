@@ -22,47 +22,49 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Serialize)]
-pub struct QueryVars {
+struct QueryVars {
     target: String,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct QueryResponse {
+struct QueryResponse {
     domains: Vec<Domain>,
     // transfers: Option<Vec<EthQueryResponseTransfers>>,
 }
 
 #[derive(Deserialize, Debug)]
 #[allow(non_snake_case)]
-pub struct Domain {
+struct Domain {
     /// ENS name (`something.eth`)
     name: String,
     /// Creation timestamp (in secods)
     createdAt: String,
     /// ETH event logs for this ENS.
     events: Vec<DomainEvent>,
-    /// Reverse resolve record setted on this ENS.
+    /// Reverse resolve record set on this ENS.
     resolvedAddress: Option<Account>,
     /// Owner info
     owner: Account,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct Account {
+struct Account {
     /// Ethereum wallet
     id: String,
 }
 
 #[derive(Deserialize, Debug)]
 #[allow(non_snake_case)]
-pub struct DomainEvent {
-    pub blockNumber: u128,
-    pub transactionID: String,
-    pub domain: DomainTiny,
+#[allow(dead_code)]
+struct DomainEvent {
+    blockNumber: u128,
+    transactionID: String,
+    domain: DomainTiny,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct DomainTiny {
+#[allow(dead_code)]
+struct DomainTiny {
     name: String,
 }
 

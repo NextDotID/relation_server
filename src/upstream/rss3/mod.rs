@@ -153,9 +153,7 @@ async fn fetch_nfts_by_account(
         C.upstream.rss3_service.url, identity, platform
     )
     .parse()
-    .map_err(|_err: InvalidUri| {
-        Error::ParamError(format!("Uri format Error {}", _err))
-    })?;
+    .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
 
     //.parse().map_err(|err| { Error::ParamError(...) })?;
     let mut resp = client.get(uri).await?;

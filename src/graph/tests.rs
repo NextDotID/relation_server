@@ -4,6 +4,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_new_db_connection() {
-        assert!(!new_db_connection().await.unwrap().collections_names().is_empty())
+        assert!(!new_db_connection()
+            .await
+            .unwrap()
+            .collections_names()
+            .is_empty())
     }
 }

@@ -3,7 +3,7 @@
 # Editing it will have no effect.
 # 
 ---
-version: 1658645480601
+version: 1659183120167
 collections:
   - name: Identities
     is_edge_collection: false
@@ -12,6 +12,8 @@ collections:
   - name: Contracts
     is_edge_collection: false
   - name: Holds
+    is_edge_collection: true
+  - name: Resolves
     is_edge_collection: true
 indexes:
   - name: PlatformIdentityUniqueness

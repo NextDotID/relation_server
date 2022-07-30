@@ -2,7 +2,7 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::{create_identity_to_identity_record};
+use crate::graph::create_identity_to_identity_record;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
 use crate::util::{make_client, naive_now, parse_body};
@@ -106,12 +106,7 @@ async fn fetch_connections_by_platform_identity(
     .parse()
     {
         Ok(n) => n,
-        Err(err) => {
-            return Err(Error::ParamError(format!(
-                "Uri format Error: {}",
-                err
-            )))
-        }
+        Err(err) => return Err(Error::ParamError(format!("Uri format Error: {}", err))),
     };
 
     let mut resp = client.get(uri).await?;

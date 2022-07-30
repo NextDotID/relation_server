@@ -79,12 +79,7 @@ async fn fetch_connections_by_platform_identity(
         .parse()
         {
             Ok(n) => n,
-            Err(err) => {
-                return Err(Error::ParamError(format!(
-                    "Uri format Error: {}",
-                    err
-                )))
-            }
+            Err(err) => return Err(Error::ParamError(format!("Uri format Error: {}", err))),
         };
 
         let mut resp = client.get(uri).await?;
