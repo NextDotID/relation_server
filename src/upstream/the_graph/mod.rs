@@ -226,10 +226,7 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
             )),
             Target::NFT(_, _, _, _) => {
                 let owner_address = domain.owner.id.clone();
-                next_targets.push(Target::Identity(
-                    Platform::Ethereum,
-                    owner_address.clone(),
-                ));
+                next_targets.push(Target::Identity(Platform::Ethereum, owner_address.clone()));
                 if resolved_address.is_some() && resolved_address != Some(owner_address) {
                     next_targets.push(Target::Identity(
                         Platform::Ethereum,

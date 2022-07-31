@@ -13,7 +13,7 @@ use crate::{
     graph::vertex::contract::{Chain, ContractCategory},
     upstream::{
         aggregation::Aggregation, keybase::Keybase, knn3::Knn3, proof_client::ProofClient,
-        rss3::Rss3, sybil_list::SybilList,
+        rss3::Rss3, sybil_list::SybilList, the_graph::TheGraph,
     },
 };
 use async_trait::async_trait;
@@ -324,37 +324,6 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
     Ok(())
 }
 
-// async fn fetching(source: Upstream, platform: &Platform, identity: &str) -> TargetProcessedList {
-//     let fetcher = source.get_fetcher(platform, &identity);
-//     let ability = fetcher.ability();
-//     let mut res: TargetProcessedList = Vec::new();
-//     for (platforms, _) in ability.into_iter() {
-//         if platforms.iter().any(|i| i == platform) {
-//             debug!(
-//                 "fetch_one | Fetching {} / {} from {:?}",
-//                 platform, identity, source
-//             );
-//             match fetcher.fetch().await {
-//                 Ok(resp) => {
-//                     debug!(
-//                         "fetch_one | Fetched ({} / {} from {:?}): {:?}",
-//                         platform, identity, source, resp
-//                     );
-//                     res.extend(resp);
-//                 }
-//                 Err(err) => {
-//                     warn!(
-//                         "fetch_one | Failed to fetch ({} / {} from {:?}): {:?}",
-//                         platform, identity, source, err
-//                     );
-//                     continue;
-//                 }
-//             };
-//         }
-//     }
-//     res
-// }
-
 /// Find one (platform, identity) pair in all upstreams.
 /// Returns identities just fetched for next iter..
 pub async fn fetch_one(target: &Target) -> Result<TargetProcessedList, Error> {
@@ -366,6 +335,7 @@ pub async fn fetch_one(target: &Target) -> Result<TargetProcessedList, Error> {
         ProofClient::fetch(target),
         Rss3::fetch(target),
         Knn3::fetch(target),
+        TheGraph::fetch(target),
     ])
     .await
     .into_iter()
