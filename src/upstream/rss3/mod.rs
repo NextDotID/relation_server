@@ -200,7 +200,7 @@ async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
         platform: Platform::Ethereum,
         identity: p.metadata.to.to_lowercase(),
         created_at: Some(created_at_naive),
-        display_name: p.metadata.to.to_lowercase(),
+        display_name: Some(p.metadata.to.to_lowercase()),
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,

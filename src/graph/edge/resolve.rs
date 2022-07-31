@@ -5,10 +5,13 @@ use crate::{
     upstream::{DataFetcher, DataSource},
     util::naive_now,
 };
-use aragog::{DatabaseConnection, DatabaseRecord, EdgeRecord, Record, query::{QueryResult, Comparison, Filter}};
-use chrono::{NaiveDateTime, Duration};
+use aragog::{
+    query::{Comparison, Filter, QueryResult},
+    DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
+};
+use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
-use strum_macros::{EnumIter, EnumString, Display};
+use strum_macros::{Display, EnumIter, EnumString};
 use uuid::Uuid;
 
 #[derive(
@@ -39,7 +42,15 @@ pub enum DomainNameSystem {
     Unknown,
 }
 
-/// Edge to connect two `Identity`s.
+/// Edge to identify which `Identity(Ethereum)` a `Contract` is resolving to.
+/// Basiclly this is served for `ENS` only.
+/// There're 3 kinds of relation between an `Identity(Ethereum)` and `Contract(ENS)` :
+/// - `Own` relation: defined in `graph/edge/own.rs`
+///   In our system: create `Own` edge from `Identity(Ethereum)` to `Contract(ENS)`.
+/// - `Resolve` relation: Find an Ethereum wallet using ENS name (like DNS).
+///   In our system: create `Resolve` edge from `Contract(ENS)` to `Identity(Ethereum)`.
+/// - `ReverseLookup` relation: Find an ENS name using an Ethereum wallet (like reverse DNS lookup).
+///   In our system: set `display_name` for the `Identity(Ethereum)`.
 #[derive(Clone, Serialize, Deserialize, Record)]
 #[collection_name = "Resolves"]
 pub struct Resolve {
@@ -107,7 +118,6 @@ impl std::ops::DerefMut for ResolveRecord {
     }
 }
 
-
 impl From<DatabaseRecord<EdgeRecord<Resolve>>> for ResolveRecord {
     fn from(record: DatabaseRecord<EdgeRecord<Resolve>>) -> Self {
         ResolveRecord(record)
@@ -136,10 +146,10 @@ impl Edge<Contract, Identity, ResolveRecord> for Resolve {
                     // Destory old edge and create new one.
                     edge.delete(db).await?;
                     Ok(DatabaseRecord::link(from, to, db, self.clone())
-                       .await?
-                       .into())
+                        .await?
+                        .into())
                 }
-            },
+            }
             None => Ok(DatabaseRecord::link(from, to, db, self.clone())
                 .await?
                 .into()),

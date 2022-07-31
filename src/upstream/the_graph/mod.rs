@@ -5,19 +5,21 @@ use crate::{
     error::Error,
     graph::{
         create_identity_to_contract_record,
-        edge::hold::Hold,
+        edge::{hold::Hold, resolve::DomainNameSystem, Resolve},
         new_db_connection,
         vertex::{
             contract::{Chain, ContractCategory},
-            Contract, Identity,
+            Contract, ContractRecord, Identity,
         },
+        Edge, Vertex,
     },
     upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList},
     util::{naive_now, parse_timestamp},
 };
+use aragog::{DatabaseConnection, DatabaseRecord};
 use async_trait::async_trait;
 use gql_client::Client;
-use log::{info, warn};
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -130,6 +132,10 @@ impl Fetcher for TheGraph {
     }
 }
 
+/// TODO: reverse lookup for ENS is not provided by official TheGraph for now.
+/// See also: https://github.com/ensdomains/ens-subgraph/issues/25
+/// Consider deploy a self-hosted reverse lookup service like:
+/// https://github.com/fafrd/ens-reverse-lookup
 async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
     let query: String;
     let target_var: String;
@@ -168,44 +174,49 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
     let db = new_db_connection().await?;
     let mut next_targets: TargetProcessedList = vec![];
 
-    for domain in res.domains.iter() {
-        let creation_tx = domain
-            .events
-            .first() // TODO: really?
-            .map(|event| event.transactionID.clone());
-        let resolved_address = domain.resolvedAddress.as_ref().map(|r| r.id.clone());
-        let ens_created_at = parse_timestamp(&domain.createdAt).ok();
-        let from: Identity = Identity {
-            uuid: Some(Uuid::new_v4()),
-            platform: Platform::Ethereum,
-            identity: domain.owner.id.clone(),
-            created_at: None,
-            display_name: resolved_address.unwrap_or("".into()),
-            added_at: naive_now(),
-            avatar_url: None,
-            profile_url: None,
-            updated_at: naive_now(),
-        };
-        let to: Contract = Contract {
-            uuid: Uuid::new_v4(),
-            category: ContractCategory::ENS,
-            address: ContractCategory::ENS.default_contract_address().unwrap(),
-            chain: Chain::Ethereum,
-            symbol: None,
-            updated_at: naive_now(),
-        };
-        let ownership: Hold = Hold {
-            uuid: Uuid::new_v4(),
-            transaction: creation_tx,
-            id: domain.name.clone(),
-            source: DataSource::TheGraph,
-            created_at: ens_created_at,
-            updated_at: naive_now(),
-            fetcher: DataFetcher::RelationService,
-        };
-        create_identity_to_contract_record(&db, &from, &to, &ownership).await?;
+    for domain in res.domains.into_iter() {
+        // Create own record
+        let contract_record = create_or_update_own(&db, &domain).await?;
 
-        // Push up_next record
+        // Deal with resolve target.
+        let resolved_address = domain.resolvedAddress.map(|r| r.id);
+        match resolved_address.clone() {
+            Some(address) => {
+                // Create resolve record
+                debug!("TheGraph {} | Resolved address: {}", target, address);
+                let resolve_target = Identity {
+                    uuid: Some(Uuid::new_v4()),
+                    platform: Platform::Ethereum,
+                    identity: address.clone(),
+                    created_at: None,
+                    display_name: None,
+                    added_at: naive_now(),
+                    avatar_url: None,
+                    profile_url: None,
+                    updated_at: naive_now(),
+                }
+                .create_or_update(&db)
+                .await?;
+                let resolve = Resolve {
+                    uuid: Uuid::new_v4(),
+                    source: DataSource::TheGraph,
+                    system: DomainNameSystem::ENS,
+                    name: domain.name.clone(),
+                    fetcher: DataFetcher::RelationService,
+                    updated_at: naive_now(),
+                };
+
+                resolve
+                    .connect(&db, &contract_record, &resolve_target)
+                    .await?;
+            }
+            None => {
+                // Resolve record not existed anymore. Maybe deleted by user.
+                // TODO: Should find existed connection and delete it.
+            }
+        }
+
+        // Append up_next
         match target {
             Target::Identity(_, _) => next_targets.push(Target::NFT(
                 Chain::Ethereum,
@@ -214,9 +225,62 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                 domain.name.clone(),
             )),
             Target::NFT(_, _, _, _) => {
-                next_targets.push(Target::Identity(Platform::Ethereum, from.identity))
+                let owner_address = domain.owner.id.clone();
+                next_targets.push(Target::Identity(
+                    Platform::Ethereum,
+                    owner_address.clone(),
+                ));
+                if resolved_address.is_some() && resolved_address != Some(owner_address) {
+                    next_targets.push(Target::Identity(
+                        Platform::Ethereum,
+                        resolved_address.unwrap(),
+                    ));
+                }
             }
         }
     }
     Ok(next_targets)
+}
+
+/// Focus on `Hold` record.
+async fn create_or_update_own(
+    db: &DatabaseConnection,
+    domain: &Domain,
+) -> Result<ContractRecord, Error> {
+    let creation_tx = domain
+        .events
+        .first() // TODO: really?
+        .map(|event| event.transactionID.clone());
+    let ens_created_at = parse_timestamp(&domain.createdAt).ok();
+    let owner = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Ethereum,
+        identity: domain.owner.id.clone(),
+        created_at: None,
+        display_name: None,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+    };
+    let conrtract = Contract {
+        uuid: Uuid::new_v4(),
+        category: ContractCategory::ENS,
+        address: ContractCategory::ENS.default_contract_address().unwrap(),
+        chain: Chain::Ethereum,
+        symbol: None,
+        updated_at: naive_now(),
+    };
+    let ownership: Hold = Hold {
+        uuid: Uuid::new_v4(),
+        transaction: creation_tx,
+        id: domain.name.clone(),
+        source: DataSource::TheGraph,
+        created_at: ens_created_at,
+        updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
+    };
+    let (_owner_record, contract_record, _hold_record) =
+        create_identity_to_contract_record(&db, &owner, &conrtract, &ownership).await?;
+    Ok(contract_record)
 }

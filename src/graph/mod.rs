@@ -9,8 +9,8 @@ use serde::Deserialize;
 pub use vertex::Vertex;
 
 use self::{
-    edge::{Hold, Proof},
-    vertex::{Contract, Identity},
+    edge::{Hold, HoldRecord, Proof},
+    vertex::{Contract, ContractRecord, Identity, IdentityRecord},
 };
 
 // TODO: move this under `vertex/`
@@ -47,11 +47,11 @@ pub async fn create_identity_to_contract_record(
     from: &Identity,
     to: &Contract,
     hold: &Hold,
-) -> Result<(), Error> {
+) -> Result<(IdentityRecord, ContractRecord, HoldRecord), Error> {
     let from_record = from.create_or_update(db).await?;
     let to_record = to.create_or_update(db).await?;
-    hold.connect(db, &from_record, &to_record).await?;
-    Ok(())
+    let hold_record = hold.connect(db, &from_record, &to_record).await?;
+    Ok((from_record, to_record, hold_record))
 }
 
 pub async fn create_identity_to_identity_record(

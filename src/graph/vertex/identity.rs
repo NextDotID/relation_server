@@ -32,7 +32,8 @@ pub struct Identity {
     pub identity: String,
     /// Usually user-friendly screen name.
     /// e.g. for `Twitter`, this is the user's `screen_name`.
-    pub display_name: String,
+    /// For `ethereum`, this is the reversed ENS name set by user.
+    pub display_name: Option<String>,
     /// URL to target identity profile page on `platform` (if any).
     pub profile_url: Option<String>,
     /// URL to avatar (if any is recorded and given by target platform).
@@ -137,7 +138,7 @@ impl Vertex<IdentityRecord> for Identity {
 
             Some(mut found) => {
                 // Update
-                found.display_name = self.display_name.clone();
+                found.display_name = self.display_name.clone().or(found.display_name.clone());
                 found.profile_url = self.profile_url.clone();
                 found.avatar_url = self.avatar_url.clone();
                 found.created_at = self.created_at.or(found.created_at);

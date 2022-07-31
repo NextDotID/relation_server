@@ -66,7 +66,8 @@ impl IdentityRecord {
 
     /// Usually user-friendly screen name.  e.g. for `Twitter`, this
     /// is the user's `screen_name`.
-    async fn display_name(&self) -> String {
+    /// Note: both `null` and `""` should be treated as "no value".
+    async fn display_name(&self) -> Option<String> {
         self.display_name.clone()
     }
 
