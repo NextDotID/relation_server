@@ -190,6 +190,10 @@ async fn fetch_nfts_by_account(
 }
 
 async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
+    // Don't use ENS result returned from RSS3.
+    if p.metadata.contract_type == "ENS".to_string() {
+        return Ok(vec![]);
+    }
     let creataed_at = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
     let created_at_naive = NaiveDateTime::from_timestamp(creataed_at.timestamp(), 0);
 

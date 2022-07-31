@@ -165,34 +165,35 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
 
     targets.push(Target::Identity(to_platform, p.web3_addr.clone()));
 
-    if p.ens.is_some() {
-        let to_contract_identity: Contract = Contract {
-            uuid: Uuid::new_v4(),
-            category: ContractCategory::ENS,
-            address: ContractCategory::ENS.default_contract_address().unwrap(),
-            chain: Chain::Ethereum,
-            symbol: None,
-            updated_at: naive_now(),
-        };
+    // TODO: Don't use ENS result from aggregation service.
+    // if p.ens.is_some() {
+    //     let to_contract_identity: Contract = Contract {
+    //         uuid: Uuid::new_v4(),
+    //         category: ContractCategory::ENS,
+    //         address: ContractCategory::ENS.default_contract_address().unwrap(),
+    //         chain: Chain::Ethereum,
+    //         symbol: None,
+    //         updated_at: naive_now(),
+    //     };
 
-        let ens = p.ens.unwrap();
-        let hold: Hold = Hold {
-            uuid: Uuid::new_v4(),
-            transaction: None,
-            id: ens.clone(),
-            source: DataSource::from_str(p.source.as_str()).unwrap_or(DataSource::Unknown),
-            created_at: None,
-            updated_at: naive_now(),
-            fetcher: DataFetcher::AggregationService,
-        };
-        let _ = create_identity_to_contract_record(&db, &from, &to_contract_identity, &hold).await;
+    //     let ens = p.ens.unwrap();
+    //     let hold: Hold = Hold {
+    //         uuid: Uuid::new_v4(),
+    //         transaction: None,
+    //         id: ens.clone(),
+    //         source: DataSource::from_str(p.source.as_str()).unwrap_or(DataSource::Unknown),
+    //         created_at: None,
+    //         updated_at: naive_now(),
+    //         fetcher: DataFetcher::AggregationService,
+    //     };
+    //     let _ = create_identity_to_contract_record(&db, &from, &to_contract_identity, &hold).await;
 
-        targets.push(Target::NFT(
-            Chain::Ethereum,
-            ContractCategory::ENS,
-            ContractCategory::ENS.default_contract_address().unwrap(),
-            ens.clone(),
-        ));
-    }
+    //     targets.push(Target::NFT(
+    //         Chain::Ethereum,
+    //         ContractCategory::ENS,
+    //         ContractCategory::ENS.default_contract_address().unwrap(),
+    //         ens.clone(),
+    //     ));
+    // }
     Ok(targets)
 }

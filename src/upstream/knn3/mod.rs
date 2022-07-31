@@ -63,8 +63,10 @@ impl Fetcher for Knn3 {
     }
 
     fn can_fetch(target: &Target) -> bool {
-        target.in_platform_supported(vec![Platform::Ethereum])
-            || target.in_nft_supported(vec![ContractCategory::ENS], vec![Chain::Ethereum])
+        // TODO: temporarily disable KNN3 fetcher
+        false
+        // target.in_platform_supported(vec![Platform::Ethereum])
+        //     || target.in_nft_supported(vec![ContractCategory::ENS], vec![Chain::Ethereum])
     }
 }
 
