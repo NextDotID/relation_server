@@ -17,7 +17,7 @@ use crate::{
     upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList},
     util::{naive_now, parse_timestamp},
 };
-use aragog::{DatabaseConnection, DatabaseRecord};
+use aragog::DatabaseConnection;
 use async_trait::async_trait;
 use gql_client::Client;
 use log::{debug, info, warn};
@@ -279,6 +279,6 @@ async fn create_or_update_own(
         fetcher: DataFetcher::RelationService,
     };
     let (_owner_record, contract_record, _hold_record) =
-        create_identity_to_contract_record(&db, &owner, &conrtract, &ownership).await?;
+        create_identity_to_contract_record(db, &owner, &conrtract, &ownership).await?;
     Ok(contract_record)
 }

@@ -84,6 +84,7 @@ impl Target {
         }
     }
 
+    #[allow(dead_code)]
     pub fn nft_chain(&self) -> Result<Chain, Error> {
         match self {
             Self::Identity(_, _) => Err(Error::General(
@@ -94,6 +95,7 @@ impl Target {
         }
     }
 
+    #[allow(dead_code)]
     pub fn nft_category(&self) -> Result<ContractCategory, Error> {
         match self {
             Self::Identity(_, _) => Err(Error::General(
@@ -104,6 +106,7 @@ impl Target {
         }
     }
 
+    #[allow(dead_code)]
     pub fn nft_id(&self) -> Result<String, Error> {
         match self {
             Self::Identity(_, _) => Err(Error::General(

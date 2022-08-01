@@ -1,3 +1,4 @@
+#[cfg(test)]
 mod tests;
 use crate::{
     config::C,
@@ -191,7 +192,7 @@ async fn fetch_nfts_by_account(
 
 async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
     // Don't use ENS result returned from RSS3.
-    if p.metadata.contract_type == "ENS".to_string() {
+    if p.metadata.contract_type == *"ENS" {
         return Ok(vec![]);
     }
     let creataed_at = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
@@ -204,7 +205,8 @@ async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
         platform: Platform::Ethereum,
         identity: p.metadata.to.to_lowercase(),
         created_at: Some(created_at_naive),
-        display_name: Some(p.metadata.to.to_lowercase()),
+        // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
+        display_name: None,
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,

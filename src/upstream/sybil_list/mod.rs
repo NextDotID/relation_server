@@ -1,4 +1,5 @@
 extern crate futures;
+#[cfg(test)]
 mod tests;
 
 use crate::config::C;
@@ -62,7 +63,8 @@ async fn save_item(
         platform: Platform::Ethereum,
         identity: eth_wallet_address.to_lowercase(),
         created_at: None,
-        display_name: Some(eth_wallet_address.to_lowercase()),
+        // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
+        display_name: None,
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,

@@ -1,10 +1,4 @@
-use aragog::query::{Comparison, Filter};
-use aragog::Record;
-
 use crate::error::Error;
-use crate::graph::new_db_connection;
-use crate::graph::vertex::contract::{Chain, ContractCategory};
-use crate::graph::vertex::Identity;
 use crate::upstream::{fetch_all, fetch_one, Platform, Target};
 
 #[tokio::test]

@@ -1,3 +1,4 @@
+#[cfg(test)]
 mod tests;
 
 use crate::config::C;
@@ -62,7 +63,7 @@ impl Fetcher for Knn3 {
         }
     }
 
-    fn can_fetch(target: &Target) -> bool {
+    fn can_fetch(_target: &Target) -> bool {
         // TODO: temporarily disable KNN3 fetcher
         false
         // target.in_platform_supported(vec![Platform::Ethereum])
@@ -110,7 +111,8 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
             platform: Platform::Ethereum,
             identity: identity.to_lowercase(),
             created_at: None,
-            display_name: Some(identity.to_lowercase()),
+            // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
+            display_name: None,
             added_at: naive_now(),
             avatar_url: None,
             profile_url: None,
@@ -185,7 +187,8 @@ async fn fetch_eth_wallet_by_ens(id: &str) -> Result<TargetProcessedList, Error>
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: address.to_lowercase(),
-        display_name: Some(address.to_lowercase()),
+        // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
+        display_name: None,
         profile_url: None,
         avatar_url: None,
         created_at: None,

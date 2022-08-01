@@ -141,7 +141,7 @@ impl Edge<Contract, Identity, ResolveRecord> for Resolve {
             Some(mut edge) => {
                 if edge.key_from() == from.key() && edge.key_to() == to.key() {
                     // Exact the same edge. Keep it.
-                    Ok(edge.into())
+                    Ok(edge)
                 } else {
                     // Destory old edge and create new one.
                     edge.delete(db).await?;

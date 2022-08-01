@@ -1,14 +1,13 @@
+#[cfg(test)]
 mod tests;
 
 use super::{DataFetcher, Target};
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::vertex::{contract::ContractCategory, Contract, Identity};
-use crate::graph::{
-    create_identity_to_contract_record, create_identity_to_identity_record, new_db_connection,
-};
-use crate::graph::{edge::Hold, edge::Proof};
-use crate::upstream::{Chain, DataSource, Fetcher, Platform, TargetProcessedList};
+use crate::graph::edge::Proof;
+use crate::graph::vertex::Identity;
+use crate::graph::{create_identity_to_identity_record, new_db_connection};
+use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use async_trait::async_trait;
 use futures::future::join_all;
@@ -113,9 +112,10 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
     let db = new_db_connection().await?;
     let mut targets = Vec::new();
 
+    let from_platform = Platform::from_str(p.sns_platform.as_str()).unwrap_or(Platform::Unknown);
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
-        platform: Platform::from_str(p.sns_platform.as_str()).unwrap_or(Platform::Unknown),
+        platform: from_platform,
         identity: p.sns_handle.clone(),
         created_at: None,
         display_name: Some(p.sns_handle.clone()),
@@ -126,13 +126,13 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
     };
 
     let to_platform = Platform::from_str(p.web3_platform.as_str()).unwrap_or_default();
-
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: to_platform,
         identity: p.web3_addr.clone(),
         created_at: None,
-        display_name: Some(p.web3_addr.clone()),
+        // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
+        display_name: None,
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,

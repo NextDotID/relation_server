@@ -65,7 +65,7 @@ async fn test_find_wallet_by_ens() -> Result<(), Error> {
     );
     let address_targets = TheGraph::fetch(&target).await?;
     println!("targets {:?}", address_targets);
-    assert!(address_targets.len() > 0);
+    assert!(!address_targets.is_empty());
     assert_eq!(
         address_targets.first().unwrap().identity().unwrap(),
         "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".to_string()

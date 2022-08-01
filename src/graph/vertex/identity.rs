@@ -111,6 +111,7 @@ impl Vertex<IdentityRecord> for Identity {
                 to_be_created.uuid = to_be_created.uuid.or(Some(Uuid::new_v4()));
                 to_be_created.added_at = naive_now();
                 to_be_created.updated_at = naive_now();
+                #[allow(unused_assignments)] // FIXME: ??
                 let mut need_refetch: bool = false;
 
                 // Must do this to avoid "future cannot be sent between threads safely" complain from compiler.
