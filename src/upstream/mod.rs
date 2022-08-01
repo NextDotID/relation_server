@@ -24,6 +24,8 @@ use log::{debug, info, trace};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
 
+use self::ens_reverse::ENSReverseLookup;
+
 /// List when processing identities.
 type TargetProcessedList = Vec<Target>;
 
@@ -346,6 +348,7 @@ pub async fn fetch_one(target: &Target) -> Result<TargetProcessedList, Error> {
         Rss3::fetch(target),
         Knn3::fetch(target),
         TheGraph::fetch(target),
+        ENSReverseLookup::fetch(target),
     ])
     .await
     .into_iter()
