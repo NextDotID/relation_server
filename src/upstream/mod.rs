@@ -1,4 +1,5 @@
 mod aggregation;
+mod ens_reverse;
 mod keybase;
 mod knn3;
 mod proof_client;
@@ -239,6 +240,12 @@ pub enum DataSource {
     #[serde(rename = "the_graph")]
     #[graphql(name = "the_graph")]
     TheGraph,
+
+    /// Data directly fetched from blockchain's RPC server.
+    #[strum(serialize = "rpc_server")]
+    #[serde(rename = "rpc_server")]
+    #[graphql(name = "rpc_server")]
+    RPCServer,
 
     /// Unknown
     #[strum(serialize = "unknown")]
