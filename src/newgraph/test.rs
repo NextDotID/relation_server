@@ -2,7 +2,7 @@
 mod test {
     use crate::newgraph::{new_raw_db_connection};
     use crate::error::Error;
-    use arangors_lite::{AqlQuery, Connection, Cursor, Database, ClientError};
+    use arangors_lite::{AqlQuery, Connection, Cursor, Database};
     use serde_json::value::Value;
     use crate::newgraph::vertex::identity::{Identity, Path, Neighbor, Source};
     use crate::upstream::{DataSource, Platform};
@@ -15,7 +15,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_find_by_platform_identity() -> Result<(), ClientError>{
+    async fn test_find_by_platform_identity() -> Result<(), Error>{
         let db = new_raw_db_connection().await?;
         let identity = "NQ5IW6W7";
         let platform= [Platform::Twitter.to_string(), Platform::Keybase.to_string()];
@@ -44,10 +44,10 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_neighbors() -> Result<(), ClientError>{
+    async fn test_neighbors() -> Result<(), Error>{
         // jxocxTygjnD3s3BnawX
         let db = new_raw_db_connection().await?;
-        let display_name = "or0TeHvTEMwdCQm";
+        let display_name = "0x00000003cd3aa7e760877f03275621d2692f5841";
         let aql = format!(r"FOR d IN relation
         SEARCH ANALYZER(d.display_name IN TOKENS('{}', 'text_en'), 'text_en')
         FOR vertex, edge, path IN 1..3 OUTBOUND d Proofs
@@ -63,7 +63,7 @@ mod test {
         //     let path: Path = from_value(p).unwrap();
         //     paths.push(path)
         // }
-
+        println!("{:?}", resp);
         let mut neighbors: Vec<Neighbor> = Vec::new();
         for p in resp {
             let path: Path = from_value(p).unwrap();

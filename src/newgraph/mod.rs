@@ -5,8 +5,9 @@ use arangors_lite::{Connection, Database, ClientError};
 use serde_json::value::Value;
 use serde_json::from_value;
 use crate::newgraph::vertex::identity::Path;
+use crate::error::Error;
 
-pub async fn new_raw_db_connection() -> Result<Database, ClientError> {
+pub async fn new_raw_db_connection() -> Result<Database, Error> {
     let conn = Connection::establish_basic_auth(
         "http://localhost:8529", "root", "ieNgoo5roong9Chu")
         .await

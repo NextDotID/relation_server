@@ -29,6 +29,8 @@ pub enum Error {
     UuidError(#[from] uuid::Error),
     #[error("ArangoDB error: {0}")]
     ArangoDBError(#[from] aragog::Error),
+    #[error("ArangoLiteDB error: {0}")]
+    ArangoLiteDBError(#[from] arangors_lite::ClientError),
     #[error("Parse error: {0}")]
     EnumParseError(#[from] strum::ParseError),
     #[error("GraphQL error: {0}")]
@@ -52,6 +54,7 @@ impl Error {
             Error::EnumParseError(_) => StatusCode::BAD_REQUEST,
             Error::GraphQLError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::UuidError(_) => StatusCode::BAD_REQUEST,
+            Error::ArangoLiteDBError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
