@@ -8,4 +8,3 @@ pub mod graph;
 pub mod util;
 
 mod upstream;
-pub mod newgraph;
