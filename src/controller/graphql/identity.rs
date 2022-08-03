@@ -194,7 +194,7 @@ impl IdentityQuery {
         }
         array_str += "]";
 
-        let record: Vec<IdentityRecord> = Identity::find_by_platforms_identity(&raw_db, array_str.clone(), &identity).await.unwrap();
+        let record: Vec<IdentityRecord> = Identity::find_by_platforms_identity(&raw_db, &platforms, &identity).await?;
         if record.len() == 0 {
             for element in platforms {
                 let platform: Platform = element.parse()?;

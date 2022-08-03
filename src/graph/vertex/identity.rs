@@ -298,7 +298,7 @@ impl IdentityRecord {
                     .bind_var("depth", depth)
                     .batch_size(1)
                     .count(false);
-                let resp: Vec<Value> = raw_db.aql_query(aql).await.unwrap();
+                let resp: Vec<Value> = raw_db.aql_query(aql).await?;
                 let mut paths: Vec<Path> = Vec::new();
                 for p in resp {
                     let p: Path = from_value(p).unwrap();
@@ -325,7 +325,7 @@ impl IdentityRecord {
                     .bind_var("source", source.to_string().as_str())
                     .batch_size(1)
                     .count(false);
-                let resp: Vec<Value> = raw_db.aql_query(aql).await.unwrap();
+                let resp: Vec<Value> = raw_db.aql_query(aql).await?;
                 let mut paths: Vec<Path> = Vec::new();
                 for p in resp {
                     let p: Path = from_value(p).unwrap();
