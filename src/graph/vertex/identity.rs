@@ -496,11 +496,25 @@ mod tests {
 
     #[tokio::test]
     async fn test_find_by_display_name() -> Result<(), Error> {
+        // let db = new_db_connection().await?;
+        // let created = Identity::create_dummy(&db).await?;
+        // println!("display_name={}", created.display_name);
         let raw_db = new_raw_db_connection().await?;
-        let found = Identity::find_by_display_name(&raw_db, String::from("0x00000003cd3aa7e760877f03275621d2692f5841"))
+        let found = Identity::find_by_display_name(&raw_db, String::from("some created.display"))
             .await?
             .expect("Record not found");
-        println!("{:?}", found);
+        println!("{:#?}", found);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_find_by_platforms_identity() -> Result<(), Error> {
+        let raw_db = new_raw_db_connection().await.unwrap();
+        let identities = Identity::find_by_platforms_identity(
+            &raw_db, 
+            &vec![Platform::Ethereum, Platform::Twitter], 
+            "0x00000003cd3aa7e760877f03275621d2692f5841").await.unwrap();
+        println!("{:?}", identities);
         Ok(())
     }
 
