@@ -48,6 +48,7 @@ pub struct ConfigDB {
     pub password: String,
     pub db: String,
     pub schema_path: String,
+    pub identities_proofs_graph: String,
 }
 
 #[derive(Clone, Deserialize, Default)]

@@ -1,4 +1,5 @@
 use crate::{
+    config::C,
     error::Error,
     graph::{
         edge::{Hold, HoldRecord, Proof, ProofRecord},
@@ -12,7 +13,7 @@ use aragog::{
     DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
 use arangors_lite::{AqlQuery, Database};
-use serde_json::{value::Value, from_value};
+use serde_json::{value::Value, from_value, json};
 
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
@@ -129,15 +130,17 @@ impl Identity {
         raw_db: &Database,
         display_name: String,
     ) -> Result<Option<IdentityRecord>, Error> {
-        let aql = r"FOR v IN relation
+        let aql = r"FOR v IN @@collection_name
         FILTER v.display_name == @display_name
         RETURN v";
+
         let aql = AqlQuery::new(aql)
+            .bind_var("@collection_name", Identity::COLLECTION_NAME)
             .bind_var("display_name", display_name.as_str())
             .batch_size(1)
             .count(false);
 
-        let result: Vec<IdentityRecord> = raw_db.aql_query(aql).await.unwrap();
+        let result: Vec<IdentityRecord> = raw_db.aql_query(aql).await?;
         if result.len() == 0 {
             Ok(None)
         } else {
@@ -283,51 +286,48 @@ impl IdentityRecord {
         depth: u16,
         _source: Option<DataSource>,
     ) -> Result<Vec<Path>, Error> {
-        // let aql = r"FOR d IN relation FILTER d._id == @identities_id
-        // FOR vertex, edge, path IN 1..@depth OUTBOUND d Proofs
-        // RETURN path";
-
-        // Using graph can speed up from 70ms to 10ms
+        // Using graph speed up FILTER
         match _source {
             None => {
                 let aql = r"
-                WITH relation
-                FOR d IN Identities
-                  FILTER d._id == @identities_id
+                WITH @@collection_name FOR d IN @@collection_name
+                  FILTER d._id == @id
                   LIMIT 1
                   FOR vertex, edge, path 
                     IN 1..@depth
-                    ANY d GRAPH 'identities_proofs_graph'
+                    ANY d GRAPH @graph_name
                     RETURN path";
 
                 let aql = AqlQuery::new(aql)
-                    .bind_var("identities_id", self.id().as_str())
+                    .bind_var("@collection_name", Identity::COLLECTION_NAME)
+                    .bind_var("graph_name", C.db.identities_proofs_graph.as_str())
+                    .bind_var("id", self.id().as_str())
                     .bind_var("depth", depth)
                     .batch_size(1)
                     .count(false);
                 let resp: Vec<Value> = raw_db.aql_query(aql).await?;
                 let mut paths: Vec<Path> = Vec::new();
                 for p in resp {
-                    let p: Path = from_value(p).unwrap();
+                    let p: Path = from_value(p)?;
                     paths.push(p)
                 }
                 Ok(paths)
             },
             Some(source) => {
                 let aql = r"
-                WITH relation
-                FOR d IN Identities
-                  FILTER d._id == @identities_id
+                WITH @@collection_name FOR d IN @@collection_name
+                  FILTER d._id == @id
                   LIMIT 1
                   FOR vertex, edge, path 
                     IN 1..@depth
-                    ANY d
-                    GRAPH 'identities_proofs_graph'
+                    ANY d GRAPH @graph_name
                     FILTER path.edges[*].`source` ALL == @source
                     RETURN path";
-                
+
                 let aql = AqlQuery::new(aql)
-                    .bind_var("identities_id", self.id().as_str())
+                    .bind_var("@collection_name", Identity::COLLECTION_NAME)
+                    .bind_var("graph_name", C.db.identities_proofs_graph.as_str())
+                    .bind_var("id", self.id().as_str())
                     .bind_var("depth", depth)
                     .bind_var("source", source.to_string().as_str())
                     .batch_size(1)
