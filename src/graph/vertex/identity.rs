@@ -1,7 +1,7 @@
 use crate::{
     error::Error,
     graph::{
-        edge::{Hold, HoldRecord, Proof},
+        edge::{Hold, HoldRecord, Proof, ProofRecord},
         vertex::Vertex,
     },
     upstream::{DataSource, Platform},
@@ -11,6 +11,9 @@ use aragog::{
     query::{Comparison, Filter, Query, QueryResult},
     DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
+use arangors_lite::{AqlQuery, Database};
+use serde_json::{value::Value, from_value};
+
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
 use http::StatusCode;
@@ -48,6 +51,12 @@ pub struct Identity {
     pub added_at: NaiveDateTime,
     /// When it is updated (re-fetched) by us RelationService. Managed by us.
     pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Path {
+    pub vertices: Vec<IdentityRecord>,
+    pub edges: Vec<ProofRecord>,
 }
 
 impl Default for Identity {
@@ -89,6 +98,43 @@ impl Identity {
             Ok(None)
         } else {
             Ok(Some(query_result.first().unwrap().to_owned().into()))
+        }
+    }
+
+    pub async fn find_by_platforms_identity(
+        raw_db: &Database,
+        platforms: String,
+        identity: &str,
+    ) -> Result<Vec<IdentityRecord>, Error> {
+        let aql = r"FOR v IN relation
+        FILTER v.identity == @identity AND FILTER v.platform IN @platform
+        RETURN v";
+        let aql = AqlQuery::new(aql)
+            .bind_var("identity", identity)
+            .bind_var("platform", platforms.as_str())
+            .batch_size(1)
+            .count(false);
+        let result: Vec<IdentityRecord> = raw_db.aql_query(aql).await.unwrap();
+        Ok(result)
+    }
+
+    async fn find_by_display_name(
+        raw_db: &Database,
+        display_name: String,
+    ) -> Result<Option<IdentityRecord>, Error> {
+        let aql = r"FOR v IN relation
+        FILTER v.display_name == @display_name
+        RETURN v";
+        let aql = AqlQuery::new(aql)
+            .bind_var("display_name", display_name.as_str())
+            .batch_size(1)
+            .count(false);
+
+        let result: Vec<IdentityRecord> = raw_db.aql_query(aql).await.unwrap();
+        if result.len() == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(result.first().unwrap().to_owned().into()))
         }
     }
 }
@@ -223,6 +269,73 @@ impl IdentityRecord {
         Ok(result.iter().map(|r| r.to_owned().into()).collect())
     }
 
+    // Return all neighbors of this identity with path<ProofRecord>
+    pub async fn find_neighbors_with_path(
+        &self,
+        raw_db: &Database,
+        depth: u16,
+        _source: Option<DataSource>,
+    ) -> Result<Vec<Path>, Error> {
+        // let aql = r"FOR d IN relation FILTER d._id == @identities_id
+        // FOR vertex, edge, path IN 1..@depth OUTBOUND d Proofs
+        // RETURN path";
+
+        // Using graph can speed up from 70ms to 10ms
+        match _source {
+            None => {
+                let aql = r"
+                WITH relation
+                FOR d IN Identities
+                  FILTER d._id == @identities_id
+                  LIMIT 1
+                  FOR vertex, edge, path 
+                    IN 1..@depth
+                    ANY d GRAPH 'identities_proofs_graph'
+                    RETURN path";
+
+                let aql = AqlQuery::new(aql)
+                    .bind_var("identities_id", self.id().as_str())
+                    .bind_var("depth", depth)
+                    .batch_size(1)
+                    .count(false);
+                let resp: Vec<Value> = raw_db.aql_query(aql).await.unwrap();
+                let mut paths: Vec<Path> = Vec::new();
+                for p in resp {
+                    let p: Path = from_value(p).unwrap();
+                    paths.push(p)
+                }
+                Ok(paths)
+            },
+            Some(source) => {
+                let aql = r"
+                WITH relation
+                FOR d IN Identities
+                  FILTER d._id == @identities_id
+                  LIMIT 1
+                  FOR vertex, edge, path 
+                    IN 1..@depth
+                    ANY d
+                    GRAPH 'identities_proofs_graph'
+                    FILTER path.edges[*].`source` ALL == @source
+                    RETURN path";
+                
+                let aql = AqlQuery::new(aql)
+                    .bind_var("identities_id", self.id().as_str())
+                    .bind_var("depth", depth)
+                    .bind_var("source", source.to_string().as_str())
+                    .batch_size(1)
+                    .count(false);
+                let resp: Vec<Value> = raw_db.aql_query(aql).await.unwrap();
+                let mut paths: Vec<Path> = Vec::new();
+                for p in resp {
+                    let p: Path = from_value(p).unwrap();
+                    paths.push(p)
+                }
+                Ok(paths)
+            }
+        }
+    }
+
     /// Returns all Contracts owned by this identity. Empty list if `self.platform != Ethereum`.
     pub async fn nfts(&self, db: &DatabaseConnection) -> Result<Vec<HoldRecord>, Error> {
         if self.0.record.platform != Platform::Ethereum {
@@ -235,6 +348,8 @@ impl IdentityRecord {
         let result: QueryResult<EdgeRecord<Hold>> = query.call(db).await?;
         Ok(result.iter().map(|r| r.to_owned().into()).collect())
     }
+
+    
 }
 
 #[cfg(test)]
@@ -248,7 +363,7 @@ mod tests {
     use super::{Identity, IdentityRecord};
     use crate::{
         error::Error,
-        graph::{edge::Proof, new_db_connection, Edge, Vertex},
+        graph::{edge::Proof, new_db_connection, Edge, Vertex, new_raw_db_connection},
         upstream::Platform,
         util::naive_now,
     };
@@ -373,22 +488,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_find_by_display_name() -> Result<(), Error> {
+        let raw_db = new_raw_db_connection().await?;
+        let found = Identity::find_by_display_name(&raw_db, String::from("0x00000003cd3aa7e760877f03275621d2692f5841"))
+            .await?
+            .expect("Record not found");
+        println!("{:?}", found);
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_neighbors() -> Result<(), Error> {
         let db = new_db_connection().await?;
         // ID2 <--Proof1-- ID1 --Proof2--> ID3
         let id1 = Identity::create_dummy(&db).await?;
         let id2 = Identity::create_dummy(&db).await?;
         let id3 = Identity::create_dummy(&db).await?;
+        let id4 = Identity::create_dummy(&db).await?;
+
         let proof1_raw: Proof = Faker.fake();
         let proof2_raw: Proof = Faker.fake();
+        let proof3_raw: Proof = Faker.fake();
         proof1_raw.connect(&db, &id1, &id2).await?;
         proof2_raw.connect(&db, &id1, &id3).await?;
-
+        proof3_raw.connect(&db, &id2, &id4).await?;
         let neighbors = id1.neighbors(&db, 2, None).await?;
-        assert_eq!(2, neighbors.len());
-        assert!(neighbors
-            .iter()
-            .all(|i| i.uuid == id2.uuid || i.uuid == id3.uuid));
+        assert_eq!(3, neighbors.len());
+        // assert!(neighbors
+        //     .iter()
+        //     .all(|i| i.uuid == id2.uuid || i.uuid == id3.uuid));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_find_neighbors_with_path() -> Result<(), Error> {
+        let raw_db = new_raw_db_connection().await.unwrap();
+        let found = Identity::find_by_display_name(&raw_db, String::from("0x00000003cd3aa7e760877f03275621d2692f5841"))
+            .await?
+            .expect("Record not found");
+        let neighbors = found.find_neighbors_with_path(&raw_db, 3, None).await.unwrap();
+        println!("{:#?}", neighbors);
         Ok(())
     }
 }

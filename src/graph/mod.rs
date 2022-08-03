@@ -4,6 +4,8 @@ pub mod vertex;
 
 use crate::{config::C, error::Error};
 use aragog::{AuthMode, DatabaseConnection, OperationOptions};
+use arangors_lite::{Connection, Database};
+
 pub use edge::Edge;
 use serde::Deserialize;
 pub use vertex::Vertex;
@@ -40,6 +42,17 @@ pub async fn new_db_connection() -> Result<DatabaseConnection, Error> {
         .build()
         .await?;
     Ok(connection)
+}
+
+// Create a row database connection instance for arangodb
+pub async fn new_raw_db_connection() -> Result<Database, Error> {
+    let conn = Connection::establish_basic_auth(
+        &C.db.host, &C.db.username, &C.db.password)
+        .await
+        .unwrap();
+    let db = conn.db(&C.db.db)
+        .await?;
+    Ok(db)
 }
 
 pub async fn create_identity_to_contract_record(
