@@ -99,6 +99,23 @@ impl Identity {
         }
     }
 
+    pub async fn find_by_platforms_identity(
+        raw_db: &Database,
+        platforms: String,
+        identity: &str,
+    ) -> Result<Vec<IdentityRecord>, Error> {
+        let aql = r"FOR v IN relation
+        FILTER v.identity == @identity AND FILTER v.platform IN @platform
+        RETURN v";
+        let aql = AqlQuery::new(aql)
+            .bind_var("identity", identity)
+            .bind_var("platform", platforms.as_str())
+            .batch_size(1)
+            .count(false);
+        let result: Vec<IdentityRecord> = raw_db.aql_query(aql).await.unwrap();
+        Ok(result)
+    }
+
     async fn find_by_display_name(
         raw_db: &Database,
         display_name: String,

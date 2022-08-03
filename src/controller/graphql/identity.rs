@@ -5,6 +5,7 @@ use crate::upstream::{fetch_all, DataSource, Platform, Target};
 
 use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
+use arangors_lite::Database;
 use log::debug;
 use strum::IntoEnumIterator;
 
@@ -172,6 +173,46 @@ impl IdentityQuery {
                 }
                 Ok(Some(found))
             }
+        }
+    }
+
+    async fn identities(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "Platform array to query")] platforms: Vec<String>,
+        #[graphql(desc = "Identity on target Platform")] identity: String,
+    ) -> Result<Vec<IdentityRecord>> {
+        let raw_db: &Database = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        let mut array_str = String::from("[");
+        for (i, element) in platforms.iter().enumerate() {
+            let platform: Platform = element.parse()?;
+            array_str = format!(r#"{}"{}""#, array_str, platform.to_string());
+            if i < platforms.len() - 1 {
+                array_str += ", ";
+            }
+        }
+        array_str += "]";
+
+        let record: Vec<IdentityRecord> = Identity::find_by_platforms_identity(&raw_db, array_str.clone(), &identity).await.unwrap();
+        if record.len() == 0 {
+            for element in platforms {
+                let platform: Platform = element.parse()?;
+                let target = Target::Identity(platform.clone(), identity.clone());
+                fetch_all(target).await?;
+            }
+            return Identity::find_by_platforms_identity(&raw_db, array_str.clone(), &identity).await
+        } else {
+            for r in &record {
+                if r.is_outdated() {
+                    let target = Target::Identity(r.platform.clone(), identity.clone());
+                    debug!(
+                        "Identity: {}/{} is outdated. Refetching...",
+                        r.platform, identity
+                    );
+                    tokio::spawn(async move { fetch_all(target).await });
+                }
+            }
+            Ok(record)
         }
     }
 }
