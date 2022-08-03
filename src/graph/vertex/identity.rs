@@ -103,18 +103,25 @@ impl Identity {
 
     pub async fn find_by_platforms_identity(
         raw_db: &Database,
-        platforms: String,
+        platforms: &Vec<Platform>,
         identity: &str,
     ) -> Result<Vec<IdentityRecord>, Error> {
-        let aql = r"FOR v IN relation
-        FILTER v.identity == @identity AND FILTER v.platform IN @platform
+        let platform_array: Vec<Value> = platforms
+            .into_iter()
+            .map(|field| json!(format!("{}", field.to_string()) ))
+            .rev()
+            .collect();
+
+        let aql = r"FOR v IN @@collection_name
+        FILTER v.identity == @identity AND v.platform IN @platform
         RETURN v";
         let aql = AqlQuery::new(aql)
+            .bind_var("@collection_name", Identity::COLLECTION_NAME)
             .bind_var("identity", identity)
-            .bind_var("platform", platforms.as_str())
+            .bind_var("platform", platform_array)
             .batch_size(1)
             .count(false);
-        let result: Vec<IdentityRecord> = raw_db.aql_query(aql).await.unwrap();
+        let result: Vec<IdentityRecord> = raw_db.aql_query(aql).await?;
         Ok(result)
     }
 

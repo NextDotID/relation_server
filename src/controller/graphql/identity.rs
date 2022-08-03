@@ -184,24 +184,21 @@ impl IdentityQuery {
         #[graphql(desc = "Identity on target Platform")] identity: String,
     ) -> Result<Vec<IdentityRecord>> {
         let raw_db: &Database = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let mut array_str = String::from("[");
-        for (i, element) in platforms.iter().enumerate() {
-            let platform: Platform = element.parse()?;
-            array_str = format!(r#"{}"{}""#, array_str, platform.to_string());
-            if i < platforms.len() - 1 {
-                array_str += ", ";
-            }
-        }
-        array_str += "]";
+
+        let platform_list : Vec<String> = Platform::iter().map(|p| p.to_string()).rev().collect();
+        let platforms : Vec<Platform> = platforms
+            .into_iter()
+            .map(|field| field.parse()
+            .expect(format!("Platforms should in [{}]", platform_list.join(", ")).as_str())
+        ).rev().collect();
 
         let record: Vec<IdentityRecord> = Identity::find_by_platforms_identity(&raw_db, &platforms, &identity).await?;
         if record.len() == 0 {
-            for element in platforms {
-                let platform: Platform = element.parse()?;
+            for platform in &platforms {
                 let target = Target::Identity(platform.clone(), identity.clone());
                 fetch_all(target).await?;
             }
-            return Identity::find_by_platforms_identity(&raw_db, array_str.clone(), &identity).await
+            return Identity::find_by_platforms_identity(&raw_db, &platforms, &identity).await
         } else {
             for r in &record {
                 if r.is_outdated() {
