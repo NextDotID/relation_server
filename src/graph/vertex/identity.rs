@@ -259,23 +259,64 @@ impl IdentityRecord {
         depth: u16,
         _source: Option<DataSource>,
     ) -> Result<Vec<Path>, Error> {
-        let aql = r"FOR d IN relation
-        FILTER d._id == @identities_id
-        FOR vertex, edge, path IN 1..@depth OUTBOUND d Proofs
-        RETURN path";
-        let aql = AqlQuery::new(aql)
-            .bind_var("identities_id", self.id().as_str())
-            .bind_var("depth", depth)
-            .batch_size(1)
-            .count(false);
+        // let aql = r"FOR d IN relation FILTER d._id == @identities_id
+        // FOR vertex, edge, path IN 1..@depth OUTBOUND d Proofs
+        // RETURN path";
 
-        let resp: Vec<Value> = raw_db.aql_query(aql).await.unwrap();
-        let mut paths: Vec<Path> = Vec::new();
-        for p in resp {
-            let p: Path = from_value(p).unwrap();
-            paths.push(p)
+        // Using graph can speed up from 70ms to 10ms
+        match _source {
+            None => {
+                let aql = r"
+                WITH relation
+                FOR d IN Identities
+                  FILTER d._id == @identities_id
+                  LIMIT 1
+                  FOR vertex, edge, path 
+                    IN 1..@depth
+                    ANY d GRAPH 'identities_proofs_graph'
+                    RETURN path";
+
+                let aql = AqlQuery::new(aql)
+                    .bind_var("identities_id", self.id().as_str())
+                    .bind_var("depth", depth)
+                    .batch_size(1)
+                    .count(false);
+                let resp: Vec<Value> = raw_db.aql_query(aql).await.unwrap();
+                let mut paths: Vec<Path> = Vec::new();
+                for p in resp {
+                    let p: Path = from_value(p).unwrap();
+                    paths.push(p)
+                }
+                Ok(paths)
+            },
+            Some(source) => {
+                let aql = r"
+                WITH relation
+                FOR d IN Identities
+                  FILTER d._id == @identities_id
+                  LIMIT 1
+                  FOR vertex, edge, path 
+                    IN 1..@depth
+                    ANY d
+                    GRAPH 'identities_proofs_graph'
+                    FILTER path.edges[*].`source` ALL == @source
+                    RETURN path";
+                
+                let aql = AqlQuery::new(aql)
+                    .bind_var("identities_id", self.id().as_str())
+                    .bind_var("depth", depth)
+                    .bind_var("source", source.to_string().as_str())
+                    .batch_size(1)
+                    .count(false);
+                let resp: Vec<Value> = raw_db.aql_query(aql).await.unwrap();
+                let mut paths: Vec<Path> = Vec::new();
+                for p in resp {
+                    let p: Path = from_value(p).unwrap();
+                    paths.push(p)
+                }
+                Ok(paths)
+            }
         }
-        Ok(paths)
     }
 
     /// Returns all Contracts owned by this identity. Empty list if `self.platform != Ethereum`.
@@ -468,7 +509,7 @@ mod tests {
         let found = Identity::find_by_display_name(&raw_db, String::from("0x00000003cd3aa7e760877f03275621d2692f5841"))
             .await?
             .expect("Record not found");
-        let neighbors = found.find_neighbors_with_path(&raw_db, 3, None);
+        let neighbors = found.find_neighbors_with_path(&raw_db, 3, None).await.unwrap();
         println!("{:#?}", neighbors);
         Ok(())
     }
