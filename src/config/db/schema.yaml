@@ -1,7 +1,7 @@
-# 
+#
 # This schema file is auto generated and synchronized with the database.
 # Editing it will have no effect.
-# 
+#
 ---
 version: 1659183120167
 collections:
@@ -26,3 +26,11 @@ indexes:
       unique: true
       sparse: true
       deduplicate: false
+graphs:
+  - name: identities_proofs_graph
+    edgeDefinitions:
+      - collection: Proofs
+        from:
+          - Identities
+        to:
+          - Identities
