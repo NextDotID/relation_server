@@ -1,11 +1,12 @@
+use crate::controller::vec_string_to_vec_platform;
 use crate::error::{Error, Result};
 use crate::graph::edge::HoldRecord;
 use crate::graph::vertex::{Identity, IdentityRecord, Vertex};
 use crate::upstream::{fetch_all, DataSource, Platform, Target};
 
 use aragog::DatabaseConnection;
-use async_graphql::{Context, Object};
 use arangors_lite::Database;
+use async_graphql::{Context, Object};
 use log::debug;
 use strum::IntoEnumIterator;
 
@@ -184,21 +185,15 @@ impl IdentityQuery {
         #[graphql(desc = "Identity on target Platform")] identity: String,
     ) -> Result<Vec<IdentityRecord>> {
         let raw_db: &Database = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-
-        let platform_list : Vec<String> = Platform::iter().map(|p| p.to_string()).rev().collect();
-        let platforms : Vec<Platform> = platforms
-            .into_iter()
-            .map(|field| field.parse()
-            .expect(format!("Platforms should in [{}]", platform_list.join(", ")).as_str())
-        ).rev().collect();
-
-        let record: Vec<IdentityRecord> = Identity::find_by_platforms_identity(&raw_db, &platforms, &identity).await?;
+        let platform_list = vec_string_to_vec_platform(platforms)?;
+        let record: Vec<IdentityRecord> =
+            Identity::find_by_platforms_identity(&raw_db, &platform_list, &identity).await?;
         if record.len() == 0 {
-            for platform in &platforms {
+            for platform in &platform_list {
                 let target = Target::Identity(platform.clone(), identity.clone());
                 fetch_all(target).await?;
             }
-            return Identity::find_by_platforms_identity(&raw_db, &platforms, &identity).await
+            return Identity::find_by_platforms_identity(&raw_db, &platform_list, &identity).await;
         } else {
             for r in &record {
                 if r.is_outdated() {
