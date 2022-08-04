@@ -13,7 +13,7 @@ use aragog::{
     DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
 use arangors_lite::{AqlQuery, Database};
-use serde_json::{value::Value, from_value, json};
+use serde_json::{from_value, json, value::Value};
 
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
@@ -109,8 +109,7 @@ impl Identity {
     ) -> Result<Vec<IdentityRecord>, Error> {
         let platform_array: Vec<Value> = platforms
             .into_iter()
-            .map(|field| json!(format!("{}", field.to_string()) ))
-            .rev()
+            .map(|field| json!(field.to_string()))
             .collect();
 
         let aql = r"FOR v IN @@collection_name
@@ -284,12 +283,13 @@ impl IdentityRecord {
         &self,
         raw_db: &Database,
         depth: u16,
-        _source: Option<DataSource>,
+        source: Option<DataSource>,
     ) -> Result<Vec<Path>, Error> {
         // Using graph speed up FILTER
-        match _source {
+        let aql: AqlQuery;
+        match source {
             None => {
-                let aql = r"
+                let aql_str = r"
                 WITH @@collection_name FOR d IN @@collection_name
                   FILTER d._id == @id
                   LIMIT 1
@@ -298,23 +298,16 @@ impl IdentityRecord {
                     ANY d GRAPH @graph_name
                     RETURN path";
 
-                let aql = AqlQuery::new(aql)
+                aql = AqlQuery::new(aql_str)
                     .bind_var("@collection_name", Identity::COLLECTION_NAME)
-                    .bind_var("graph_name", C.db.identities_proofs_graph.as_str())
+                    .bind_var("graph_name", "identities_proofs_graph")
                     .bind_var("id", self.id().as_str())
                     .bind_var("depth", depth)
                     .batch_size(1)
                     .count(false);
-                let resp: Vec<Value> = raw_db.aql_query(aql).await?;
-                let mut paths: Vec<Path> = Vec::new();
-                for p in resp {
-                    let p: Path = from_value(p)?;
-                    paths.push(p)
-                }
-                Ok(paths)
-            },
+            }
             Some(source) => {
-                let aql = r"
+                let aql_str = r"
                 WITH @@collection_name FOR d IN @@collection_name
                   FILTER d._id == @id
                   LIMIT 1
@@ -324,23 +317,23 @@ impl IdentityRecord {
                     FILTER path.edges[*].`source` ALL == @source
                     RETURN path";
 
-                let aql = AqlQuery::new(aql)
+                aql = AqlQuery::new(aql_str)
                     .bind_var("@collection_name", Identity::COLLECTION_NAME)
-                    .bind_var("graph_name", C.db.identities_proofs_graph.as_str())
+                    .bind_var("graph_name", "identities_proofs_graph")
                     .bind_var("id", self.id().as_str())
                     .bind_var("depth", depth)
                     .bind_var("source", source.to_string().as_str())
                     .batch_size(1)
                     .count(false);
-                let resp: Vec<Value> = raw_db.aql_query(aql).await?;
-                let mut paths: Vec<Path> = Vec::new();
-                for p in resp {
-                    let p: Path = from_value(p).unwrap();
-                    paths.push(p)
-                }
-                Ok(paths)
             }
         }
+        let resp: Vec<Value> = raw_db.aql_query(aql).await?;
+        let mut paths: Vec<Path> = Vec::new();
+        for p in resp {
+            let p: Path = from_value(p)?;
+            paths.push(p)
+        }
+        Ok(paths)
     }
 
     /// Returns all Contracts owned by this identity. Empty list if `self.platform != Ethereum`.
@@ -355,8 +348,6 @@ impl IdentityRecord {
         let result: QueryResult<EdgeRecord<Hold>> = query.call(db).await?;
         Ok(result.iter().map(|r| r.to_owned().into()).collect())
     }
-
-    
 }
 
 #[cfg(test)]
@@ -369,8 +360,9 @@ mod tests {
 
     use super::{Identity, IdentityRecord};
     use crate::{
+        controller::healthz::controller,
         error::Error,
-        graph::{edge::Proof, new_db_connection, Edge, Vertex, new_raw_db_connection},
+        graph::{edge::Proof, new_db_connection, new_raw_db_connection, Edge, Vertex},
         upstream::Platform,
         util::naive_now,
     };
@@ -511,9 +503,12 @@ mod tests {
     async fn test_find_by_platforms_identity() -> Result<(), Error> {
         let raw_db = new_raw_db_connection().await.unwrap();
         let identities = Identity::find_by_platforms_identity(
-            &raw_db, 
-            &vec![Platform::Ethereum, Platform::Twitter], 
-            "0x00000003cd3aa7e760877f03275621d2692f5841").await.unwrap();
+            &raw_db,
+            &vec![Platform::Ethereum, Platform::Twitter],
+            "0x00000003cd3aa7e760877f03275621d2692f5841",
+        )
+        .await
+        .unwrap();
         println!("{:?}", identities);
         Ok(())
     }
@@ -544,11 +539,29 @@ mod tests {
     #[tokio::test]
     async fn test_find_neighbors_with_path() -> Result<(), Error> {
         let raw_db = new_raw_db_connection().await.unwrap();
-        let found = Identity::find_by_display_name(&raw_db, String::from("0x00000003cd3aa7e760877f03275621d2692f5841"))
-            .await?
-            .expect("Record not found");
-        let neighbors = found.find_neighbors_with_path(&raw_db, 3, None).await.unwrap();
+        let found = Identity::find_by_display_name(
+            &raw_db,
+            String::from("0x00000003cd3aa7e760877f03275621d2692f5841"),
+        )
+        .await?
+        .expect("Record not found");
+        let neighbors = found
+            .find_neighbors_with_path(&raw_db, 3, None)
+            .await
+            .unwrap();
         println!("{:#?}", neighbors);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_string_to_platfrom() -> Result<(), Error> {
+        let platforms = vec![
+            String::from("github"),
+            String::from("twitter"),
+            // String::from("aaa"),
+        ];
+        let platform_list = crate::controller::vec_string_to_vec_platform(platforms)?;
+        println!("{:?}", platform_list);
         Ok(())
     }
 }
