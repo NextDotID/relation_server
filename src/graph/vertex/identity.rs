@@ -1,5 +1,4 @@
 use crate::{
-    config::C,
     error::Error,
     graph::{
         edge::{Hold, HoldRecord, Proof, ProofRecord},
@@ -125,6 +124,7 @@ impl Identity {
         Ok(result)
     }
 
+    #[allow(unused)]
     async fn find_by_display_name(
         raw_db: &Database,
         display_name: String,
@@ -293,7 +293,7 @@ impl IdentityRecord {
                 WITH @@collection_name FOR d IN @@collection_name
                   FILTER d._id == @id
                   LIMIT 1
-                  FOR vertex, edge, path 
+                  FOR vertex, edge, path
                     IN 1..@depth
                     ANY d GRAPH @graph_name
                     RETURN path";
@@ -311,7 +311,7 @@ impl IdentityRecord {
                 WITH @@collection_name FOR d IN @@collection_name
                   FILTER d._id == @id
                   LIMIT 1
-                  FOR vertex, edge, path 
+                  FOR vertex, edge, path
                     IN 1..@depth
                     ANY d GRAPH @graph_name
                     FILTER path.edges[*].`source` ALL == @source
@@ -360,7 +360,6 @@ mod tests {
 
     use super::{Identity, IdentityRecord};
     use crate::{
-        controller::healthz::controller,
         error::Error,
         graph::{edge::Proof, new_db_connection, new_raw_db_connection, Edge, Vertex},
         upstream::Platform,
