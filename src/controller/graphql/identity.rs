@@ -187,24 +187,17 @@ impl IdentityQuery {
         let raw_db: &Database = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let platform_list = vec_string_to_vec_platform(platforms)?;
         let record: Vec<IdentityRecord> =
-            Identity::find_by_platforms_identity(&raw_db, &platform_list, &identity).await?;
+            Identity::find_by_platforms_identity(&raw_db, &platform_list, identity.as_str()).await?;
         if record.len() == 0 {
             for platform in &platform_list {
                 let target = Target::Identity(platform.clone(), identity.clone());
                 fetch_all(target).await?;
             }
-            return Identity::find_by_platforms_identity(&raw_db, &platform_list, &identity).await;
+            Ok(Identity::find_by_platforms_identity(&raw_db, &platform_list, identity.as_str()).await?)
         } else {
-            for r in &record {
-                if r.is_outdated() {
-                    let target = Target::Identity(r.platform.clone(), identity.clone());
-                    debug!(
-                        "Identity: {}/{} is outdated. Refetching...",
-                        r.platform, identity
-                    );
-                    tokio::spawn(async move { fetch_all(target).await });
-                }
-            }
+            record.clone().into_iter().filter(|r| r.is_outdated()).for_each(|r| {
+                tokio::spawn(async move { fetch_all(Target::Identity(r.platform.clone(), r.identity.clone())).await });
+            });
             Ok(record)
         }
     }
