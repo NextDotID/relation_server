@@ -195,8 +195,10 @@ impl IdentityQuery {
             }
             Ok(Identity::find_by_platforms_identity(&raw_db, &platform_list, identity.as_str()).await?)
         } else {
-            record.clone().into_iter().filter(|r| r.is_outdated()).for_each(|r| {
-                tokio::spawn(async move { fetch_all(Target::Identity(r.platform.clone(), r.identity.clone())).await });
+            record.iter().filter(|r| r.is_outdated()).for_each(|r| {
+                let platform = r.platform.clone();
+                let identity = r.identity.clone();
+                tokio::spawn(async move { fetch_all(Target::Identity(platform, identity)).await });
             });
             Ok(record)
         }
