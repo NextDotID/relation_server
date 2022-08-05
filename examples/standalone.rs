@@ -11,6 +11,7 @@ use relation_server::{
     config::{self, C},
     controller::graphql::Query,
     error::Result,
+    graph::new_raw_db_connection,
 };
 use std::{convert::Infallible, net::SocketAddr};
 use warp::{http::Response as HttpResponse, Filter, Rejection};
@@ -34,8 +35,10 @@ async fn main() -> Result<()> {
         .apply_schema() // Only apply database migration here.
         .build()
         .await?;
+    let raw_db = new_raw_db_connection().await?;
     let schema = Schema::build(Query::default(), EmptyMutation, EmptySubscription)
         .data(db)
+        .data(raw_db)
         .finish();
 
     let graphql_post = async_graphql_warp::graphql(schema)

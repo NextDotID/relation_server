@@ -187,13 +187,17 @@ impl IdentityQuery {
         let raw_db: &Database = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let platform_list = vec_string_to_vec_platform(platforms)?;
         let record: Vec<IdentityRecord> =
-            Identity::find_by_platforms_identity(&raw_db, &platform_list, identity.as_str()).await?;
+            Identity::find_by_platforms_identity(&raw_db, &platform_list, identity.as_str())
+                .await?;
         if record.len() == 0 {
             for platform in &platform_list {
                 let target = Target::Identity(platform.clone(), identity.clone());
                 fetch_all(target).await?;
             }
-            Ok(Identity::find_by_platforms_identity(&raw_db, &platform_list, identity.as_str()).await?)
+            Ok(
+                Identity::find_by_platforms_identity(&raw_db, &platform_list, identity.as_str())
+                    .await?,
+            )
         } else {
             record.iter().filter(|r| r.is_outdated()).for_each(|r| {
                 let platform = r.platform.clone();
