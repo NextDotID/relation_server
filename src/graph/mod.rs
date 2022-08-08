@@ -83,8 +83,7 @@ pub async fn new_raw_db_connection() -> Result<Database, Error> {
     let db = conn.db(&C.db.db).await?;
     let views: Vec<ViewDescription> = db.list_views().await?;
     let view_name = "relation";
-    let index = views.iter().position(|r| r.name == view_name);
-    if index.is_some() {
+    if views.into_iter().any(|r| r.name == view_name) {
         return Ok(db);
     }
 
