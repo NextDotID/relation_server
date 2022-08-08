@@ -129,12 +129,12 @@ impl Identity {
         raw_db: &Database,
         display_name: String,
     ) -> Result<Option<IdentityRecord>, Error> {
-        let aql = r"FOR v IN @@collection_name
-        FILTER v.display_name == @display_name
+        let aql = r"FOR v IN @@view
+        SEARCH ANALYZER(v.display_name IN TOKENS(@display_name, 'text_en'), 'text_en')
         RETURN v";
 
         let aql = AqlQuery::new(aql)
-            .bind_var("@collection_name", Identity::COLLECTION_NAME)
+            .bind_var("@view", "relation")
             .bind_var("display_name", display_name.as_str())
             .batch_size(1)
             .count(false);
@@ -536,16 +536,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_find_neighbors_with_path() -> Result<(), Error> {
+    async fn test_neighbors_with_traversal() -> Result<(), Error> {
         let raw_db = new_raw_db_connection().await.unwrap();
-        let found = Identity::find_by_display_name(
-            &raw_db,
-            String::from("0x00000003cd3aa7e760877f03275621d2692f5841"),
-        )
-        .await?
-        .expect("Record not found");
+        let found = Identity::find_by_display_name(&raw_db, String::from("Kc37j5zNLG5RLxbWGOz"))
+            .await?
+            .expect("Record not found");
+        println!("{:#?}", found);
         let neighbors = found
-            .find_neighbors_with_path(&raw_db, 3, None)
+            .neighbors_with_traversal(&raw_db, 3, None)
             .await
             .unwrap();
         println!("{:#?}", neighbors);

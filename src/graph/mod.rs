@@ -2,9 +2,14 @@ pub mod edge;
 mod tests;
 pub mod vertex;
 
+use std::collections::HashMap;
+
 use crate::{config::C, error::Error};
 use aragog::{AuthMode, DatabaseConnection, OperationOptions};
-use arangors_lite::{Connection, Database};
+use arangors_lite::{
+    view::ArangoSearchViewLink, view::ArangoSearchViewPropertiesOptions, view::ViewDescription,
+    view::ViewOptions, view::ViewType, Connection, Database,
+};
 
 pub use edge::Edge;
 use serde::Deserialize;
@@ -68,9 +73,61 @@ pub async fn create_identity_to_identity_record(
     Ok(())
 }
 
+// fn is_view_exist(name: &str, views: Vec<ViewDescription>) -> bool {
+
+// }
+
 // Create a row database connection instance for arangodb
 pub async fn new_raw_db_connection() -> Result<Database, Error> {
     let conn = Connection::establish_basic_auth(&C.db.host, &C.db.username, &C.db.password).await?;
     let db = conn.db(&C.db.db).await?;
+    let views: Vec<ViewDescription> = db.list_views().await?;
+    let view_name = "relation";
+    let index = views.iter().position(|r| r.name == view_name);
+    match index {
+        Some(_) => {}
+        None => {
+            /*{
+                "name":"relation",
+                "links":{
+                    "Identities":{
+                        "includeAllFields":true,
+                        "fields":{
+                            "identity":{"analyzers":["text_en"]},
+                            "display_name":{"analyzers":["text_en"]}
+                        }
+                    }
+                }
+            }*/
+            let mut fields = HashMap::new();
+            fields.insert(
+                String::from("identity"),
+                ArangoSearchViewLink::builder()
+                    .analyzers(vec![String::from("text_en")])
+                    .build(),
+            );
+            fields.insert(
+                String::from("display_name"),
+                ArangoSearchViewLink::builder()
+                    .analyzers(vec![String::from("text_en")])
+                    .build(),
+            );
+            let links = ArangoSearchViewLink::builder()
+                .include_all_fields(true)
+                .fields(fields)
+                .build();
+            let mut links_map = HashMap::new();
+            links_map.insert(String::from("Identities"), links);
+            let properties = ArangoSearchViewPropertiesOptions::builder()
+                .links(links_map)
+                .build();
+            let view_options = ViewOptions::builder()
+                .name(view_name.to_string())
+                .typ(ViewType::ArangoSearchView)
+                .properties(properties)
+                .build();
+            db.create_view(view_options).await?;
+        }
+    }
     Ok(db)
 }

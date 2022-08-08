@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::graph::new_db_connection;
+    use crate::graph::{new_db_connection, new_raw_db_connection};
 
     #[tokio::test]
     async fn test_new_db_connection() {
@@ -9,5 +9,10 @@ mod tests {
             .unwrap()
             .collections_names()
             .is_empty())
+    }
+
+    #[tokio::test]
+    async fn test_new_raw_db_connection() {
+        new_raw_db_connection().await.unwrap();
     }
 }
