@@ -129,12 +129,12 @@ impl Identity {
         raw_db: &Database,
         display_name: String,
     ) -> Result<Option<IdentityRecord>, Error> {
-        let aql = r"FOR v IN @@collection_name
-        FILTER v.display_name == @display_name
+        let aql = r"FOR v IN @@view
+        SEARCH ANALYZER(v.display_name IN TOKENS(@display_name, 'text_en'), 'text_en')
         RETURN v";
 
         let aql = AqlQuery::new(aql)
-            .bind_var("@collection_name", Identity::COLLECTION_NAME)
+            .bind_var("@view", "relation")
             .bind_var("display_name", display_name.as_str())
             .batch_size(1)
             .count(false);
@@ -279,27 +279,27 @@ impl IdentityRecord {
     }
 
     // Return all neighbors of this identity with path<ProofRecord>
-    pub async fn find_neighbors_with_path(
+    pub async fn neighbors_with_traversal(
         &self,
         raw_db: &Database,
         depth: u16,
         source: Option<DataSource>,
-    ) -> Result<Vec<Path>, Error> {
+    ) -> Result<Vec<ProofRecord>, Error> {
         // Using graph speed up FILTER
         let aql: AqlQuery;
         match source {
             None => {
                 let aql_str = r"
-                WITH @@collection_name FOR d IN @@collection_name
+                WITH @@view FOR d IN @@view
                   FILTER d._id == @id
                   LIMIT 1
                   FOR vertex, edge, path
                     IN 1..@depth
                     ANY d GRAPH @graph_name
-                    RETURN path";
+                    RETURN edge";
 
                 aql = AqlQuery::new(aql_str)
-                    .bind_var("@collection_name", Identity::COLLECTION_NAME)
+                    .bind_var("@view", "relation")
                     .bind_var("graph_name", "identities_proofs_graph")
                     .bind_var("id", self.id().as_str())
                     .bind_var("depth", depth)
@@ -308,17 +308,17 @@ impl IdentityRecord {
             }
             Some(source) => {
                 let aql_str = r"
-                WITH @@collection_name FOR d IN @@collection_name
+                WITH @@view FOR d IN @@view
                   FILTER d._id == @id
                   LIMIT 1
                   FOR vertex, edge, path
                     IN 1..@depth
                     ANY d GRAPH @graph_name
                     FILTER path.edges[*].`source` ALL == @source
-                    RETURN path";
+                    RETURN edge";
 
                 aql = AqlQuery::new(aql_str)
-                    .bind_var("@collection_name", Identity::COLLECTION_NAME)
+                    .bind_var("@view", "relation")
                     .bind_var("graph_name", "identities_proofs_graph")
                     .bind_var("id", self.id().as_str())
                     .bind_var("depth", depth)
@@ -328,9 +328,9 @@ impl IdentityRecord {
             }
         }
         let resp: Vec<Value> = raw_db.aql_query(aql).await?;
-        let mut paths: Vec<Path> = Vec::new();
+        let mut paths: Vec<ProofRecord> = Vec::new();
         for p in resp {
-            let p: Path = from_value(p)?;
+            let p: ProofRecord = from_value(p)?;
             paths.push(p)
         }
         Ok(paths)
@@ -536,16 +536,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_find_neighbors_with_path() -> Result<(), Error> {
+    async fn test_neighbors_with_traversal() -> Result<(), Error> {
         let raw_db = new_raw_db_connection().await.unwrap();
-        let found = Identity::find_by_display_name(
-            &raw_db,
-            String::from("0x00000003cd3aa7e760877f03275621d2692f5841"),
-        )
-        .await?
-        .expect("Record not found");
+        let found = Identity::find_by_display_name(&raw_db, String::from("Kc37j5zNLG5RLxbWGOz"))
+            .await?
+            .expect("Record not found");
+        println!("{:#?}", found);
         let neighbors = found
-            .find_neighbors_with_path(&raw_db, 3, None)
+            .neighbors_with_traversal(&raw_db, 3, None)
             .await
             .unwrap();
         println!("{:#?}", neighbors);
