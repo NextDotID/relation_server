@@ -84,50 +84,50 @@ pub async fn new_raw_db_connection() -> Result<Database, Error> {
     let views: Vec<ViewDescription> = db.list_views().await?;
     let view_name = "relation";
     let index = views.iter().position(|r| r.name == view_name);
-    match index {
-        Some(_) => {}
-        None => {
-            /*{
-                "name":"relation",
-                "links":{
-                    "Identities":{
-                        "includeAllFields":true,
-                        "fields":{
-                            "identity":{"analyzers":["text_en"]},
-                            "display_name":{"analyzers":["text_en"]}
-                        }
-                    }
-                }
-            }*/
-            let mut fields = HashMap::new();
-            fields.insert(
-                String::from("identity"),
-                ArangoSearchViewLink::builder()
-                    .analyzers(vec![String::from("text_en")])
-                    .build(),
-            );
-            fields.insert(
-                String::from("display_name"),
-                ArangoSearchViewLink::builder()
-                    .analyzers(vec![String::from("text_en")])
-                    .build(),
-            );
-            let links = ArangoSearchViewLink::builder()
-                .include_all_fields(true)
-                .fields(fields)
-                .build();
-            let mut links_map = HashMap::new();
-            links_map.insert(String::from("Identities"), links);
-            let properties = ArangoSearchViewPropertiesOptions::builder()
-                .links(links_map)
-                .build();
-            let view_options = ViewOptions::builder()
-                .name(view_name.to_string())
-                .typ(ViewType::ArangoSearchView)
-                .properties(properties)
-                .build();
-            db.create_view(view_options).await?;
-        }
+    if index.is_some() {
+        return Ok(db);
     }
+
+    /* else create_arangosearch_view: [relation] {
+        "name":"relation",
+        "links":{
+            "Identities":{
+                "includeAllFields":true,
+                "fields":{
+                    "identity":{"analyzers":["text_en"]},
+                    "display_name":{"analyzers":["text_en"]}
+                }
+            }
+        }
+    }*/
+
+    let fields = HashMap::from([
+        (
+            "identity".to_string(),
+            ArangoSearchViewLink::builder()
+                .analyzers(vec![String::from("text_en")])
+                .build(),
+        ),
+        (
+            "display_name".to_string(),
+            ArangoSearchViewLink::builder()
+                .analyzers(vec![String::from("text_en")])
+                .build(),
+        ),
+    ]);
+
+    let links = ArangoSearchViewLink::builder()
+        .include_all_fields(true)
+        .fields(fields)
+        .build();
+    let properties = ArangoSearchViewPropertiesOptions::builder()
+        .links(HashMap::from([("Identities".to_string(), links)]))
+        .build();
+    let view_options = ViewOptions::builder()
+        .name(view_name.to_string())
+        .typ(ViewType::ArangoSearchView)
+        .properties(properties)
+        .build();
+    db.create_view(view_options).await?;
     Ok(db)
 }
