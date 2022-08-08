@@ -1,11 +1,12 @@
+use crate::controller::vec_string_to_vec_platform;
 use crate::error::{Error, Result};
 use crate::graph::edge::HoldRecord;
 use crate::graph::vertex::{Identity, IdentityRecord, Vertex};
 use crate::upstream::{fetch_all, DataSource, Platform, Target};
 
 use aragog::DatabaseConnection;
-use async_graphql::{Context, Object};
 use arangors_lite::Database;
+use async_graphql::{Context, Object};
 use log::debug;
 use strum::IntoEnumIterator;
 
@@ -184,35 +185,25 @@ impl IdentityQuery {
         #[graphql(desc = "Identity on target Platform")] identity: String,
     ) -> Result<Vec<IdentityRecord>> {
         let raw_db: &Database = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let mut array_str = String::from("[");
-        for (i, element) in platforms.iter().enumerate() {
-            let platform: Platform = element.parse()?;
-            array_str = format!(r#"{}"{}""#, array_str, platform.to_string());
-            if i < platforms.len() - 1 {
-                array_str += ", ";
-            }
-        }
-        array_str += "]";
-
-        let record: Vec<IdentityRecord> = Identity::find_by_platforms_identity(&raw_db, array_str.clone(), &identity).await.unwrap();
+        let platform_list = vec_string_to_vec_platform(platforms)?;
+        let record: Vec<IdentityRecord> =
+            Identity::find_by_platforms_identity(&raw_db, &platform_list, identity.as_str())
+                .await?;
         if record.len() == 0 {
-            for element in platforms {
-                let platform: Platform = element.parse()?;
+            for platform in &platform_list {
                 let target = Target::Identity(platform.clone(), identity.clone());
                 fetch_all(target).await?;
             }
-            return Identity::find_by_platforms_identity(&raw_db, array_str.clone(), &identity).await
+            Ok(
+                Identity::find_by_platforms_identity(&raw_db, &platform_list, identity.as_str())
+                    .await?,
+            )
         } else {
-            for r in &record {
-                if r.is_outdated() {
-                    let target = Target::Identity(r.platform.clone(), identity.clone());
-                    debug!(
-                        "Identity: {}/{} is outdated. Refetching...",
-                        r.platform, identity
-                    );
-                    tokio::spawn(async move { fetch_all(target).await });
-                }
-            }
+            record.iter().filter(|r| r.is_outdated()).for_each(|r| {
+                let platform = r.platform.clone();
+                let identity = r.identity.clone();
+                tokio::spawn(async move { fetch_all(Target::Identity(platform, identity)).await });
+            });
             Ok(record)
         }
     }
