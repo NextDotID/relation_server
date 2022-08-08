@@ -279,27 +279,27 @@ impl IdentityRecord {
     }
 
     // Return all neighbors of this identity with path<ProofRecord>
-    pub async fn find_neighbors_with_path(
+    pub async fn neighbors_with_traversal(
         &self,
         raw_db: &Database,
         depth: u16,
         source: Option<DataSource>,
-    ) -> Result<Vec<Path>, Error> {
+    ) -> Result<Vec<ProofRecord>, Error> {
         // Using graph speed up FILTER
         let aql: AqlQuery;
         match source {
             None => {
                 let aql_str = r"
-                WITH @@collection_name FOR d IN @@collection_name
+                WITH @@view FOR d IN @@view
                   FILTER d._id == @id
                   LIMIT 1
                   FOR vertex, edge, path
                     IN 1..@depth
                     ANY d GRAPH @graph_name
-                    RETURN path";
+                    RETURN edge";
 
                 aql = AqlQuery::new(aql_str)
-                    .bind_var("@collection_name", Identity::COLLECTION_NAME)
+                    .bind_var("@view", "relation")
                     .bind_var("graph_name", "identities_proofs_graph")
                     .bind_var("id", self.id().as_str())
                     .bind_var("depth", depth)
@@ -308,17 +308,17 @@ impl IdentityRecord {
             }
             Some(source) => {
                 let aql_str = r"
-                WITH @@collection_name FOR d IN @@collection_name
+                WITH @@view FOR d IN @@view
                   FILTER d._id == @id
                   LIMIT 1
                   FOR vertex, edge, path
                     IN 1..@depth
                     ANY d GRAPH @graph_name
                     FILTER path.edges[*].`source` ALL == @source
-                    RETURN path";
+                    RETURN edge";
 
                 aql = AqlQuery::new(aql_str)
-                    .bind_var("@collection_name", Identity::COLLECTION_NAME)
+                    .bind_var("@view", "relation")
                     .bind_var("graph_name", "identities_proofs_graph")
                     .bind_var("id", self.id().as_str())
                     .bind_var("depth", depth)
@@ -328,9 +328,9 @@ impl IdentityRecord {
             }
         }
         let resp: Vec<Value> = raw_db.aql_query(aql).await?;
-        let mut paths: Vec<Path> = Vec::new();
+        let mut paths: Vec<ProofRecord> = Vec::new();
         for p in resp {
-            let p: Path = from_value(p)?;
+            let p: ProofRecord = from_value(p)?;
             paths.push(p)
         }
         Ok(paths)

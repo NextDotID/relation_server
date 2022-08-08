@@ -1,6 +1,6 @@
 use crate::controller::vec_string_to_vec_platform;
 use crate::error::{Error, Result};
-use crate::graph::edge::HoldRecord;
+use crate::graph::edge::{HoldRecord, ProofRecord};
 use crate::graph::vertex::{Identity, IdentityRecord, Vertex};
 use crate::upstream::{fetch_all, DataSource, Platform, Target};
 
@@ -124,6 +124,16 @@ impl IdentityRecord {
             None,
         )
         .await
+    }
+
+    async fn neighbor_with_traversal(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
+    ) -> Result<Vec<ProofRecord>> {
+        let raw_db: &Database = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        self.neighbors_with_traversal(raw_db, depth.unwrap_or(1), None)
+            .await
     }
 
     /// NFTs owned by this identity.
