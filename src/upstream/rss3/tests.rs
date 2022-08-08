@@ -12,7 +12,7 @@ use crate::{
 async fn test_smoke_nft_rss3() -> Result<(), Error> {
     let target = Target::Identity(
         Platform::Ethereum,
-        "0x6875e13A6301040388F61f5DBa5045E1bE01c657".to_lowercase(),
+        "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".to_lowercase(),
     );
     let _ = Rss3::fetch(&target).await?;
 
@@ -24,12 +24,12 @@ async fn test_smoke_nft_rss3() -> Result<(), Error> {
     let contract = Contract::find_by_chain_address(
         &db,
         &Chain::Polygon,
-        "0x8f9772d0ed34bd0293098a439912f0f6d6e78e3f",
+        "0x60576a64851c5b42e8c57e3e4a5cf3cf4eeb2ed6",
     )
     .await?
     .unwrap();
 
-    let _ = Hold::find_by_from_to_id(&db, &owner, &contract, "1")
+    let _ = Hold::find_by_from_to_id(&db, &owner, &contract, "1484")
         .await
         .expect("Record not found");
 
