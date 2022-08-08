@@ -62,9 +62,9 @@ pub struct MetaData {
     #[serde(default)]
     pub token_id: String,
     #[serde(default)]
-    pub token_address: String,
-    pub token_standard: String,
-    pub token_symbol: String,
+    pub token_address: Option<String>,
+    pub token_standard: Option<String>,
+    pub token_symbol: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -105,6 +105,9 @@ pub enum Rss3Chain {
 
     #[serde(rename = "optimism")]
     Optimism,
+
+    #[serde(rename = "gnosis")]
+    Gnosis,
 }
 
 impl From<Rss3Chain> for Chain {
@@ -119,6 +122,8 @@ impl From<Rss3Chain> for Chain {
             Rss3Chain::Arweave => Chain::Arweave,
             Rss3Chain::Arbitrum => Chain::Arbitrum,
             Rss3Chain::Optimism => Chain::Optimism,
+            Rss3Chain::Gnosis => Chain::Gnosis,
+            _ => Chain::Unknown,
         }
     }
 }
@@ -192,7 +197,7 @@ async fn fetch_nfts_by_account(
 
 async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
     // Don't use ENS result returned from RSS3.
-    if p.metadata.contract_type == *"ENS" {
+    if p.metadata.token_symbol.is_some() && p.metadata.token_symbol.clone().unwrap() == "ENS".to_string() {
         return Ok(vec![]);
     }
     let creataed_at = DateTime::parse_from_rfc3339(&p.date_created).unwrap();
@@ -214,14 +219,14 @@ async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
     };
 
     let chain: Chain = p.metadata.network.into();
-    let nft_category = ContractCategory::from_str(p.metadata.contract_type.as_str()).unwrap();
+    let nft_category = ContractCategory::from_str(p.metadata.contract_type.as_str()).unwrap_or_default();
 
     let to: Contract = Contract {
         uuid: Uuid::new_v4(),
         category: nft_category,
         address: p.metadata.collection_address.clone().to_lowercase(),
         chain,
-        symbol: Some(p.metadata.token_symbol.clone()),
+        symbol: p.metadata.token_symbol.clone(),
         updated_at: naive_now(),
     };
 
