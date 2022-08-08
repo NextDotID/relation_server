@@ -25,7 +25,6 @@ use uuid::Uuid;
 )]
 pub enum Chain {
     /// The Blockchain.
-    #[default]
     #[serde(rename = "ethereum")]
     #[strum(serialize = "ethereum")]
     #[graphql(name = "ethereum")]
@@ -145,6 +144,12 @@ pub enum Chain {
     #[strum(serialize = "optimism")]
     #[graphql(name = "optimism")]
     Optimism,
+
+    #[default]
+    #[serde(rename = "unknown")]
+    #[strum(serialize = "unknown")]
+    #[graphql(name = "unknown")]
+    Unknown,
 }
 
 /// Internal chain implementation / framework.
@@ -190,6 +195,7 @@ impl Chain {
             Arweave => ChainType::Arweave,
             Arbitrum => ChainType::EVM(42161),
             Optimism => ChainType::EVM(10),
+            Unknown => todo!(),
         }
     }
 }
