@@ -1,7 +1,9 @@
 pub mod edge;
+pub mod pool;
 mod tests;
 pub mod vertex;
-
+use deadpool::managed::Pool;
+use log::debug;
 use std::collections::HashMap;
 
 use crate::{config::C, error::Error};
@@ -35,6 +37,49 @@ pub struct CryptoIdentity {
 pub struct PubKeyDerivation {
     pub uuid: String,
     pub method: String,
+}
+
+#[derive(Clone)]
+pub struct ConnectionPool {
+    pub pool: Pool<Connection, Error>,
+}
+
+impl ConnectionPool {
+    pub async fn db(&self) -> Result<Database, Error> {
+        let pool_status = &self.pool.status();
+        debug!(
+            "Connection pool status: max_size={}, size={}, available={}",
+            pool_status.max_size, pool_status.size, pool_status.available
+        );
+        let connection = &self.pool.get().await;
+        match connection {
+            Ok(conn) => match conn.db(&C.db.db).await {
+                Ok(db) => Ok(db),
+                Err(err) => Err(Error::ArangoLiteDBError(err)),
+            },
+            Err(err) => Err(Error::PoolError(err.to_string())),
+        }
+    }
+}
+
+/// Create connection pool for arangodb
+pub async fn new_connection_pool() -> ConnectionPool {
+    // HOLD ON: Specify the maximum number(1024)
+    // let max_pool_size = num_cpus::get_physical() * 4;
+    let max_pool_size = 24;
+    let connection_pool = Pool::new(
+        pool::ConnectionManager {
+            host: C.db.host.to_string(),
+            username: C.db.username.to_string(),
+            password: C.db.password.to_string(),
+            db: C.db.db.to_string(),
+        },
+        max_pool_size,
+    );
+    debug!("Creating connection pool");
+    ConnectionPool {
+        pool: connection_pool,
+    }
 }
 
 /// Create a database connection instance.
@@ -72,10 +117,6 @@ pub async fn create_identity_to_identity_record(
     proof.connect(db, &from_record, &to_record).await?;
     Ok(())
 }
-
-// fn is_view_exist(name: &str, views: Vec<ViewDescription>) -> bool {
-
-// }
 
 // Create a row database connection instance for arangodb
 pub async fn new_raw_db_connection() -> Result<Database, Error> {

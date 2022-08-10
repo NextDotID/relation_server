@@ -11,6 +11,7 @@ use relation_server::{
     config::{self, C},
     controller::graphql::Query,
     error::Result,
+    graph::new_connection_pool,
     graph::new_raw_db_connection,
 };
 use std::{convert::Infallible, net::SocketAddr};
@@ -36,9 +37,11 @@ async fn main() -> Result<()> {
         .build()
         .await?;
     let raw_db = new_raw_db_connection().await?;
+    let pool = new_connection_pool();
     let schema = Schema::build(Query::default(), EmptyMutation, EmptySubscription)
         .data(db)
         .data(raw_db)
+        .data(pool)
         .finish();
 
     let graphql_post = async_graphql_warp::graphql(schema)
