@@ -290,7 +290,7 @@ impl IdentityRecord {
         match source {
             None => {
                 let aql_str = r"
-                WITH @@view FOR d IN @@view
+                WITH @@collection_name FOR d IN @@collection_name
                   FILTER d._id == @id
                   LIMIT 1
                   FOR vertex, edge, path
@@ -299,7 +299,7 @@ impl IdentityRecord {
                     RETURN edge";
 
                 aql = AqlQuery::new(aql_str)
-                    .bind_var("@view", "relation")
+                    .bind_var("@collection_name", Identity::COLLECTION_NAME)
                     .bind_var("graph_name", "identities_proofs_graph")
                     .bind_var("id", self.id().as_str())
                     .bind_var("depth", depth)
@@ -308,7 +308,7 @@ impl IdentityRecord {
             }
             Some(source) => {
                 let aql_str = r"
-                WITH @@view FOR d IN @@view
+                WITH @@collection_name FOR d IN @@collection_name
                   FILTER d._id == @id
                   LIMIT 1
                   FOR vertex, edge, path
@@ -318,7 +318,7 @@ impl IdentityRecord {
                     RETURN edge";
 
                 aql = AqlQuery::new(aql_str)
-                    .bind_var("@view", "relation")
+                    .bind_var("@collection_name", Identity::COLLECTION_NAME)
                     .bind_var("graph_name", "identities_proofs_graph")
                     .bind_var("id", self.id().as_str())
                     .bind_var("depth", depth)
