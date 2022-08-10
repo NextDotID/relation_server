@@ -126,10 +126,11 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
     };
 
     let to_platform = Platform::from_str(p.web3_platform.as_str()).unwrap_or_default();
+    let web3_addr = p.web3_addr.to_lowercase();
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: to_platform,
-        identity: p.web3_addr.clone(),
+        identity: web3_addr.clone(),
         created_at: None,
         // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
         display_name: None,
@@ -163,7 +164,7 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
 
     let _ = create_identity_to_identity_record(&db, &from, &to, &pf).await;
 
-    targets.push(Target::Identity(to_platform, p.web3_addr.clone()));
+    targets.push(Target::Identity(to_platform, web3_addr.clone()));
 
     // TODO: Don't use ENS result from aggregation service.
     // if p.ens.is_some() {
