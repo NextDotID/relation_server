@@ -319,16 +319,16 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
     let mut up_next: TargetProcessedList = vec![initial_target];
     let mut processed: TargetProcessedList = vec![];
     while !up_next.is_empty() {
-        debug!("fetch_all::up_next | {:?}", up_next);
+        info!("fetch_all::up_next | {:?}", up_next);
         let target = up_next.pop().unwrap();
         let fetched = fetch_one(&target).await?;
         processed.push(target.clone());
         fetched.into_iter().for_each(|f| {
             if processed.contains(&f) || up_next.contains(&f) {
-                trace!("fetch_all::iter | Fetched {} | duplicated", f);
-            } else {    
+                info!("fetch_all::iter | Fetched {} | duplicated", f);
+            } else {
                 up_next.push(f.clone());
-                trace!("fetch_all::iter | Fetched {} | pushed into up_next", f.clone());
+                info!("fetch_all::iter | Fetched {} | pushed into up_next", f.clone());
             }
         });
     }
