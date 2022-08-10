@@ -1,5 +1,6 @@
 use crate::{
     error::Error,
+    graph::ConnectionPool,
     graph::{
         edge::{Hold, HoldRecord, Proof, ProofRecord},
         vertex::Vertex,
@@ -16,8 +17,10 @@ use serde_json::{from_value, json, value::Value};
 
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
+use dataloader::BatchFn;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Record)]
@@ -251,6 +254,57 @@ impl std::ops::DerefMut for IdentityRecord {
 impl From<DatabaseRecord<Identity>> for IdentityRecord {
     fn from(record: DatabaseRecord<Identity>) -> Self {
         Self(record)
+    }
+}
+
+pub struct IdentifyLoadFn {
+    pub pool: ConnectionPool,
+}
+
+#[async_trait::async_trait]
+impl BatchFn<String, Option<IdentityRecord>> for IdentifyLoadFn {
+    async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<IdentityRecord>> {
+        println!("Loading identify for: {:?}", ids);
+        let identities = get_identities(&self.pool, ids.to_vec()).await;
+        match identities {
+            Ok(identities) => identities,
+            // HOLD ON: Not sure if `Err` need to return
+            Err(_) => ids.iter().map(|k| (k.to_owned(), None)).collect(),
+        }
+    }
+}
+
+/// It already returns Dataloader friendly output given the NFT IDs.
+async fn get_identities(
+    pool: &ConnectionPool,
+    ids: Vec<String>,
+) -> Result<HashMap<String, Option<IdentityRecord>>, Error> {
+    let db = pool.db().await?;
+    let aql = r"TODO";
+    let aql = AqlQuery::new(aql)
+        .bind_var("@collection_name", Identity::COLLECTION_NAME)
+        .batch_size(1)
+        .count(false);
+
+    let identities = db.aql_query::<IdentityRecord>(aql).await;
+    match identities {
+        Ok(contents) => {
+            let id_identities_map = contents
+                .into_iter()
+                .map(|content| (content.identity.clone(), Some(content)))
+                .collect();
+
+            let dataloader_map = ids.into_iter().fold(
+                id_identities_map,
+                |mut map: HashMap<String, Option<IdentityRecord>>, id| {
+                    map.entry(id).or_insert(None);
+                    map
+                },
+            );
+
+            Ok(dataloader_map)
+        }
+        Err(e) => Err(Error::ArangoLiteDBError(e)),
     }
 }
 

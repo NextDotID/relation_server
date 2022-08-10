@@ -1,10 +1,17 @@
-use crate::{error::Error, graph::Vertex, util::naive_now};
+use crate::{
+    error::Error,
+    graph::{ConnectionPool, Vertex},
+    util::naive_now,
+};
 use aragog::{
     query::{Comparison, Filter},
     DatabaseConnection, DatabaseRecord, Record,
 };
+use arangors_lite::AqlQuery;
 use chrono::{Duration, NaiveDateTime};
+use dataloader::BatchFn;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use strum_macros::{Display, EnumIter, EnumString};
 use uuid::Uuid;
 
@@ -261,6 +268,57 @@ impl ContractCategory {
             POAP => Some(Chain::Ethereum),
             _ => None,
         }
+    }
+}
+
+pub struct ContractLoadFn {
+    pub pool: ConnectionPool,
+}
+
+#[async_trait::async_trait]
+impl BatchFn<String, Option<ContractRecord>> for ContractLoadFn {
+    async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<ContractRecord>> {
+        println!("Loading contract for: {:?}", ids);
+        let contracts = get_contracts(&self.pool, ids.to_vec()).await;
+        match contracts {
+            Ok(contracts) => contracts,
+            // HOLD ON: Not sure if `Err` need to return
+            Err(_) => ids.iter().map(|k| (k.to_owned(), None)).collect(),
+        }
+    }
+}
+
+/// It already returns Dataloader friendly output given the NFT IDs.
+async fn get_contracts(
+    pool: &ConnectionPool,
+    ids: Vec<String>,
+) -> Result<HashMap<String, Option<ContractRecord>>, Error> {
+    let db = pool.db().await?;
+    let aql = r"TODO";
+    let aql = AqlQuery::new(aql)
+        .bind_var("@collection_name", Contract::COLLECTION_NAME)
+        .batch_size(1)
+        .count(false);
+
+    let contracts = db.aql_query::<ContractRecord>(aql).await;
+    match contracts {
+        Ok(contents) => {
+            let id_contracts_map = contents
+                .into_iter()
+                .map(|content| (content.address.clone(), Some(content)))
+                .collect();
+
+            let dataloader_map = ids.into_iter().fold(
+                id_contracts_map,
+                |mut map: HashMap<String, Option<ContractRecord>>, id| {
+                    map.entry(id).or_insert(None);
+                    map
+                },
+            );
+
+            Ok(dataloader_map)
+        }
+        Err(e) => Err(Error::ArangoLiteDBError(e)),
     }
 }
 
