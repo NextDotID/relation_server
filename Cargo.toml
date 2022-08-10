@@ -40,8 +40,11 @@ strum_macros = "*"
 strum = "*"
 
 # GraphQL
-async-graphql = {version = "4", features = ["uuid", "chrono"]}
+async-graphql = { version = "4", features = ["uuid", "chrono"] }
 async-graphql-warp = "*"
+dataloader = "0.14.0"
+deadpool = { version = "0.7.0", features = ["managed"] }
+num_cpus = "1.13.0"
 
 gql_client = "1.0.4"
 
