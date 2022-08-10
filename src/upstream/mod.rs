@@ -327,10 +327,8 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
             if processed.contains(&f) || up_next.contains(&f) {
                 trace!("fetch_all::iter | Fetched {} | duplicated", f);
             } else {    
-                if !up_next.contains(&f) {
-                    up_next.push(f.clone());
-                    trace!("fetch_all::iter | Fetched {} | pushed into up_next", f.clone());
-                }  
+                up_next.push(f.clone());
+                trace!("fetch_all::iter | Fetched {} | pushed into up_next", f.clone());
             }
         });
     }
