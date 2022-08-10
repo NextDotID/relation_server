@@ -37,6 +37,8 @@ pub enum Error {
     ParseIntError(#[from] std::num::ParseIntError),
     #[error("GraphQL error: {0}")]
     GraphQLError(String),
+    #[error("PoolError error: {0}")]
+    PoolError(String),
 }
 
 impl Error {
@@ -58,6 +60,7 @@ impl Error {
             Error::ParseIntError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::UuidError(_) => StatusCode::BAD_REQUEST,
             Error::ArangoLiteDBError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::PoolError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
