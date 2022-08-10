@@ -3,7 +3,7 @@ use crate::upstream::{fetch_all, fetch_one, Platform, Target};
 
 #[tokio::test]
 async fn test_fetcher_result() -> Result<(), Error> {
-    fetch_all(Target::Identity(Platform::Twitter, "0xsannie".into()))
+    fetch_all(Target::Identity(Platform::Twitter, "suji_yan".into()))
         .await
         .expect("fetch_all should success");
 

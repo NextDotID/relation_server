@@ -324,15 +324,14 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
         let fetched = fetch_one(&target).await?;
         processed.push(target.clone());
         fetched.into_iter().for_each(|f| {
-            if processed.contains(&f) {
+            if processed.contains(&f) || up_next.contains(&f) {
                 trace!("fetch_all::iter | Fetched {} | duplicated", f);
-            } else {
-                trace!("fetch_all::iter | Fetched {} | pushed into up_next", f);
-                up_next.push(f);
+            } else {    
+                up_next.push(f.clone());
+                trace!("fetch_all::iter | Fetched {} | pushed into up_next", f.clone());
             }
         });
     }
-
     Ok(())
 }
 
