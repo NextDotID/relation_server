@@ -197,8 +197,8 @@ async fn fetch_nfts_by_account(
 async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
     // Don't use ENS result returned from RSS3.
     if Some("ENS".to_string()) == p.metadata.token_symbol
-        || ContractCategory::ENS.default_contract_address()
-            == Some(p.metadata.collection_address.clone())
+        || ContractCategory::ENS.default_contract_address().unwrap()
+            == p.metadata.collection_address.clone()
     {
         return Ok(vec![]);
     }
