@@ -196,7 +196,10 @@ async fn fetch_nfts_by_account(
 
 async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
     // Don't use ENS result returned from RSS3.
-    if Some("ENS".to_string()) == p.metadata.token_symbol {
+    if Some("ENS".to_string()) == p.metadata.token_symbol
+        || ContractCategory::ENS.default_contract_address().unwrap()
+            == p.metadata.collection_address
+    {
         return Ok(vec![]);
     }
 
@@ -219,21 +222,22 @@ async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
     };
 
     let chain: Chain = p.metadata.network.into();
-    let nft_category = ContractCategory::from_str(p.metadata.contract_type.as_str()).unwrap_or_default();
+    let nft_category =
+        ContractCategory::from_str(p.metadata.contract_type.as_str()).unwrap_or_default();
 
     let to: Contract = Contract {
         uuid: Uuid::new_v4(),
         category: nft_category,
-        address: p.metadata.collection_address.clone().to_lowercase(),
+        address: p.metadata.collection_address.to_lowercase(),
         chain,
-        symbol: p.metadata.token_symbol.clone(),
+        symbol: p.metadata.token_symbol,
         updated_at: naive_now(),
     };
 
     let hold: Hold = Hold {
         uuid: Uuid::new_v4(),
         source: DataSource::Rss3,
-        transaction: Some(p.metadata.proof.clone()),
+        transaction: Some(p.metadata.proof),
         id: p.metadata.token_id.clone(),
         created_at: Some(created_at_naive),
         updated_at: naive_now(),
@@ -244,7 +248,7 @@ async fn save_item(p: Item) -> Result<TargetProcessedList, Error> {
     Ok(vec![Target::NFT(
         chain,
         nft_category,
-        p.metadata.collection_address.clone(),
-        p.metadata.token_id.clone(),
+        p.metadata.collection_address,
+        p.metadata.token_id,
     )])
 }
