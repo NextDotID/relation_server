@@ -328,7 +328,10 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
                 info!("fetch_all::iter | Fetched {} | duplicated", f);
             } else {
                 up_next.push(f.clone());
-                info!("fetch_all::iter | Fetched {} | pushed into up_next", f.clone());
+                info!(
+                    "fetch_all::iter | Fetched {} | pushed into up_next",
+                    f.clone()
+                );
             }
         });
     }
