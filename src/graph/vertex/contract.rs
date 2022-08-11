@@ -1,5 +1,6 @@
 use crate::{
     error::Error,
+    graph::edge::Hold,
     graph::{ConnectionPool, Vertex},
     util::naive_now,
 };
@@ -11,6 +12,7 @@ use arangors_lite::AqlQuery;
 use chrono::{Duration, NaiveDateTime};
 use dataloader::BatchFn;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, value::Value};
 use std::collections::HashMap;
 use strum_macros::{Display, EnumIter, EnumString};
 use uuid::Uuid;
@@ -294,18 +296,28 @@ async fn get_contracts(
     ids: Vec<String>,
 ) -> Result<HashMap<String, Option<ContractRecord>>, Error> {
     let db = pool.db().await?;
-    let aql = r"TODO";
+    let nft_ids: Vec<Value> = ids.iter().map(|field| json!(field.to_string())).collect();
+
+    let aql = r###"WITH @@edge_collection_name
+    FOR d IN @@edge_collection_name
+        FILTER d.id IN @nft_ids
+        LET v = d._to
+        FOR c IN @@collection_name FILTER c._id == v
+        RETURN {"id": d.id, "contract": c}"###;
+
     let aql = AqlQuery::new(aql)
+        .bind_var("@edge_collection_name", Hold::COLLECTION_NAME)
         .bind_var("@collection_name", Contract::COLLECTION_NAME)
+        .bind_var("nft_ids", nft_ids)
         .batch_size(1)
         .count(false);
 
-    let contracts = db.aql_query::<ContractRecord>(aql).await;
+    let contracts = db.aql_query::<ToContractRecord>(aql).await;
     match contracts {
         Ok(contents) => {
             let id_contracts_map = contents
                 .into_iter()
-                .map(|content| (content.address.clone(), Some(content)))
+                .map(|content| (content.id.clone(), Some(content.contract)))
                 .collect();
 
             let dataloader_map = ids.into_iter().fold(
@@ -424,6 +436,14 @@ impl Vertex<ContractRecord> for Contract {
 #[derive(Clone, Deserialize, Serialize, Default, Debug)]
 pub struct ContractRecord(pub DatabaseRecord<Contract>);
 
+#[derive(Clone, Deserialize, Serialize, Default, Debug)]
+pub struct ToContractRecord {
+    /// NFT_ID of ENS is a hash of domain. So domain can be used as NFT_ID.
+    pub id: String,
+    /// Account / identity Holds NFT -> Contract
+    pub contract: ContractRecord,
+}
+
 impl std::ops::Deref for ContractRecord {
     type Target = DatabaseRecord<Contract>;
 
@@ -447,6 +467,7 @@ impl From<DatabaseRecord<Contract>> for ContractRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graph::new_connection_pool;
     use crate::graph::new_db_connection;
     use fake::{Dummy, Fake, Faker};
 
@@ -486,6 +507,19 @@ mod tests {
             .await?
             .expect("contract should be found");
         assert_eq!(found.key(), created.key());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_contracts_hashmap() -> Result<(), Error> {
+        let pool = new_connection_pool().await;
+        let ids = vec![
+            String::from("2NOea6D9n8T8fQf464L"),
+            String::from("lJTcEp2"),
+            String::from("fake"),
+        ];
+        let result = get_contracts(&pool, ids).await;
+        println!("{:#?}", result);
         Ok(())
     }
 }

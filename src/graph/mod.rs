@@ -76,7 +76,7 @@ pub async fn new_connection_pool() -> ConnectionPool {
         },
         max_pool_size,
     );
-    debug!("Creating connection pool");
+    debug!("Creating connection pool(db={})", &C.db.db);
     ConnectionPool {
         pool: connection_pool,
     }

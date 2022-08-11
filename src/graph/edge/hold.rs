@@ -162,7 +162,10 @@ impl Edge<Identity, Contract, HoldRecord> for Hold {
 
 #[cfg(test)]
 mod tests {
-    use crate::{graph::new_db_connection, util::naive_now};
+    use crate::{
+        graph::{new_db_connection, Proof},
+        util::naive_now,
+    };
     use fake::{Dummy, Fake, Faker};
 
     use super::*;
@@ -184,16 +187,23 @@ mod tests {
     #[tokio::test]
     async fn test_find_by_id_chain_address() -> Result<(), Error> {
         let db = new_db_connection().await?;
-        let identity = Identity::create_dummy(&db).await?;
-        let contract = Contract::create_dummy(&db).await?;
-        let hold: Hold = Faker.fake();
-        let hold_record = hold.connect(&db, &identity, &contract).await?;
+        let id1 = Identity::create_dummy(&db).await?;
+        let id2 = Identity::create_dummy(&db).await?;
+        let proof1_raw: Proof = Faker.fake();
+        proof1_raw.connect(&db, &id1, &id2).await?;
+
+        let contract1 = Contract::create_dummy(&db).await?;
+        let contract2 = Contract::create_dummy(&db).await?;
+        let hold1: Hold = Faker.fake();
+        let hold2: Hold = Faker.fake();
+        let hold1_record = hold1.connect(&db, &id1, &contract1).await?;
+        let hold2_record = hold2.connect(&db, &id2, &contract2).await?;
         let found =
-            Hold::find_by_id_chain_address(&db, &hold.id, &contract.chain, &contract.address)
+            Hold::find_by_id_chain_address(&db, &hold1.id, &contract1.chain, &contract1.address)
                 .await
                 .expect("Should find a Hold record without error")
                 .expect("Should find a Hold record, not Empty");
-        assert_eq!(found.key(), hold_record.key());
+        assert_eq!(found.key(), hold1_record.key());
 
         Ok(())
     }
