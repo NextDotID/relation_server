@@ -2,6 +2,7 @@ use aragog::{
     query::{Comparison, Filter, QueryResult},
     DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
+use arangors_lite::{AqlQuery, Database};
 use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -107,6 +108,37 @@ impl Hold {
             Ok(None)
         } else {
             Ok(Some(result.first().unwrap().clone().into()))
+        }
+    }
+
+    /// Find a hold record by Chain, NFT_ID and NFT Address.
+    /// merge these 2 queries into one.
+    pub async fn find_by_id_chain_address_merge(
+        db: &Database,
+        id: &str,
+        chain: &Chain,
+        address: &str,
+    ) -> Result<Option<HoldRecord>, Error> {
+        let aql_str = r"FOR c IN @@collection_name
+            FILTER c.address == @address AND c.chain == @chain
+            FOR vertex, edge IN 1..1 INBOUND c GRAPH @graph_name
+            FILTER edge.id == @id
+            RETURN edge
+        ";
+        let aql = AqlQuery::new(aql_str)
+            .bind_var("@collection_name", Contract::COLLECTION_NAME)
+            .bind_var("graph_name", "identities_contracts_graph")
+            .bind_var("address", address)
+            .bind_var("chain", chain.to_string())
+            .bind_var("id", id)
+            .batch_size(1)
+            .count(false);
+
+        let holds = db.aql_query::<HoldRecord>(aql).await?;
+        if holds.len() == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(holds.first().unwrap().clone().into()))
         }
     }
 }
