@@ -3,14 +3,14 @@ use crate::{
     graph::{
         edge::{Edge, Hold, HoldRecord},
         vertex::{
-            contract::{Chain, ContractCategory, ContractLoadFn},
+            contract::{Chain, ContractCategory, ContractLoadFn, ContractRecord},
             IdentifyLoadFn, IdentityRecord,
         },
-        ConnectionPool,
     },
     upstream::{fetch_all, DataFetcher, DataSource, Target},
 };
-use aragog::DatabaseConnection;
+// use aragog::DatabaseConnection;
+use arangors_lite::Database;
 use async_graphql::{Context, Object};
 // use dataloader::cached::Loader;
 use dataloader::non_cached::Loader;
@@ -63,13 +63,8 @@ impl HoldRecord {
         // let to_record: DatabaseRecord<Contract> = self.record.to_record(db).await?;
         // Ok(to_record.record.category)
 
-        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let contract_loader = ContractLoadFn {
-            pool: pool.to_owned(),
-        };
-
-        // HOLD ON: Specify the batch size number
-        let loader = Loader::new(contract_loader).with_max_batch_size(10);
+        let loader: &Loader<String, Option<ContractRecord>, ContractLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         match loader.load(self.id.clone()).await {
             Some(contract) => Ok(contract.category),
             None => Err(Error::GraphQLError("contract no found.".to_string())),
@@ -85,13 +80,8 @@ impl HoldRecord {
         // let to_record: DatabaseRecord<Contract> = self.record.to_record(db).await?;
         // Ok(to_record.record.chain)
 
-        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let contract_loader = ContractLoadFn {
-            pool: pool.to_owned(),
-        };
-
-        // HOLD ON: Specify the batch size number
-        let loader = Loader::new(contract_loader).with_max_batch_size(10);
+        let loader: &Loader<String, Option<ContractRecord>, ContractLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         match loader.load(self.id.clone()).await {
             Some(contract) => Ok(contract.chain),
             None => Err(Error::GraphQLError("contract no found.".to_string())),
@@ -105,13 +95,8 @@ impl HoldRecord {
         // let to_record: DatabaseRecord<Contract> = self.record.to_record(db).await?;
         // Ok(to_record.record.address)
 
-        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let contract_loader = ContractLoadFn {
-            pool: pool.to_owned(),
-        };
-
-        // HOLD ON: Specify the batch size number
-        let loader = Loader::new(contract_loader).with_max_batch_size(10);
+        let loader: &Loader<String, Option<ContractRecord>, ContractLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         match loader.load(self.id.clone()).await {
             Some(contract) => Ok(contract.address.clone()),
             None => Err(Error::GraphQLError("contract no found.".to_string())),
@@ -125,13 +110,8 @@ impl HoldRecord {
         // let to_record: DatabaseRecord<Contract> = self.record.to_record(db).await?;
         // Ok(to_record.record.symbol)
 
-        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let contract_loader = ContractLoadFn {
-            pool: pool.to_owned(),
-        };
-
-        // HOLD ON: Specify the batch size number
-        let loader = Loader::new(contract_loader).with_max_batch_size(10);
+        let loader: &Loader<String, Option<ContractRecord>, ContractLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         match loader.load(self.id.clone()).await {
             Some(contract) => Ok(contract.symbol.clone()),
             None => Err(Error::GraphQLError("contract no found.".to_string())),
@@ -145,13 +125,8 @@ impl HoldRecord {
         // let identity: DatabaseRecord<Identity> = self.record.from_record(db).await?;
         // Ok(identity.into())
 
-        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let identity_loader = IdentifyLoadFn {
-            pool: pool.to_owned(),
-        };
-
-        // HOLD ON: Specify the batch size number
-        let loader = Loader::new(identity_loader).with_max_batch_size(10);
+        let loader: &Loader<String, Option<IdentityRecord>, IdentifyLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         match loader.load(self.id.clone()).await {
             Some(identity) => Ok(identity),
             None => Err(Error::GraphQLError("record no found.".to_string())),

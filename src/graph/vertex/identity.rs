@@ -13,13 +13,13 @@ use aragog::{
     DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
 use arangors_lite::{AqlQuery, Database};
-use serde_json::{from_value, json, value::Value};
-
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
 use dataloader::BatchFn;
 use http::StatusCode;
+use log::debug;
 use serde::{Deserialize, Serialize};
+use serde_json::{from_value, json, value::Value};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -272,7 +272,7 @@ pub struct IdentifyLoadFn {
 #[async_trait::async_trait]
 impl BatchFn<String, Option<IdentityRecord>> for IdentifyLoadFn {
     async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<IdentityRecord>> {
-        println!("Loading identify for: {:?}", ids);
+        debug!("Loading identify for: {:?}", ids);
         let identities = get_identities(&self.pool, ids.to_vec()).await;
         match identities {
             Ok(identities) => identities,

@@ -11,6 +11,7 @@ use aragog::{
 use arangors_lite::AqlQuery;
 use chrono::{Duration, NaiveDateTime};
 use dataloader::BatchFn;
+use log::debug;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, value::Value};
 use std::collections::HashMap;
@@ -280,7 +281,7 @@ pub struct ContractLoadFn {
 #[async_trait::async_trait]
 impl BatchFn<String, Option<ContractRecord>> for ContractLoadFn {
     async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<ContractRecord>> {
-        println!("Loading contract for: {:?}", ids);
+        debug!("Loading contract for: {:?}", ids);
         let contracts = get_contracts(&self.pool, ids.to_vec()).await;
         match contracts {
             Ok(contracts) => contracts,
