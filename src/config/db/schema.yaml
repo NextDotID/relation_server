@@ -1,9 +1,9 @@
-#
+# 
 # This schema file is auto generated and synchronized with the database.
 # Editing it will have no effect.
-#
+# 
 ---
-version: 1659183120167
+version: 1660206807852
 collections:
   - name: Identities
     is_edge_collection: false
@@ -34,3 +34,10 @@ graphs:
           - Identities
         to:
           - Identities
+  - name: identities_contracts_graph
+    edgeDefinitions:
+      - collection: Holds
+        from:
+          - Identities
+        to:
+          - Contracts

@@ -1,5 +1,6 @@
 use crate::{
     error::Error,
+    graph::ConnectionPool,
     graph::{
         edge::{Hold, HoldRecord, Proof, ProofRecord},
         vertex::Vertex,
@@ -12,12 +13,14 @@ use aragog::{
     DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
 use arangors_lite::{AqlQuery, Database};
-use serde_json::{from_value, json, value::Value};
-
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
+use dataloader::BatchFn;
 use http::StatusCode;
+use log::debug;
 use serde::{Deserialize, Serialize};
+use serde_json::{from_value, json, value::Value};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Record)]
@@ -234,6 +237,14 @@ impl Vertex<IdentityRecord> for Identity {
 #[derive(Clone, Deserialize, Serialize, Default, Debug)]
 pub struct IdentityRecord(pub DatabaseRecord<Identity>);
 
+#[derive(Clone, Deserialize, Serialize, Default, Debug)]
+pub struct ToIdentityRecord {
+    /// NFT_ID of ENS is a hash of domain. So domain can be used as NFT_ID.
+    pub id: String,
+    /// Account / identity Holds NFT -> Contract
+    pub identity: IdentityRecord,
+}
+
 impl std::ops::Deref for IdentityRecord {
     type Target = DatabaseRecord<Identity>;
 
@@ -251,6 +262,67 @@ impl std::ops::DerefMut for IdentityRecord {
 impl From<DatabaseRecord<Identity>> for IdentityRecord {
     fn from(record: DatabaseRecord<Identity>) -> Self {
         Self(record)
+    }
+}
+
+pub struct IdentifyLoadFn {
+    pub pool: ConnectionPool,
+}
+
+#[async_trait::async_trait]
+impl BatchFn<String, Option<IdentityRecord>> for IdentifyLoadFn {
+    async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<IdentityRecord>> {
+        debug!("Loading identify for: {:?}", ids);
+        let identities = get_identities(&self.pool, ids.to_vec()).await;
+        match identities {
+            Ok(identities) => identities,
+            // HOLD ON: Not sure if `Err` need to return
+            Err(_) => ids.iter().map(|k| (k.to_owned(), None)).collect(),
+        }
+    }
+}
+
+/// It already returns Dataloader friendly output given the NFT IDs.
+async fn get_identities(
+    pool: &ConnectionPool,
+    ids: Vec<String>,
+) -> Result<HashMap<String, Option<IdentityRecord>>, Error> {
+    let db = pool.db().await?;
+    let nft_ids: Vec<Value> = ids.iter().map(|field| json!(field.to_string())).collect();
+
+    let aql = r###"WITH @@edge_collection_name
+    FOR d IN @@edge_collection_name
+        FILTER d.id IN @nft_ids
+        LET v = d._from
+        FOR i IN @@collection_name FILTER i._id == v
+        RETURN {"id": d.id, "identity": i}"###;
+
+    let aql = AqlQuery::new(aql)
+        .bind_var("@edge_collection_name", Hold::COLLECTION_NAME)
+        .bind_var("@collection_name", Identity::COLLECTION_NAME)
+        .bind_var("nft_ids", nft_ids)
+        .batch_size(1)
+        .count(false);
+
+    let identities = db.aql_query::<ToIdentityRecord>(aql).await;
+    match identities {
+        Ok(contents) => {
+            let id_identities_map = contents
+                .into_iter()
+                .map(|content| (content.id.clone(), Some(content.identity)))
+                .collect();
+
+            let dataloader_map = ids.into_iter().fold(
+                id_identities_map,
+                |mut map: HashMap<String, Option<IdentityRecord>>, id| {
+                    map.entry(id).or_insert(None);
+                    map
+                },
+            );
+
+            Ok(dataloader_map)
+        }
+        Err(e) => Err(Error::ArangoLiteDBError(e)),
     }
 }
 
@@ -353,6 +425,7 @@ impl IdentityRecord {
 #[cfg(test)]
 mod tests {
 
+    use crate::graph::vertex::identity::get_identities;
     use aragog::DatabaseConnection;
     use fake::{Dummy, Fake, Faker};
     use tokio::join;
@@ -361,7 +434,8 @@ mod tests {
     use super::{Identity, IdentityRecord};
     use crate::{
         error::Error,
-        graph::{edge::Proof, new_db_connection, new_raw_db_connection, Edge, Vertex},
+        graph::{edge::Proof, Edge, Vertex},
+        graph::{new_connection_pool, new_db_connection, new_raw_db_connection},
         upstream::Platform,
         util::naive_now,
     };
@@ -559,6 +633,19 @@ mod tests {
         ];
         let platform_list = crate::controller::vec_string_to_vec_platform(platforms)?;
         println!("{:?}", platform_list);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_identities() -> Result<(), Error> {
+        let pool = new_connection_pool().await;
+        let ids = vec![
+            String::from("2NOea6D9n8T8fQf464L"),
+            String::from("lJTcEp2"),
+            String::from("fake"),
+        ];
+        let result = get_identities(&pool, ids).await;
+        println!("{:#?}", result);
         Ok(())
     }
 }

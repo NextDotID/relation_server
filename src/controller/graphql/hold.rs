@@ -3,14 +3,17 @@ use crate::{
     graph::{
         edge::{Edge, Hold, HoldRecord},
         vertex::{
-            contract::{Chain, ContractCategory},
-            Contract, Identity, IdentityRecord,
+            contract::{Chain, ContractCategory, ContractLoadFn, ContractRecord},
+            IdentifyLoadFn, IdentityRecord,
         },
     },
     upstream::{fetch_all, DataFetcher, DataSource, Target},
 };
-use aragog::{DatabaseConnection, DatabaseRecord};
+// use aragog::DatabaseConnection;
+use arangors_lite::Database;
 use async_graphql::{Context, Object};
+// use dataloader::cached::Loader;
+use dataloader::non_cached::Loader;
 use strum::IntoEnumIterator;
 use uuid::Uuid;
 
@@ -56,9 +59,16 @@ impl HoldRecord {
     /// NFT Category. See `availableNftCategories` for all values available.
     async fn category(&self, ctx: &Context<'_>) -> Result<ContractCategory> {
         // FIXME: Very stupid N+1 here.
-        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let to_record: DatabaseRecord<Contract> = self.record.to_record(db).await?;
-        Ok(to_record.record.category)
+        // let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        // let to_record: DatabaseRecord<Contract> = self.record.to_record(db).await?;
+        // Ok(to_record.record.category)
+
+        let loader: &Loader<String, Option<ContractRecord>, ContractLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        match loader.load(self.id.clone()).await {
+            Some(contract) => Ok(contract.category),
+            None => Err(Error::GraphQLError("contract no found.".to_string())),
+        }
     }
 
     /// On which chain?
@@ -66,33 +76,61 @@ impl HoldRecord {
     /// See `availableChains` for all chains supported by RelationService.
     async fn chain(&self, ctx: &Context<'_>) -> Result<Chain> {
         // FIXME: Very stupid N+1 here.
-        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let to_record: DatabaseRecord<Contract> = self.record.to_record(db).await?;
-        Ok(to_record.record.chain)
+        // let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        // let to_record: DatabaseRecord<Contract> = self.record.to_record(db).await?;
+        // Ok(to_record.record.chain)
+
+        let loader: &Loader<String, Option<ContractRecord>, ContractLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        match loader.load(self.id.clone()).await {
+            Some(contract) => Ok(contract.chain),
+            None => Err(Error::GraphQLError("contract no found.".to_string())),
+        }
     }
 
     /// Contract address of this Contract. Usually `0xHEX_STRING`.
     async fn address(&self, ctx: &Context<'_>) -> Result<String> {
         // FIXME: Very stupid N+1 here.
-        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let to_record: DatabaseRecord<Contract> = self.record.to_record(db).await?;
-        Ok(to_record.record.address)
+        // let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        // let to_record: DatabaseRecord<Contract> = self.record.to_record(db).await?;
+        // Ok(to_record.record.address)
+
+        let loader: &Loader<String, Option<ContractRecord>, ContractLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        match loader.load(self.id.clone()).await {
+            Some(contract) => Ok(contract.address.clone()),
+            None => Err(Error::GraphQLError("contract no found.".to_string())),
+        }
     }
 
     /// Token symbol (if any).
     async fn symbol(&self, ctx: &Context<'_>) -> Result<Option<String>> {
         // FIXME: Very stupid N+1 here.
-        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let to_record: DatabaseRecord<Contract> = self.record.to_record(db).await?;
-        Ok(to_record.record.symbol)
+        // let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        // let to_record: DatabaseRecord<Contract> = self.record.to_record(db).await?;
+        // Ok(to_record.record.symbol)
+
+        let loader: &Loader<String, Option<ContractRecord>, ContractLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        match loader.load(self.id.clone()).await {
+            Some(contract) => Ok(contract.symbol.clone()),
+            None => Err(Error::GraphQLError("contract no found.".to_string())),
+        }
     }
 
     /// Which `Identity` does this NFT belong to.
     async fn owner(&self, ctx: &Context<'_>) -> Result<IdentityRecord> {
         // FIXME: Very stupid N+1 here.
-        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let identity: DatabaseRecord<Identity> = self.record.from_record(db).await?;
-        Ok(identity.into())
+        // let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        // let identity: DatabaseRecord<Identity> = self.record.from_record(db).await?;
+        // Ok(identity.into())
+
+        let loader: &Loader<String, Option<IdentityRecord>, IdentifyLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        match loader.load(self.id.clone()).await {
+            Some(identity) => Ok(identity),
+            None => Err(Error::GraphQLError("record no found.".to_string())),
+        }
     }
 
     /// Who collects this data.
@@ -138,12 +176,12 @@ impl HoldQuery {
         )]
         address: Option<String>,
     ) -> Result<Option<HoldRecord>> {
-        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        let raw_db: &Database = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let contract_address = address
             .or(category.default_contract_address())
             .ok_or(Error::GraphQLError("Contract address is required.".into()))?;
         let target = Target::NFT(chain, category, contract_address.clone(), id.clone());
-        match Hold::find_by_id_chain_address(db, &id, &chain, &contract_address).await? {
+        match Hold::find_by_id_chain_address_merge(raw_db, &id, &chain, &contract_address).await? {
             Some(hold) => {
                 if hold.is_outdated() {
                     tokio::spawn(async move { fetch_all(target).await });
@@ -153,7 +191,7 @@ impl HoldQuery {
 
             None => {
                 fetch_all(target).await?;
-                Hold::find_by_id_chain_address(db, &id, &chain, &contract_address).await
+                Hold::find_by_id_chain_address_merge(raw_db, &id, &chain, &contract_address).await
             }
         }
     }
