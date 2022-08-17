@@ -1,9 +1,11 @@
 pub mod hold;
 pub mod proof;
+pub mod resolve;
 // mod pubkey_derivation;
 
 pub use hold::{Hold, HoldRecord};
 pub use proof::{Proof, ProofRecord};
+pub use resolve::{Resolve, ResolveRecord};
 
 use aragog::{DatabaseConnection, DatabaseRecord, Record};
 use async_trait::async_trait;

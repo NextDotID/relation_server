@@ -1,10 +1,20 @@
-use crate::{error::Error, graph::Vertex, util::naive_now};
+use crate::{
+    error::Error,
+    graph::edge::Hold,
+    graph::{ConnectionPool, Vertex},
+    util::naive_now,
+};
 use aragog::{
     query::{Comparison, Filter},
     DatabaseConnection, DatabaseRecord, Record,
 };
+use arangors_lite::AqlQuery;
 use chrono::{Duration, NaiveDateTime};
+use dataloader::BatchFn;
+use log::debug;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, value::Value};
+use std::collections::HashMap;
 use strum_macros::{Display, EnumIter, EnumString};
 use uuid::Uuid;
 
@@ -25,7 +35,6 @@ use uuid::Uuid;
 )]
 pub enum Chain {
     /// The Blockchain.
-    #[default]
     #[serde(rename = "ethereum")]
     #[strum(serialize = "ethereum")]
     #[graphql(name = "ethereum")]
@@ -145,6 +154,12 @@ pub enum Chain {
     #[strum(serialize = "optimism")]
     #[graphql(name = "optimism")]
     Optimism,
+
+    #[default]
+    #[serde(rename = "unknown")]
+    #[strum(serialize = "unknown")]
+    #[graphql(name = "unknown")]
+    Unknown,
 }
 
 /// Internal chain implementation / framework.
@@ -190,6 +205,7 @@ impl Chain {
             Arweave => ChainType::Arweave,
             Arbitrum => ChainType::EVM(42161),
             Optimism => ChainType::EVM(10),
+            Unknown => todo!(),
         }
     }
 }
@@ -214,12 +230,12 @@ pub enum ContractCategory {
     #[graphql(name = "ENS")]
     ENS,
 
-    #[strum(serialize = "ERC721")]
+    #[strum(serialize = "ERC721", serialize = "ERC-721")]
     #[serde(rename = "ERC721")]
     #[graphql(name = "ERC721")]
     ERC721,
 
-    #[strum(serialize = "ERC1155")]
+    #[strum(serialize = "ERC1155", serialize = "ERC-1155")]
     #[serde(rename = "ERC1155")]
     #[graphql(name = "ERC1155")]
     ERC1155,
@@ -255,6 +271,67 @@ impl ContractCategory {
             POAP => Some(Chain::Ethereum),
             _ => None,
         }
+    }
+}
+
+pub struct ContractLoadFn {
+    pub pool: ConnectionPool,
+}
+
+#[async_trait::async_trait]
+impl BatchFn<String, Option<ContractRecord>> for ContractLoadFn {
+    async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<ContractRecord>> {
+        debug!("Loading contract for: {:?}", ids);
+        let contracts = get_contracts(&self.pool, ids.to_vec()).await;
+        match contracts {
+            Ok(contracts) => contracts,
+            // HOLD ON: Not sure if `Err` need to return
+            Err(_) => ids.iter().map(|k| (k.to_owned(), None)).collect(),
+        }
+    }
+}
+
+/// It already returns Dataloader friendly output given the NFT IDs.
+async fn get_contracts(
+    pool: &ConnectionPool,
+    ids: Vec<String>,
+) -> Result<HashMap<String, Option<ContractRecord>>, Error> {
+    let db = pool.db().await?;
+    let nft_ids: Vec<Value> = ids.iter().map(|field| json!(field.to_string())).collect();
+
+    let aql = r###"WITH @@edge_collection_name
+    FOR d IN @@edge_collection_name
+        FILTER d.id IN @nft_ids
+        LET v = d._to
+        FOR c IN @@collection_name FILTER c._id == v
+        RETURN {"id": d.id, "contract": c}"###;
+
+    let aql = AqlQuery::new(aql)
+        .bind_var("@edge_collection_name", Hold::COLLECTION_NAME)
+        .bind_var("@collection_name", Contract::COLLECTION_NAME)
+        .bind_var("nft_ids", nft_ids)
+        .batch_size(1)
+        .count(false);
+
+    let contracts = db.aql_query::<ToContractRecord>(aql).await;
+    match contracts {
+        Ok(contents) => {
+            let id_contracts_map = contents
+                .into_iter()
+                .map(|content| (content.id.clone(), Some(content.contract)))
+                .collect();
+
+            let dataloader_map = ids.into_iter().fold(
+                id_contracts_map,
+                |mut map: HashMap<String, Option<ContractRecord>>, id| {
+                    map.entry(id).or_insert(None);
+                    map
+                },
+            );
+
+            Ok(dataloader_map)
+        }
+        Err(e) => Err(Error::ArangoLiteDBError(e)),
     }
 }
 
@@ -328,7 +405,7 @@ impl Vertex<ContractRecord> for Contract {
                 found.updated_at = naive_now();
                 found.symbol = self.symbol.clone();
                 found.save(db).await?;
-                Ok(found.into())
+                Ok(found)
             }
         }
     }
@@ -351,7 +428,6 @@ impl Vertex<ContractRecord> for Contract {
     fn is_outdated(&self) -> bool {
         let outdated_in = Duration::hours(1);
         self.updated_at
-            .clone()
             .checked_add_signed(outdated_in)
             .unwrap()
             .lt(&naive_now())
@@ -360,6 +436,14 @@ impl Vertex<ContractRecord> for Contract {
 
 #[derive(Clone, Deserialize, Serialize, Default, Debug)]
 pub struct ContractRecord(pub DatabaseRecord<Contract>);
+
+#[derive(Clone, Deserialize, Serialize, Default, Debug)]
+pub struct ToContractRecord {
+    /// NFT_ID of ENS is a hash of domain. So domain can be used as NFT_ID.
+    pub id: String,
+    /// Account / identity Holds NFT -> Contract
+    pub contract: ContractRecord,
+}
 
 impl std::ops::Deref for ContractRecord {
     type Target = DatabaseRecord<Contract>;
@@ -384,13 +468,14 @@ impl From<DatabaseRecord<Contract>> for ContractRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graph::new_connection_pool;
     use crate::graph::new_db_connection;
     use fake::{Dummy, Fake, Faker};
 
     impl Contract {
         pub async fn create_dummy(db: &DatabaseConnection) -> Result<ContractRecord, Error> {
             let nft: Contract = Faker.fake();
-            Ok(nft.create_or_update(db).await?.into())
+            nft.create_or_update(db).await
         }
     }
 
@@ -410,7 +495,7 @@ mod tests {
     async fn test_creation() -> Result<(), Error> {
         let db = new_db_connection().await?;
         let created = Contract::create_dummy(&db).await?;
-        assert!(created.key().len() > 0);
+        assert!(!created.key().is_empty());
 
         Ok(())
     }
@@ -423,6 +508,19 @@ mod tests {
             .await?
             .expect("contract should be found");
         assert_eq!(found.key(), created.key());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_contracts_hashmap() -> Result<(), Error> {
+        let pool = new_connection_pool().await;
+        let ids = vec![
+            String::from("2NOea6D9n8T8fQf464L"),
+            String::from("lJTcEp2"),
+            String::from("fake"),
+        ];
+        let result = get_contracts(&pool, ids).await;
+        println!("{:#?}", result);
         Ok(())
     }
 }

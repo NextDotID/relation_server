@@ -1,18 +1,16 @@
 use aragog::{
-    query::{Comparison, Filter, Query, QueryResult},
+    query::{Comparison, Filter, QueryResult},
     DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
+use arangors_lite::{AqlQuery, Database};
 use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
     error::Error,
-    graph::vertex::{
-        contract::{Chain, ContractCategory},
-        Contract, Identity,
-    },
-    upstream::DataSource,
+    graph::vertex::{contract::Chain, Contract, Identity},
+    upstream::{DataFetcher, DataSource},
     util::naive_now,
 };
 
@@ -41,6 +39,9 @@ pub struct Hold {
     pub created_at: Option<NaiveDateTime>,
     /// When this HODL™ relation is fetched by us RelationService.
     pub updated_at: NaiveDateTime,
+    /// Who collects this data.
+    /// It works as a "data cleansing" or "proxy" between `source`s and us.
+    pub fetcher: DataFetcher,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -109,6 +110,37 @@ impl Hold {
             Ok(Some(result.first().unwrap().clone().into()))
         }
     }
+
+    /// Find a hold record by Chain, NFT_ID and NFT Address.
+    /// merge these 2 queries into one.
+    pub async fn find_by_id_chain_address_merge(
+        db: &Database,
+        id: &str,
+        chain: &Chain,
+        address: &str,
+    ) -> Result<Option<HoldRecord>, Error> {
+        let aql_str = r"FOR c IN @@collection_name
+            FILTER c.address == @address AND c.chain == @chain
+            FOR vertex, edge IN 1..1 INBOUND c GRAPH @graph_name
+            FILTER edge.id == @id
+            RETURN edge
+        ";
+        let aql = AqlQuery::new(aql_str)
+            .bind_var("@collection_name", Contract::COLLECTION_NAME)
+            .bind_var("graph_name", "identities_contracts_graph")
+            .bind_var("address", address)
+            .bind_var("chain", chain.to_string())
+            .bind_var("id", id)
+            .batch_size(1)
+            .count(false);
+
+        let holds = db.aql_query::<HoldRecord>(aql).await?;
+        if holds.len() == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(holds.first().unwrap().clone().into()))
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -127,7 +159,7 @@ impl Edge<Identity, Contract, HoldRecord> for Hold {
     ) -> Result<HoldRecord, Error> {
         let found = Self::find_by_from_to_id(db, from, to, &self.id).await?;
         match found {
-            Some(edge) => Ok(edge.into()),
+            Some(edge) => Ok(edge),
             None => Ok(DatabaseRecord::link(from, to, db, self.clone())
                 .await?
                 .into()),
@@ -154,7 +186,6 @@ impl Edge<Identity, Contract, HoldRecord> for Hold {
     fn is_outdated(&self) -> bool {
         let outdated_in = Duration::hours(8);
         self.updated_at
-            .clone()
             .checked_add_signed(outdated_in)
             .unwrap()
             .lt(&naive_now())
@@ -163,7 +194,10 @@ impl Edge<Identity, Contract, HoldRecord> for Hold {
 
 #[cfg(test)]
 mod tests {
-    use crate::{graph::new_db_connection, util::naive_now};
+    use crate::{
+        graph::{new_db_connection, Proof},
+        util::naive_now,
+    };
     use fake::{Dummy, Fake, Faker};
 
     use super::*;
@@ -177,6 +211,7 @@ mod tests {
                 id: config.fake(),
                 created_at: Some(naive_now()),
                 updated_at: naive_now(),
+                fetcher: Default::default(),
             }
         }
     }
@@ -184,16 +219,23 @@ mod tests {
     #[tokio::test]
     async fn test_find_by_id_chain_address() -> Result<(), Error> {
         let db = new_db_connection().await?;
-        let identity = Identity::create_dummy(&db).await?;
-        let contract = Contract::create_dummy(&db).await?;
-        let hold: Hold = Faker.fake();
-        let hold_record = hold.connect(&db, &identity, &contract).await?;
+        let id1 = Identity::create_dummy(&db).await?;
+        let id2 = Identity::create_dummy(&db).await?;
+        let proof1_raw: Proof = Faker.fake();
+        proof1_raw.connect(&db, &id1, &id2).await?;
+
+        let contract1 = Contract::create_dummy(&db).await?;
+        let contract2 = Contract::create_dummy(&db).await?;
+        let hold1: Hold = Faker.fake();
+        let hold2: Hold = Faker.fake();
+        let hold1_record = hold1.connect(&db, &id1, &contract1).await?;
+        let hold2_record = hold2.connect(&db, &id2, &contract2).await?;
         let found =
-            Hold::find_by_id_chain_address(&db, &hold.id, &contract.chain, &contract.address)
+            Hold::find_by_id_chain_address(&db, &hold1.id, &contract1.chain, &contract1.address)
                 .await
                 .expect("Should find a Hold record without error")
                 .expect("Should find a Hold record, not Empty");
-        assert_eq!(found.key(), hold_record.key());
+        assert_eq!(found.key(), hold1_record.key());
 
         Ok(())
     }

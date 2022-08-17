@@ -1,7 +1,8 @@
 use crate::{
     error::Error,
+    graph::ConnectionPool,
     graph::{
-        edge::{Hold, HoldRecord, Proof},
+        edge::{Hold, HoldRecord, Proof, ProofRecord},
         vertex::Vertex,
     },
     upstream::{DataSource, Platform},
@@ -11,10 +12,15 @@ use aragog::{
     query::{Comparison, Filter, Query, QueryResult},
     DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
+use arangors_lite::{AqlQuery, Database};
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
+use dataloader::BatchFn;
 use http::StatusCode;
+use log::debug;
 use serde::{Deserialize, Serialize};
+use serde_json::{from_value, json, value::Value};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Record)]
@@ -32,7 +38,8 @@ pub struct Identity {
     pub identity: String,
     /// Usually user-friendly screen name.
     /// e.g. for `Twitter`, this is the user's `screen_name`.
-    pub display_name: String,
+    /// For `ethereum`, this is the reversed ENS name set by user.
+    pub display_name: Option<String>,
     /// URL to target identity profile page on `platform` (if any).
     pub profile_url: Option<String>,
     /// URL to avatar (if any is recorded and given by target platform).
@@ -47,6 +54,12 @@ pub struct Identity {
     pub added_at: NaiveDateTime,
     /// When it is updated (re-fetched) by us RelationService. Managed by us.
     pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Path {
+    pub vertices: Vec<IdentityRecord>,
+    pub edges: Vec<ProofRecord>,
 }
 
 impl Default for Identity {
@@ -90,6 +103,52 @@ impl Identity {
             Ok(Some(query_result.first().unwrap().to_owned().into()))
         }
     }
+
+    pub async fn find_by_platforms_identity(
+        raw_db: &Database,
+        platforms: &Vec<Platform>,
+        identity: &str,
+    ) -> Result<Vec<IdentityRecord>, Error> {
+        let platform_array: Vec<Value> = platforms
+            .into_iter()
+            .map(|field| json!(field.to_string()))
+            .collect();
+
+        let aql = r"FOR v IN @@collection_name
+        FILTER v.identity == @identity AND v.platform IN @platform
+        RETURN v";
+        let aql = AqlQuery::new(aql)
+            .bind_var("@collection_name", Identity::COLLECTION_NAME)
+            .bind_var("identity", identity)
+            .bind_var("platform", platform_array)
+            .batch_size(1)
+            .count(false);
+        let result: Vec<IdentityRecord> = raw_db.aql_query(aql).await?;
+        Ok(result)
+    }
+
+    #[allow(unused)]
+    async fn find_by_display_name(
+        raw_db: &Database,
+        display_name: String,
+    ) -> Result<Option<IdentityRecord>, Error> {
+        let aql = r"FOR v IN @@view
+        SEARCH ANALYZER(v.display_name IN TOKENS(@display_name, 'text_en'), 'text_en')
+        RETURN v";
+
+        let aql = AqlQuery::new(aql)
+            .bind_var("@view", "relation")
+            .bind_var("display_name", display_name.as_str())
+            .batch_size(1)
+            .count(false);
+
+        let result: Vec<IdentityRecord> = raw_db.aql_query(aql).await?;
+        if result.len() == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(result.first().unwrap().to_owned().into()))
+        }
+    }
 }
 
 #[async_trait]
@@ -110,6 +169,7 @@ impl Vertex<IdentityRecord> for Identity {
                 to_be_created.uuid = to_be_created.uuid.or(Some(Uuid::new_v4()));
                 to_be_created.added_at = naive_now();
                 to_be_created.updated_at = naive_now();
+                #[allow(unused_assignments)] // FIXME: ??
                 let mut need_refetch: bool = false;
 
                 // Must do this to avoid "future cannot be sent between threads safely" complain from compiler.
@@ -137,14 +197,14 @@ impl Vertex<IdentityRecord> for Identity {
 
             Some(mut found) => {
                 // Update
-                found.display_name = self.display_name.clone();
+                found.display_name = self.display_name.clone().or(found.display_name.clone());
                 found.profile_url = self.profile_url.clone();
                 found.avatar_url = self.avatar_url.clone();
-                found.created_at = self.created_at.or(found.created_at.clone());
+                found.created_at = self.created_at.or(found.created_at);
                 found.updated_at = naive_now();
 
                 found.save(db).await?;
-                Ok(found.into())
+                Ok(found)
             }
         }
     }
@@ -166,7 +226,6 @@ impl Vertex<IdentityRecord> for Identity {
     fn is_outdated(&self) -> bool {
         let outdated_in = Duration::hours(1);
         self.updated_at
-            .clone()
             .checked_add_signed(outdated_in)
             .unwrap()
             .lt(&naive_now())
@@ -177,6 +236,14 @@ impl Vertex<IdentityRecord> for Identity {
 /// Useful by GraphQL side to wrap more function / traits.
 #[derive(Clone, Deserialize, Serialize, Default, Debug)]
 pub struct IdentityRecord(pub DatabaseRecord<Identity>);
+
+#[derive(Clone, Deserialize, Serialize, Default, Debug)]
+pub struct ToIdentityRecord {
+    /// NFT_ID of ENS is a hash of domain. So domain can be used as NFT_ID.
+    pub id: String,
+    /// Account / identity Holds NFT -> Contract
+    pub identity: IdentityRecord,
+}
 
 impl std::ops::Deref for IdentityRecord {
     type Target = DatabaseRecord<Identity>;
@@ -195,6 +262,67 @@ impl std::ops::DerefMut for IdentityRecord {
 impl From<DatabaseRecord<Identity>> for IdentityRecord {
     fn from(record: DatabaseRecord<Identity>) -> Self {
         Self(record)
+    }
+}
+
+pub struct IdentifyLoadFn {
+    pub pool: ConnectionPool,
+}
+
+#[async_trait::async_trait]
+impl BatchFn<String, Option<IdentityRecord>> for IdentifyLoadFn {
+    async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<IdentityRecord>> {
+        debug!("Loading identify for: {:?}", ids);
+        let identities = get_identities(&self.pool, ids.to_vec()).await;
+        match identities {
+            Ok(identities) => identities,
+            // HOLD ON: Not sure if `Err` need to return
+            Err(_) => ids.iter().map(|k| (k.to_owned(), None)).collect(),
+        }
+    }
+}
+
+/// It already returns Dataloader friendly output given the NFT IDs.
+async fn get_identities(
+    pool: &ConnectionPool,
+    ids: Vec<String>,
+) -> Result<HashMap<String, Option<IdentityRecord>>, Error> {
+    let db = pool.db().await?;
+    let nft_ids: Vec<Value> = ids.iter().map(|field| json!(field.to_string())).collect();
+
+    let aql = r###"WITH @@edge_collection_name
+    FOR d IN @@edge_collection_name
+        FILTER d.id IN @nft_ids
+        LET v = d._from
+        FOR i IN @@collection_name FILTER i._id == v
+        RETURN {"id": d.id, "identity": i}"###;
+
+    let aql = AqlQuery::new(aql)
+        .bind_var("@edge_collection_name", Hold::COLLECTION_NAME)
+        .bind_var("@collection_name", Identity::COLLECTION_NAME)
+        .bind_var("nft_ids", nft_ids)
+        .batch_size(1)
+        .count(false);
+
+    let identities = db.aql_query::<ToIdentityRecord>(aql).await;
+    match identities {
+        Ok(contents) => {
+            let id_identities_map = contents
+                .into_iter()
+                .map(|content| (content.id.clone(), Some(content.identity)))
+                .collect();
+
+            let dataloader_map = ids.into_iter().fold(
+                id_identities_map,
+                |mut map: HashMap<String, Option<IdentityRecord>>, id| {
+                    map.entry(id).or_insert(None);
+                    map
+                },
+            );
+
+            Ok(dataloader_map)
+        }
+        Err(e) => Err(Error::ArangoLiteDBError(e)),
     }
 }
 
@@ -222,6 +350,64 @@ impl IdentityRecord {
         Ok(result.iter().map(|r| r.to_owned().into()).collect())
     }
 
+    // Return all neighbors of this identity with path<ProofRecord>
+    pub async fn neighbors_with_traversal(
+        &self,
+        raw_db: &Database,
+        depth: u16,
+        source: Option<DataSource>,
+    ) -> Result<Vec<ProofRecord>, Error> {
+        // Using graph speed up FILTER
+        let aql: AqlQuery;
+        match source {
+            None => {
+                let aql_str = r"
+                WITH @@collection_name FOR d IN @@collection_name
+                  FILTER d._id == @id
+                  LIMIT 1
+                  FOR vertex, edge, path
+                    IN 1..@depth
+                    ANY d GRAPH @graph_name
+                    RETURN edge";
+
+                aql = AqlQuery::new(aql_str)
+                    .bind_var("@collection_name", Identity::COLLECTION_NAME)
+                    .bind_var("graph_name", "identities_proofs_graph")
+                    .bind_var("id", self.id().as_str())
+                    .bind_var("depth", depth)
+                    .batch_size(1)
+                    .count(false);
+            }
+            Some(source) => {
+                let aql_str = r"
+                WITH @@collection_name FOR d IN @@collection_name
+                  FILTER d._id == @id
+                  LIMIT 1
+                  FOR vertex, edge, path
+                    IN 1..@depth
+                    ANY d GRAPH @graph_name
+                    FILTER path.edges[*].`source` ALL == @source
+                    RETURN edge";
+
+                aql = AqlQuery::new(aql_str)
+                    .bind_var("@collection_name", Identity::COLLECTION_NAME)
+                    .bind_var("graph_name", "identities_proofs_graph")
+                    .bind_var("id", self.id().as_str())
+                    .bind_var("depth", depth)
+                    .bind_var("source", source.to_string().as_str())
+                    .batch_size(1)
+                    .count(false);
+            }
+        }
+        let resp: Vec<Value> = raw_db.aql_query(aql).await?;
+        let mut paths: Vec<ProofRecord> = Vec::new();
+        for p in resp {
+            let p: ProofRecord = from_value(p)?;
+            paths.push(p)
+        }
+        Ok(paths)
+    }
+
     /// Returns all Contracts owned by this identity. Empty list if `self.platform != Ethereum`.
     pub async fn nfts(&self, db: &DatabaseConnection) -> Result<Vec<HoldRecord>, Error> {
         if self.0.record.platform != Platform::Ethereum {
@@ -238,17 +424,18 @@ impl IdentityRecord {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
 
+    use crate::graph::vertex::identity::get_identities;
     use aragog::DatabaseConnection;
     use fake::{Dummy, Fake, Faker};
-    use tokio::{join, time::sleep};
+    use tokio::join;
     use uuid::Uuid;
 
     use super::{Identity, IdentityRecord};
     use crate::{
         error::Error,
-        graph::{edge::Proof, new_db_connection, Edge, Vertex},
+        graph::{edge::Proof, Edge, Vertex},
+        graph::{new_connection_pool, new_db_connection, new_raw_db_connection},
         upstream::Platform,
         util::naive_now,
     };
@@ -257,7 +444,7 @@ mod tests {
         /// Create test dummy data in database.
         pub async fn create_dummy(db: &DatabaseConnection) -> Result<IdentityRecord, Error> {
             let identity: Identity = Faker.fake();
-            Ok(identity.create_or_update(db).await?.into())
+            identity.create_or_update(db).await
         }
     }
 
@@ -283,7 +470,7 @@ mod tests {
         let db = new_db_connection().await?;
         let result = identity.create_or_update(&db).await?;
         assert!(result.uuid.is_some());
-        assert!(result.key().len() > 0);
+        assert!(!result.key().is_empty());
 
         Ok(())
     }
@@ -373,22 +560,92 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_find_by_display_name() -> Result<(), Error> {
+        // let db = new_db_connection().await?;
+        // let created = Identity::create_dummy(&db).await?;
+        // println!("display_name={}", created.display_name);
+        let raw_db = new_raw_db_connection().await?;
+        let found = Identity::find_by_display_name(&raw_db, String::from("some created.display"))
+            .await?
+            .expect("Record not found");
+        println!("{:#?}", found);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_find_by_platforms_identity() -> Result<(), Error> {
+        let raw_db = new_raw_db_connection().await.unwrap();
+        let identities = Identity::find_by_platforms_identity(
+            &raw_db,
+            &vec![Platform::Ethereum, Platform::Twitter],
+            "0x00000003cd3aa7e760877f03275621d2692f5841",
+        )
+        .await
+        .unwrap();
+        println!("{:?}", identities);
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_neighbors() -> Result<(), Error> {
         let db = new_db_connection().await?;
         // ID2 <--Proof1-- ID1 --Proof2--> ID3
         let id1 = Identity::create_dummy(&db).await?;
         let id2 = Identity::create_dummy(&db).await?;
         let id3 = Identity::create_dummy(&db).await?;
+        let id4 = Identity::create_dummy(&db).await?;
+
         let proof1_raw: Proof = Faker.fake();
         let proof2_raw: Proof = Faker.fake();
+        let proof3_raw: Proof = Faker.fake();
         proof1_raw.connect(&db, &id1, &id2).await?;
         proof2_raw.connect(&db, &id1, &id3).await?;
-
+        proof3_raw.connect(&db, &id2, &id4).await?;
         let neighbors = id1.neighbors(&db, 2, None).await?;
-        assert_eq!(2, neighbors.len());
-        assert!(neighbors
-            .iter()
-            .all(|i| i.uuid == id2.uuid || i.uuid == id3.uuid));
+        assert_eq!(3, neighbors.len());
+        // assert!(neighbors
+        //     .iter()
+        //     .all(|i| i.uuid == id2.uuid || i.uuid == id3.uuid));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_neighbors_with_traversal() -> Result<(), Error> {
+        let raw_db = new_raw_db_connection().await.unwrap();
+        let found = Identity::find_by_display_name(&raw_db, String::from("Kc37j5zNLG5RLxbWGOz"))
+            .await?
+            .expect("Record not found");
+        println!("{:#?}", found);
+        let neighbors = found
+            .neighbors_with_traversal(&raw_db, 3, None)
+            .await
+            .unwrap();
+        println!("{:#?}", neighbors);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_string_to_platfrom() -> Result<(), Error> {
+        let platforms = vec![
+            String::from("github"),
+            String::from("twitter"),
+            // String::from("aaa"),
+        ];
+        let platform_list = crate::controller::vec_string_to_vec_platform(platforms)?;
+        println!("{:?}", platform_list);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_identities() -> Result<(), Error> {
+        let pool = new_connection_pool().await;
+        let ids = vec![
+            String::from("2NOea6D9n8T8fQf464L"),
+            String::from("lJTcEp2"),
+            String::from("fake"),
+        ];
+        let result = get_identities(&pool, ids).await;
+        println!("{:#?}", result);
         Ok(())
     }
 }

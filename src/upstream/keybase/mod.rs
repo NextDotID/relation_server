@@ -1,8 +1,9 @@
+#[cfg(test)]
 mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::{create_identity_to_identity_record, Edge, Vertex};
+use crate::graph::create_identity_to_identity_record;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
 use crate::util::{make_client, naive_now, parse_body};
@@ -12,7 +13,7 @@ use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
 
-use super::Target;
+use super::{DataFetcher, Target};
 
 #[derive(Deserialize, Debug)]
 pub struct KeybaseResponse {
@@ -106,12 +107,7 @@ async fn fetch_connections_by_platform_identity(
     .parse()
     {
         Ok(n) => n,
-        Err(err) => {
-            return Err(Error::ParamError(format!(
-                "Uri format Error: {}",
-                err.to_string()
-            )))
-        }
+        Err(err) => return Err(Error::ParamError(format!("Uri format Error: {}", err))),
     };
 
     let mut resp = client.get(uri).await?;
@@ -148,7 +144,7 @@ async fn fetch_connections_by_platform_identity(
             platform: Platform::Keybase,
             identity: user_id.clone(),
             created_at: None,
-            display_name: user_name.clone(),
+            display_name: Some(user_name.clone()),
             added_at: naive_now(),
             avatar_url: None,
             profile_url: None,
@@ -163,7 +159,7 @@ async fn fetch_connections_by_platform_identity(
             platform: Platform::from_str(p.proof_type.as_str()).unwrap(),
             identity: p.nametag.clone(),
             created_at: None,
-            display_name: p.nametag.clone(),
+            display_name: Some(p.nametag.clone()),
             added_at: naive_now(),
             avatar_url: None,
             profile_url: None,
@@ -176,9 +172,10 @@ async fn fetch_connections_by_platform_identity(
             record_id: Some(p.proof_id.clone()),
             created_at: None,
             updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
         };
 
-        let _ = create_identity_to_identity_record(&db, &from, &to, &pf).await?;
+        create_identity_to_identity_record(&db, &from, &to, &pf).await?;
 
         next_targets.push(Target::Identity(
             Platform::from_str(&p.proof_type).unwrap(),

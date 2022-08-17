@@ -1,15 +1,13 @@
+#[cfg(test)]
 mod tests;
 
-use super::Target;
+use super::{DataFetcher, Target};
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::vertex::{contract::ContractCategory, Contract, Identity};
-use crate::graph::{
-    create_identity_to_contract_record, create_identity_to_identity_record, new_db_connection,
-    Edge, Vertex,
-};
-use crate::graph::{edge::Hold, edge::Proof};
-use crate::upstream::{Chain, DataSource, Fetcher, Platform, TargetProcessedList};
+use crate::graph::edge::Proof;
+use crate::graph::vertex::Identity;
+use crate::graph::{create_identity_to_identity_record, new_db_connection};
+use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use async_trait::async_trait;
 use futures::future::join_all;
@@ -80,12 +78,7 @@ async fn fetch_connections_by_platform_identity(
         .parse()
         {
             Ok(n) => n,
-            Err(err) => {
-                return Err(Error::ParamError(format!(
-                    "Uri format Error: {}",
-                    err.to_string()
-                )))
-            }
+            Err(err) => return Err(Error::ParamError(format!("Uri format Error: {}", err))),
         };
 
         let mut resp = client.get(uri).await?;
@@ -94,15 +87,15 @@ async fn fetch_connections_by_platform_identity(
         }
 
         let body: Response = parse_body(&mut resp).await?;
-        if body.records.len() == 0 {
+        if body.records.is_empty() {
             break;
         }
 
-        let futures: Vec<_> = body.records.into_iter().map(|p| save_item(p)).collect();
+        let futures: Vec<_> = body.records.into_iter().map(save_item).collect();
         let targets: TargetProcessedList = join_all(futures)
             .await
             .into_iter()
-            .flat_map(|result| result.unwrap_or(vec![]))
+            .flat_map(|result| result.unwrap_or_default())
             .collect();
         next_targets.extend(targets);
 
@@ -119,12 +112,13 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
     let db = new_db_connection().await?;
     let mut targets = Vec::new();
 
+    let from_platform = Platform::from_str(p.sns_platform.as_str()).unwrap_or(Platform::Unknown);
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
-        platform: Platform::from_str(p.sns_platform.as_str()).unwrap_or(Platform::Unknown),
+        platform: from_platform,
         identity: p.sns_handle.clone(),
         created_at: None,
-        display_name: p.sns_handle.clone(),
+        display_name: Some(p.sns_handle.clone()),
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
@@ -132,58 +126,75 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
     };
 
     let to_platform = Platform::from_str(p.web3_platform.as_str()).unwrap_or_default();
-
+    let web3_addr = p.web3_addr.to_lowercase();
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
-        platform: to_platform.clone(),
-        identity: p.web3_addr.clone(),
+        platform: to_platform,
+        identity: web3_addr.clone(),
         created_at: None,
-        display_name: p.web3_addr.clone(),
+        // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
+        display_name: None,
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
     };
 
+    let create_ms_time: u32 = (p.create_timestamp.parse::<i64>().unwrap() % 1000)
+        .try_into()
+        .unwrap();
+    let update_ms_time: u32 = (p.modify_timestamp.parse::<i64>().unwrap() % 1000)
+        .try_into()
+        .unwrap();
+
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
         source: DataSource::from_str(p.source.as_str()).unwrap_or(DataSource::Unknown),
         record_id: Some(p.id.clone()),
-        created_at: Some(timestamp_to_naive(p.create_timestamp.parse().unwrap())),
-        updated_at: timestamp_to_naive(p.modify_timestamp.parse().unwrap()),
+        created_at: Some(timestamp_to_naive(
+            p.create_timestamp.parse::<i64>().unwrap() / 1000,
+            create_ms_time,
+        )),
+        updated_at: timestamp_to_naive(
+            p.modify_timestamp.parse::<i64>().unwrap() / 1000,
+            update_ms_time,
+        ),
+        fetcher: DataFetcher::AggregationService,
     };
 
     let _ = create_identity_to_identity_record(&db, &from, &to, &pf).await;
 
-    targets.push(Target::Identity(to_platform.clone(), p.web3_addr.clone()));
+    targets.push(Target::Identity(to_platform, web3_addr.clone()));
 
-    if p.ens.is_some() {
-        let to_contract_identity: Contract = Contract {
-            uuid: Uuid::new_v4(),
-            category: ContractCategory::ENS,
-            address: ContractCategory::ENS.default_contract_address().unwrap(),
-            chain: Chain::Ethereum,
-            symbol: None,
-            updated_at: naive_now(),
-        };
+    // TODO: Don't use ENS result from aggregation service.
+    // if p.ens.is_some() {
+    //     let to_contract_identity: Contract = Contract {
+    //         uuid: Uuid::new_v4(),
+    //         category: ContractCategory::ENS,
+    //         address: ContractCategory::ENS.default_contract_address().unwrap(),
+    //         chain: Chain::Ethereum,
+    //         symbol: None,
+    //         updated_at: naive_now(),
+    //     };
 
-        let ens = p.ens.unwrap();
-        let hold: Hold = Hold {
-            uuid: Uuid::new_v4(),
-            transaction: None,
-            id: ens.clone(),
-            source: DataSource::from_str(p.source.as_str()).unwrap_or(DataSource::Unknown),
-            created_at: None,
-            updated_at: naive_now(),
-        };
-        let _ = create_identity_to_contract_record(&db, &from, &to_contract_identity, &hold).await;
+    //     let ens = p.ens.unwrap();
+    //     let hold: Hold = Hold {
+    //         uuid: Uuid::new_v4(),
+    //         transaction: None,
+    //         id: ens.clone(),
+    //         source: DataSource::from_str(p.source.as_str()).unwrap_or(DataSource::Unknown),
+    //         created_at: None,
+    //         updated_at: naive_now(),
+    //         fetcher: DataFetcher::AggregationService,
+    //     };
+    //     let _ = create_identity_to_contract_record(&db, &from, &to_contract_identity, &hold).await;
 
-        targets.push(Target::NFT(
-            Chain::Ethereum,
-            ContractCategory::ENS,
-            ContractCategory::ENS.default_contract_address().unwrap(),
-            ens.clone(),
-        ));
-    }
+    //     targets.push(Target::NFT(
+    //         Chain::Ethereum,
+    //         ContractCategory::ENS,
+    //         ContractCategory::ENS.default_contract_address().unwrap(),
+    //         ens.clone(),
+    //     ));
+    // }
     Ok(targets)
 }

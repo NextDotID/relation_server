@@ -4,6 +4,7 @@ use async_graphql::{
     EmptyMutation, EmptySubscription, Schema,
 };
 use async_graphql_warp::{GraphQLBadRequest, GraphQLResponse};
+use dataloader::non_cached::Loader;
 use env_logger::Env;
 use http::StatusCode;
 use log::warn;
@@ -11,6 +12,10 @@ use relation_server::{
     config::{self, C},
     controller::graphql::Query,
     error::Result,
+    graph::new_connection_pool,
+    graph::new_raw_db_connection,
+    graph::vertex::contract::ContractLoadFn,
+    graph::vertex::IdentifyLoadFn,
 };
 use std::{convert::Infallible, net::SocketAddr};
 use warp::{http::Response as HttpResponse, Filter, Rejection};
@@ -34,8 +39,28 @@ async fn main() -> Result<()> {
         .apply_schema() // Only apply database migration here.
         .build()
         .await?;
+    let raw_db = new_raw_db_connection().await?;
+    let pool = new_connection_pool().await;
+    let contract_loader_fn = ContractLoadFn {
+        pool: pool.to_owned(),
+    };
+    let identity_loader_fn = IdentifyLoadFn {
+        pool: pool.to_owned(),
+    };
+    // HOLD ON: Specify the batch size number
+    let contract_loader = Loader::new(contract_loader_fn)
+        .with_max_batch_size(100)
+        .with_yield_count(10);
+
+    let identity_loader = Loader::new(identity_loader_fn)
+        .with_max_batch_size(100)
+        .with_yield_count(10);
+
     let schema = Schema::build(Query::default(), EmptyMutation, EmptySubscription)
         .data(db)
+        .data(raw_db)
+        .data(contract_loader)
+        .data(identity_loader)
         .finish();
 
     let graphql_post = async_graphql_warp::graphql(schema)
@@ -80,7 +105,7 @@ async fn main() -> Result<()> {
         });
 
     let address = SocketAddr::new(config::C.web.listen.parse().unwrap(), config::C.web.port);
-    println!("Playground: http://{}", address.to_string());
+    println!("Playground: http://{}", address);
     warp::serve(routes).run(address).await;
 
     println!("Shutting down...");

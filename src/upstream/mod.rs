@@ -1,16 +1,20 @@
 mod aggregation;
+mod ens_reverse;
 mod keybase;
 mod knn3;
 mod proof_client;
 mod rss3;
 mod sybil_list;
+#[cfg(test)]
+mod tests;
+mod the_graph;
 
 use crate::{
     error::Error,
     graph::vertex::contract::{Chain, ContractCategory},
     upstream::{
         aggregation::Aggregation, keybase::Keybase, knn3::Knn3, proof_client::ProofClient,
-        rss3::Rss3, sybil_list::SybilList,
+        rss3::Rss3, sybil_list::SybilList, the_graph::TheGraph,
     },
 };
 use async_trait::async_trait;
@@ -19,6 +23,8 @@ use http::StatusCode;
 use log::{debug, info, trace};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
+
+use self::ens_reverse::ENSReverseLookup;
 
 /// List when processing identities.
 type TargetProcessedList = Vec<Target>;
@@ -62,7 +68,7 @@ impl Target {
 
     pub fn platform(&self) -> Result<Platform, Error> {
         match self {
-            Self::Identity(platform, _) => Ok(platform.clone()),
+            Self::Identity(platform, _) => Ok(*platform),
             Self::NFT(_, _, _, _) => Err(Error::General(
                 "Target: Get platform error: Not an Identity".into(),
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -80,26 +86,29 @@ impl Target {
         }
     }
 
+    #[allow(dead_code)]
     pub fn nft_chain(&self) -> Result<Chain, Error> {
         match self {
             Self::Identity(_, _) => Err(Error::General(
                 "Target: Get nft chain error: Not an NFT".into(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             )),
-            Self::NFT(chain, _, _, _) => Ok(chain.clone()),
+            Self::NFT(chain, _, _, _) => Ok(*chain),
         }
     }
 
+    #[allow(dead_code)]
     pub fn nft_category(&self) -> Result<ContractCategory, Error> {
         match self {
             Self::Identity(_, _) => Err(Error::General(
                 "Target: Get nft category error: Not an NFT".into(),
                 StatusCode::INTERNAL_SERVER_ERROR,
             )),
-            Self::NFT(_, category, _, _) => Ok(category.clone()),
+            Self::NFT(_, category, _, _) => Ok(*category),
         }
     }
 
+    #[allow(dead_code)]
     pub fn nft_id(&self) -> Result<String, Error> {
         match self {
             Self::Identity(_, _) => Err(Error::General(
@@ -220,7 +229,7 @@ pub enum DataSource {
     #[strum(serialize = "knn3")]
     #[serde(rename = "knn3")]
     #[graphql(name = "knn3")]
-    Knn3, // = "rss3",
+    Knn3, // = "knn3",
 
     #[strum(serialize = "cyberconnect")]
     #[serde(rename = "cyberconnect")]
@@ -232,12 +241,54 @@ pub enum DataSource {
     #[graphql(name = "ethLeaderboard")]
     EthLeaderboard,
 
+    #[strum(serialize = "the_graph")]
+    #[serde(rename = "the_graph")]
+    #[graphql(name = "the_graph")]
+    TheGraph,
+
+    /// Data directly fetched from blockchain's RPC server.
+    #[strum(serialize = "rpc_server")]
+    #[serde(rename = "rpc_server")]
+    #[graphql(name = "rpc_server")]
+    RPCServer,
+
     /// Unknown
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
     #[graphql(name = "unknown")]
     #[default]
     Unknown,
+}
+
+/// Who collects all the data.
+/// It works as a "data cleansing" or "proxy" between `Upstream`s and us.
+#[derive(
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Display,
+    EnumString,
+    PartialEq,
+    Eq,
+    EnumIter,
+    Default,
+    Copy,
+    async_graphql::Enum,
+)]
+pub enum DataFetcher {
+    /// This server
+    #[strum(serialize = "relation_service")]
+    #[serde(rename = "relation_service")]
+    #[graphql(name = "relation_service")]
+    #[default]
+    RelationService,
+
+    /// Aggregation service
+    #[strum(serialize = "aggregation_service")]
+    #[serde(rename = "aggregation_service")]
+    #[graphql(name = "aggregation_service")]
+    AggregationService,
 }
 
 /// All asymmetric cryptography algorithm supported by RelationService.
@@ -264,57 +315,28 @@ pub trait Fetcher {
 
 /// Find all available (platform, identity) in all `Upstream`s.
 pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
-    info!("fetch_all : {}", initial_target);
+    info!(target: "fetch_all", "{}", initial_target);
     let mut up_next: TargetProcessedList = vec![initial_target];
     let mut processed: TargetProcessedList = vec![];
-    while up_next.len() > 0 {
-        debug!("fetch_all::up_next | {:?}", up_next);
+    while !up_next.is_empty() {
+        info!("fetch_all::up_next | {:?}", up_next);
         let target = up_next.pop().unwrap();
         let fetched = fetch_one(&target).await?;
         processed.push(target.clone());
         fetched.into_iter().for_each(|f| {
-            if processed.contains(&f) {
-                trace!("fetch_all::iter | Fetched {} | duplicated", f);
+            if processed.contains(&f) || up_next.contains(&f) {
+                info!("fetch_all::iter | Fetched {} | duplicated", f);
             } else {
-                trace!("fetch_all::iter | Fetched {} | pushed into up_next", f);
                 up_next.push(f.clone());
+                info!(
+                    "fetch_all::iter | Fetched {} | pushed into up_next",
+                    f.clone()
+                );
             }
         });
     }
-
     Ok(())
 }
-
-// async fn fetching(source: Upstream, platform: &Platform, identity: &str) -> TargetProcessedList {
-//     let fetcher = source.get_fetcher(platform, &identity);
-//     let ability = fetcher.ability();
-//     let mut res: TargetProcessedList = Vec::new();
-//     for (platforms, _) in ability.into_iter() {
-//         if platforms.iter().any(|i| i == platform) {
-//             debug!(
-//                 "fetch_one | Fetching {} / {} from {:?}",
-//                 platform, identity, source
-//             );
-//             match fetcher.fetch().await {
-//                 Ok(resp) => {
-//                     debug!(
-//                         "fetch_one | Fetched ({} / {} from {:?}): {:?}",
-//                         platform, identity, source, resp
-//                     );
-//                     res.extend(resp);
-//                 }
-//                 Err(err) => {
-//                     warn!(
-//                         "fetch_one | Failed to fetch ({} / {} from {:?}): {:?}",
-//                         platform, identity, source, err
-//                     );
-//                     continue;
-//                 }
-//             };
-//         }
-//     }
-//     res
-// }
 
 /// Find one (platform, identity) pair in all upstreams.
 /// Returns identities just fetched for next iter..
@@ -327,10 +349,12 @@ pub async fn fetch_one(target: &Target) -> Result<TargetProcessedList, Error> {
         ProofClient::fetch(target),
         Rss3::fetch(target),
         Knn3::fetch(target),
+        TheGraph::fetch(target),
+        ENSReverseLookup::fetch(target),
     ])
     .await
     .into_iter()
-    .flat_map(|res| res.unwrap_or(vec![]))
+    .flat_map(|res| res.unwrap_or_default())
     .collect();
 
     Ok(results)
@@ -342,26 +366,4 @@ pub async fn prefetch() -> Result<(), Error> {
     sybil_list::prefetch().await?;
     info!("Prefetch completed.");
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::error::Error;
-    use crate::upstream::{fetch_all, fetch_one, Platform, Target};
-
-    #[tokio::test]
-    async fn test_fetcher_result() -> Result<(), Error> {
-        let result = fetch_all(Target::Identity(Platform::Twitter, "0xsannie".into())).await?;
-        assert_eq!(result, ());
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_fetch_one_result() -> Result<(), Error> {
-        let result = fetch_one(&Target::Identity(Platform::Twitter, "0xsannie".into())).await?;
-        assert_ne!(result.len(), 0);
-
-        Ok(())
-    }
 }

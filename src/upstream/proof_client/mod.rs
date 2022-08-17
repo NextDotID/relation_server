@@ -1,4 +1,5 @@
 extern crate futures;
+#[cfg(test)]
 mod tests;
 
 use crate::config::C;
@@ -12,6 +13,8 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
+
+use super::DataFetcher;
 
 /// https://github.com/nextdotid/proof-server/blob/master/docs/api.apib
 #[derive(Deserialize, Debug)]
@@ -87,7 +90,7 @@ async fn fetch_connections_by_platform_identity(
         C.upstream.proof_service.url, platform, identity
     )
     .parse()
-    .map_err(|_err| Error::ParamError(format!("Uri format Error")))?;
+    .map_err(|_err| Error::ParamError("Uri format Error".to_string()))?;
     let mut resp = client.get(uri).await?;
 
     if !resp.status().is_success() {
@@ -119,9 +122,10 @@ async fn fetch_connections_by_platform_identity(
             platform: Platform::NextID,
             identity: next_id_identity.clone(),
             created_at: Some(timestamp_to_naive(
-                p.created_at.to_string().parse().unwrap(),
+                p.created_at.to_string().parse::<i64>().unwrap(),
+                0,
             )),
-            display_name: next_id_identity.clone(),
+            display_name: Some(next_id_identity.clone()),
             added_at: naive_now(),
             avatar_url: None,
             profile_url: None,
@@ -129,19 +133,22 @@ async fn fetch_connections_by_platform_identity(
         };
 
         let from_record = from.create_or_update(&db).await?;
-        let to_platform = Platform::from_str(p.platform.as_str());
-        if to_platform.is_err() {
-            continue;
-        }
+        let to_platform = Platform::from_str(p.platform.as_str()).unwrap_or(Platform::Unknown);
 
         let to: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
-            platform: to_platform.clone().unwrap(),
+            platform: to_platform,
             identity: p.identity.to_string(),
             created_at: Some(timestamp_to_naive(
                 p.created_at.to_string().parse().unwrap(),
+                0,
             )),
-            display_name: p.identity.clone(),
+            // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
+            display_name: if to_platform == Platform::Ethereum {
+                None
+            } else {
+                Some(p.identity.clone())
+            },
             added_at: naive_now(),
             avatar_url: None,
             profile_url: None,
@@ -149,7 +156,7 @@ async fn fetch_connections_by_platform_identity(
         };
         let to_record = to.create_or_update(&db).await?;
 
-        next_targets.push(Target::Identity(to_platform.unwrap(), p.identity));
+        next_targets.push(Target::Identity(to_platform, p.identity));
 
         let pf: Proof = Proof {
             uuid: Uuid::new_v4(),
@@ -157,8 +164,10 @@ async fn fetch_connections_by_platform_identity(
             record_id: None,
             created_at: Some(timestamp_to_naive(
                 p.created_at.to_string().parse().unwrap(),
+                0,
             )),
             updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
         };
         pf.connect(&db, &from_record, &to_record).await?;
     }

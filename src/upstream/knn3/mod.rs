@@ -1,16 +1,17 @@
+#[cfg(test)]
 mod tests;
 
 use crate::config::C;
 use crate::graph::edge::hold::Hold;
 use crate::graph::vertex::{contract::Chain, contract::ContractCategory, Contract};
-use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList};
+
+use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
 use crate::util::naive_now;
 use crate::{
     error::Error,
     graph::{create_identity_to_contract_record, new_db_connection, vertex::Identity},
 };
-use aragog::DatabaseConnection;
+
 use async_trait::async_trait;
 use gql_client::Client;
 use log::{info, warn};
@@ -62,9 +63,11 @@ impl Fetcher for Knn3 {
         }
     }
 
-    fn can_fetch(target: &Target) -> bool {
-        target.in_platform_supported(vec![Platform::Ethereum])
-            || target.in_nft_supported(vec![ContractCategory::ENS], vec![Chain::Ethereum])
+    fn can_fetch(_target: &Target) -> bool {
+        // TODO: temporarily disable KNN3 fetcher
+        false
+        // target.in_platform_supported(vec![Platform::Ethereum])
+        //     || target.in_nft_supported(vec![ContractCategory::ENS], vec![Chain::Ethereum])
     }
 }
 
@@ -83,9 +86,7 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
         addr: &identity.to_lowercase(), // Yes, KNN3 is case-sensitive.
     };
 
-    let resp = client
-        .query_with_vars::<EthQueryResponse, EthQueryVars>(query, vars)
-        .await;
+    let resp: Result<Option<EthQueryResponse>, _> = client.query_with_vars(query, vars).await;
     if resp.is_err() {
         warn!(
             "KNN3 fetch | Failed to fetch addrs: {}, err: {:?}",
@@ -110,7 +111,8 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
             platform: Platform::Ethereum,
             identity: identity.to_lowercase(),
             created_at: None,
-            display_name: identity.to_lowercase(),
+            // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
+            display_name: None,
             added_at: naive_now(),
             avatar_url: None,
             profile_url: None,
@@ -131,6 +133,7 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
             source: DataSource::Knn3,
             created_at: None,
             updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
         };
         create_identity_to_contract_record(&db, &from, &to, &ownership).await?;
     }
@@ -184,7 +187,8 @@ async fn fetch_eth_wallet_by_ens(id: &str) -> Result<TargetProcessedList, Error>
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: address.to_lowercase(),
-        display_name: address.to_lowercase(),
+        // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
+        display_name: None,
         profile_url: None,
         avatar_url: None,
         created_at: None,
@@ -206,6 +210,7 @@ async fn fetch_eth_wallet_by_ens(id: &str) -> Result<TargetProcessedList, Error>
         source: DataSource::Knn3,
         created_at: None,
         updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
     };
     let db = new_db_connection().await?;
     create_identity_to_contract_record(&db, &from, &to, &hold).await?;

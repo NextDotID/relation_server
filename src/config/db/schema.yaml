@@ -3,7 +3,7 @@
 # Editing it will have no effect.
 # 
 ---
-version: 1658645480601
+version: 1660206807852
 collections:
   - name: Identities
     is_edge_collection: false
@@ -12,6 +12,8 @@ collections:
   - name: Contracts
     is_edge_collection: false
   - name: Holds
+    is_edge_collection: true
+  - name: Resolves
     is_edge_collection: true
 indexes:
   - name: PlatformIdentityUniqueness
@@ -24,3 +26,18 @@ indexes:
       unique: true
       sparse: true
       deduplicate: false
+graphs:
+  - name: identities_proofs_graph
+    edgeDefinitions:
+      - collection: Proofs
+        from:
+          - Identities
+        to:
+          - Identities
+  - name: identities_contracts_graph
+    edgeDefinitions:
+      - collection: Holds
+        from:
+          - Identities
+        to:
+          - Contracts

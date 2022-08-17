@@ -1,9 +1,11 @@
+use crate::controller::vec_string_to_vec_platform;
 use crate::error::{Error, Result};
-use crate::graph::edge::HoldRecord;
+use crate::graph::edge::{HoldRecord, ProofRecord};
 use crate::graph::vertex::{Identity, IdentityRecord, Vertex};
 use crate::upstream::{fetch_all, DataSource, Platform, Target};
 
 use aragog::DatabaseConnection;
+use arangors_lite::Database;
 use async_graphql::{Context, Object};
 use log::debug;
 use strum::IntoEnumIterator;
@@ -33,7 +35,7 @@ impl IdentityRecord {
     async fn status(&self) -> Vec<DataStatus> {
         use DataStatus::*;
         let mut current: Vec<DataStatus> = vec![];
-        if self.key().len() > 0 {
+        if !self.key().is_empty() {
             current.push(Cached);
             if self.is_outdated() {
                 current.push(Outdated);
@@ -54,7 +56,7 @@ impl IdentityRecord {
     /// Platform.  See `avaliablePlatforms` or schema definition for a
     /// list of platforms supported by RelationService.
     async fn platform(&self) -> Platform {
-        self.platform.clone()
+        self.platform
     }
 
     /// Identity on target platform.  Username or database primary key
@@ -66,7 +68,8 @@ impl IdentityRecord {
 
     /// Usually user-friendly screen name.  e.g. for `Twitter`, this
     /// is the user's `screen_name`.
-    async fn display_name(&self) -> String {
+    /// Note: both `null` and `""` should be treated as "no value".
+    async fn display_name(&self) -> Option<String> {
         self.display_name.clone()
     }
 
@@ -123,6 +126,16 @@ impl IdentityRecord {
         .await
     }
 
+    async fn neighbor_with_traversal(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
+    ) -> Result<Vec<ProofRecord>> {
+        let raw_db: &Database = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        self.neighbors_with_traversal(raw_db, depth.unwrap_or(1), None)
+            .await
+    }
+
     /// NFTs owned by this identity.
     /// For now, there's only `platform: ethereum` identity has NFTs.
     async fn nft(&self, ctx: &Context<'_>) -> Result<Vec<HoldRecord>> {
@@ -155,12 +168,12 @@ impl IdentityQuery {
     ) -> Result<Option<IdentityRecord>> {
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let platform: Platform = platform.parse()?;
-        let target = Target::Identity(platform.clone(), identity.clone());
+        let target = Target::Identity(platform, identity.clone());
         // FIXME: Still kinda dirty. Should be in an background queue/worker-like shape.
-        match Identity::find_by_platform_identity(&db, &platform, &identity).await? {
+        match Identity::find_by_platform_identity(db, &platform, &identity).await? {
             None => {
                 fetch_all(target).await?;
-                Identity::find_by_platform_identity(&db, &platform, &identity).await
+                Identity::find_by_platform_identity(db, &platform, &identity).await
             }
             Some(found) => {
                 if found.is_outdated() {
@@ -172,6 +185,36 @@ impl IdentityQuery {
                 }
                 Ok(Some(found))
             }
+        }
+    }
+
+    async fn identities(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "Platform array to query")] platforms: Vec<String>,
+        #[graphql(desc = "Identity on target Platform")] identity: String,
+    ) -> Result<Vec<IdentityRecord>> {
+        let raw_db: &Database = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        let platform_list = vec_string_to_vec_platform(platforms)?;
+        let record: Vec<IdentityRecord> =
+            Identity::find_by_platforms_identity(&raw_db, &platform_list, identity.as_str())
+                .await?;
+        if record.len() == 0 {
+            for platform in &platform_list {
+                let target = Target::Identity(platform.clone(), identity.clone());
+                fetch_all(target).await?;
+            }
+            Ok(
+                Identity::find_by_platforms_identity(&raw_db, &platform_list, identity.as_str())
+                    .await?,
+            )
+        } else {
+            record.iter().filter(|r| r.is_outdated()).for_each(|r| {
+                let platform = r.platform.clone();
+                let identity = r.identity.clone();
+                tokio::spawn(async move { fetch_all(Target::Identity(platform, identity)).await });
+            });
+            Ok(record)
         }
     }
 }

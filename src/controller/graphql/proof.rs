@@ -7,6 +7,7 @@ use crate::graph::edge::Proof;
 use crate::graph::vertex::IdentityRecord;
 use crate::graph::Edge;
 use crate::graph::{edge::proof::ProofRecord, vertex::Identity};
+use crate::upstream::DataFetcher;
 
 #[Object]
 impl ProofRecord {
@@ -37,6 +38,13 @@ impl ProofRecord {
         self.updated_at.timestamp()
     }
 
+    /// Who collects this data.
+    /// It works as a "data cleansing" or "proxy" between `source`s and us.
+    async fn fetcher(&self) -> DataFetcher {
+        self.fetcher
+    }
+
+    /// Which `IdentityRecord` does this connection starts at.
     async fn from(&self, ctx: &Context<'_>) -> Result<IdentityRecord> {
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let from_record: aragog::DatabaseRecord<Identity> = self.from_record(db).await?;
@@ -44,6 +52,7 @@ impl ProofRecord {
         Ok(from_record.into())
     }
 
+    /// Which `IdentityRecord` does this connection ends at.
     async fn to(&self, ctx: &Context<'_>) -> Result<IdentityRecord> {
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let to_record: aragog::DatabaseRecord<Identity> = self.to_record(db).await?;

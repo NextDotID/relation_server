@@ -1,4 +1,5 @@
 extern crate futures;
+#[cfg(test)]
 mod tests;
 
 use crate::config::C;
@@ -21,7 +22,7 @@ use uuid::Uuid;
 
 use futures::future::join_all;
 
-use super::Target;
+use super::{DataFetcher, Target};
 
 #[derive(Deserialize, Debug)]
 pub struct SybilListItem {
@@ -62,36 +63,42 @@ async fn save_item(
         platform: Platform::Ethereum,
         identity: eth_wallet_address.to_lowercase(),
         created_at: None,
-        display_name: eth_wallet_address.to_lowercase(),
+        // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
+        display_name: None,
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
     };
-    let from_record = from.create_or_update(&db).await.ok()?;
+    let from_record = from.create_or_update(db).await.ok()?;
 
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Twitter,
         identity: item.twitter.handle.to_lowercase(),
         created_at: None,
-        display_name: item.twitter.handle.to_lowercase(),
+        display_name: Some(item.twitter.handle.to_lowercase()),
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
     };
-    let to_record = to.create_or_update(&db).await.ok()?;
+    let to_record = to.create_or_update(db).await.ok()?;
 
+    let create_ms_time: u32 = (item.twitter.timestamp % 1000).try_into().unwrap();
     let proof: Proof = Proof {
         uuid: Uuid::new_v4(),
         source: DataSource::SybilList,
         record_id: Some(item.twitter.tweet_id),
-        created_at: Some(timestamp_to_naive(item.twitter.timestamp / 1000)), // millisecond
+        created_at: Some(timestamp_to_naive(
+            item.twitter.timestamp / 1000,
+            create_ms_time,
+        )), // millisecond
         updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
     };
 
-    proof.connect(&db, &from_record, &to_record).await.ok()?;
+    proof.connect(db, &from_record, &to_record).await.ok()?;
     Some((Platform::Twitter, item.twitter.handle))
 }
 
@@ -162,7 +169,7 @@ impl Fetcher for SybilList {
                     let next_target: DatabaseRecord<Identity> = found.record.to_record(&db).await?;
 
                     Ok(vec![Target::Identity(
-                        next_target.platform.clone(),
+                        next_target.platform,
                         next_target.identity.clone(),
                     )])
                 }
@@ -184,7 +191,7 @@ impl Fetcher for SybilList {
                         found.record.from_record(&db).await?;
 
                     Ok(vec![Target::Identity(
-                        next_target.platform.clone(),
+                        next_target.platform,
                         next_target.identity.clone(),
                     )])
                 }
