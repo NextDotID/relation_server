@@ -25,7 +25,7 @@ url = "https://keybase.io/_/api/1.0/user/lookup.json"
 url = "https://mw.graphql.knn3.xyz/"
 
 [upstream.rss3_service]
-url = "https://pregod.rss3.dev/v0.4.0/"
+url = "https://pregod.rss3.dev/v1.1.0/notes"
 
 [upstream.the_graph]
 ens = "https://api.thegraph.com/subgraphs/name/ensdomains/ens"

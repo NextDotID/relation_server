@@ -230,12 +230,12 @@ pub enum ContractCategory {
     #[graphql(name = "ENS")]
     ENS,
 
-    #[strum(serialize = "ERC721")]
+    #[strum(serialize = "ERC721", serialize = "ERC-721")]
     #[serde(rename = "ERC721")]
     #[graphql(name = "ERC721")]
     ERC721,
 
-    #[strum(serialize = "ERC1155")]
+    #[strum(serialize = "ERC1155", serialize = "ERC-1155")]
     #[serde(rename = "ERC1155")]
     #[graphql(name = "ERC1155")]
     ERC1155,
