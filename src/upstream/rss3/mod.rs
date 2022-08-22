@@ -46,7 +46,7 @@ pub struct ResultItem {
 #[derive(Deserialize, Debug)]
 pub struct ActionItem {
     pub tag: String,
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     pub tag_type: String,
     #[serde(default)]
     pub hash: String,
@@ -68,7 +68,6 @@ pub struct MetaData {
     pub symbol: String,
     pub standard: Option<String>,
     pub contract_address: Option<String>,
-
 }
 
 #[derive(Deserialize, Debug)]
@@ -183,21 +182,20 @@ async fn fetch_nfts_by_account(
     }
 
     let futures: Vec<_> = body
-    .result
-    .into_iter()
-    .filter(|p| p.owner == identity.to_lowercase())
-    .map(save_item)
-    .collect();
+        .result
+        .into_iter()
+        .filter(|p| p.owner == identity.to_lowercase())
+        .map(save_item)
+        .collect();
 
     let next_targets: TargetProcessedList = join_all(futures)
-    .await
-    .into_iter()
-    .flat_map(|result| result.unwrap_or_default())
-    .collect();
+        .await
+        .into_iter()
+        .flat_map(|result| result.unwrap_or_default())
+        .collect();
 
     Ok(next_targets)
 }
-
 
 async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
     let creataed_at = DateTime::parse_from_rfc3339(&p.timestamp).unwrap();
@@ -221,21 +219,28 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         return Ok(vec![]);
     }
 
-    let found = p.actions.into_iter().find(|a|a.tag == "collectible".to_string());
+    let found = p
+        .actions
+        .into_iter()
+        .find(|a| a.tag == "collectible".to_string());
     if found.is_none() {
         return Ok(vec![]);
     }
     let real_action = found.unwrap();
     let mut nft_category =
-        ContractCategory::from_str(real_action.metadata.standard.as_ref().unwrap().as_str()).unwrap_or_default();
-    
-    println!("nft_category {}", real_action.metadata.standard.unwrap().as_str());
+        ContractCategory::from_str(real_action.metadata.standard.as_ref().unwrap().as_str())
+            .unwrap_or_default();
+
     if real_action.tag_type == "poap".to_string() {
         nft_category = ContractCategory::POAP;
     }
 
     let chain = p.network.into();
-    let contract_addr = real_action.metadata.contract_address.unwrap().to_lowercase();
+    let contract_addr = real_action
+        .metadata
+        .contract_address
+        .unwrap()
+        .to_lowercase();
     let nft_id = real_action.metadata.id.unwrap();
 
     let to: Contract = Contract {
@@ -264,6 +269,4 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         contract_addr.clone(),
         nft_id.clone(),
     )])
-
 }
-
