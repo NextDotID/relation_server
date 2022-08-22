@@ -9,10 +9,10 @@ use crate::{
     util::naive_now,
 };
 use aragog::{
-    query::{Comparison, Filter, Query, QueryResult},
-    DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
+    query::{Comparison, Filter},
+    DatabaseConnection, DatabaseRecord, Record,
 };
-use arangors_lite::{AqlQuery, Database};
+use arangors_lite::AqlQuery;
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
 use dataloader::BatchFn;
@@ -102,13 +102,34 @@ impl Identity {
         } else {
             Ok(Some(query_result.first().unwrap().to_owned().into()))
         }
+
+        /* Use connection pool
+        let db = pool.db().await?;
+        let aql = r"FOR v IN @@collection_name
+        FILTER v.identity == @identity AND v.platform == @platform
+        RETURN v";
+        let aql = AqlQuery::new(aql)
+            .bind_var("@collection_name", Identity::COLLECTION_NAME)
+            .bind_var("identity", identity)
+            .bind_var("platform", platform.to_string())
+            .batch_size(1)
+            .count(false);
+
+        let result: Vec<IdentityRecord> = db.aql_query(aql).await?;
+        if result.len() == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(result.first().unwrap().to_owned().into()))
+        }
+        */
     }
 
     pub async fn find_by_platforms_identity(
-        raw_db: &Database,
+        pool: &ConnectionPool,
         platforms: &Vec<Platform>,
         identity: &str,
     ) -> Result<Vec<IdentityRecord>, Error> {
+        let db = pool.db().await?;
         let platform_array: Vec<Value> = platforms
             .into_iter()
             .map(|field| json!(field.to_string()))
@@ -123,26 +144,27 @@ impl Identity {
             .bind_var("platform", platform_array)
             .batch_size(1)
             .count(false);
-        let result: Vec<IdentityRecord> = raw_db.aql_query(aql).await?;
+        let result: Vec<IdentityRecord> = db.aql_query(aql).await?;
         Ok(result)
     }
 
     #[allow(unused)]
     async fn find_by_display_name(
-        raw_db: &Database,
+        pool: &ConnectionPool,
         display_name: String,
     ) -> Result<Option<IdentityRecord>, Error> {
-        let aql = r"FOR v IN @@view
+        let db = pool.db().await?;
+        let aql = r"FOR v IN @@collection_name
         SEARCH ANALYZER(v.display_name IN TOKENS(@display_name, 'text_en'), 'text_en')
         RETURN v";
 
         let aql = AqlQuery::new(aql)
-            .bind_var("@view", "relation")
+            .bind_var("@collection_name", Identity::COLLECTION_NAME)
             .bind_var("display_name", display_name.as_str())
             .batch_size(1)
             .count(false);
 
-        let result: Vec<IdentityRecord> = raw_db.aql_query(aql).await?;
+        let result: Vec<IdentityRecord> = db.aql_query(aql).await?;
         if result.len() == 0 {
             Ok(None)
         } else {
@@ -399,34 +421,41 @@ impl IdentityRecord {
     /// Returns all neighbors of this identity. Depth and upstream data souce can be specified.
     pub async fn neighbors(
         &self,
-        db: &DatabaseConnection,
+        pool: &ConnectionPool,
         depth: u16,
         _source: Option<DataSource>,
     ) -> Result<Vec<Self>, Error> {
-        // TODO: make `source` filter work.
-        // let proof_query = match source {
-        //     None => Proof::query(),
-        //     Some(source) => Proof::query().filter(
-        //         Comparison::field("source") // Don't know why this won't work
-        //             .equals_str(source.to_string())
-        //             .into(),
-        //     ).distinct(),
-        // };
+        // Use DISTINCT
+        let db = pool.db().await?;
+        let aql_str = r"
+        WITH @@collection_name FOR d IN @@collection_name
+          FILTER d._id == @id
+          LIMIT 1
+          FOR vertex
+            IN 1..@depth
+            ANY d GRAPH @graph_name
+            RETURN DISTINCT vertex";
 
-        let result: QueryResult<Identity> = Query::any(1, depth, Proof::COLLECTION_NAME, self.id())
-            .call(db)
-            .await?;
-        Ok(result.iter().map(|r| r.to_owned().into()).collect())
+        let aql = AqlQuery::new(aql_str)
+            .bind_var("@collection_name", Identity::COLLECTION_NAME)
+            .bind_var("graph_name", "identities_proofs_graph")
+            .bind_var("id", self.id().as_str())
+            .bind_var("depth", depth)
+            .batch_size(1)
+            .count(false);
+        let vertices: Vec<Self> = db.aql_query(aql).await?;
+        Ok(vertices)
     }
 
     // Return all neighbors of this identity with path<ProofRecord>
     pub async fn neighbors_with_traversal(
         &self,
-        raw_db: &Database,
+        pool: &ConnectionPool,
         depth: u16,
         source: Option<DataSource>,
     ) -> Result<Vec<ProofRecord>, Error> {
         // Using graph speed up FILTER
+        let db = pool.db().await?;
         let aql: AqlQuery;
         match source {
             None => {
@@ -437,7 +466,7 @@ impl IdentityRecord {
                   FOR vertex, edge, path
                     IN 1..@depth
                     ANY d GRAPH @graph_name
-                    RETURN edge";
+                    RETURN DISTINCT edge";
 
                 aql = AqlQuery::new(aql_str)
                     .bind_var("@collection_name", Identity::COLLECTION_NAME)
@@ -468,7 +497,7 @@ impl IdentityRecord {
                     .count(false);
             }
         }
-        let resp: Vec<Value> = raw_db.aql_query(aql).await?;
+        let resp: Vec<Value> = db.aql_query(aql).await?;
         let mut paths: Vec<ProofRecord> = Vec::new();
         for p in resp {
             let p: ProofRecord = from_value(p)?;
@@ -478,16 +507,24 @@ impl IdentityRecord {
     }
 
     /// Returns all Contracts owned by this identity. Empty list if `self.platform != Ethereum`.
-    pub async fn nfts(&self, db: &DatabaseConnection) -> Result<Vec<HoldRecord>, Error> {
+    pub async fn nfts(&self, pool: &ConnectionPool) -> Result<Vec<HoldRecord>, Error> {
         if self.0.record.platform != Platform::Ethereum {
             return Ok(vec![]);
         }
 
-        let query = EdgeRecord::<Hold>::query().filter(Filter::new(
-            Comparison::field("_from").equals_str(self.id()),
-        ));
-        let result: QueryResult<EdgeRecord<Hold>> = query.call(db).await?;
-        Ok(result.iter().map(|r| r.to_owned().into()).collect())
+        let db = pool.db().await?;
+        let aql_str = r"WITH @@edge_collection_name
+            FOR d in @@edge_collection_name
+            FILTER d._from == @id
+            RETURN d";
+        let aql = AqlQuery::new(aql_str)
+            .bind_var("@edge_collection_name", Hold::COLLECTION_NAME)
+            .bind_var("id", self.id().as_str())
+            .batch_size(1)
+            .count(false);
+
+        let result = db.aql_query::<HoldRecord>(aql).await?;
+        Ok(result)
     }
 }
 
@@ -504,7 +541,7 @@ mod tests {
     use crate::{
         error::Error,
         graph::{edge::Proof, Edge, Vertex},
-        graph::{new_connection_pool, new_db_connection, new_raw_db_connection},
+        graph::{new_connection_pool, new_db_connection},
         upstream::Platform,
         util::naive_now,
     };
@@ -633,8 +670,9 @@ mod tests {
         // let db = new_db_connection().await?;
         // let created = Identity::create_dummy(&db).await?;
         // println!("display_name={}", created.display_name);
-        let raw_db = new_raw_db_connection().await?;
-        let found = Identity::find_by_display_name(&raw_db, String::from("some created.display"))
+        // let raw_db = new_raw_db_connection().await?;
+        let pool = new_connection_pool().await;
+        let found = Identity::find_by_display_name(&pool, String::from("some created.display"))
             .await?
             .expect("Record not found");
         println!("{:#?}", found);
@@ -643,9 +681,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_find_by_platforms_identity() -> Result<(), Error> {
-        let raw_db = new_raw_db_connection().await.unwrap();
+        let pool = new_connection_pool().await;
         let identities = Identity::find_by_platforms_identity(
-            &raw_db,
+            &pool,
             &vec![Platform::Ethereum, Platform::Twitter],
             "0x00000003cd3aa7e760877f03275621d2692f5841",
         )
@@ -658,6 +696,7 @@ mod tests {
     #[tokio::test]
     async fn test_neighbors() -> Result<(), Error> {
         let db = new_db_connection().await?;
+        let pool = new_connection_pool().await;
         // ID2 <--Proof1-- ID1 --Proof2--> ID3
         let id1 = Identity::create_dummy(&db).await?;
         let id2 = Identity::create_dummy(&db).await?;
@@ -670,7 +709,7 @@ mod tests {
         proof1_raw.connect(&db, &id1, &id2).await?;
         proof2_raw.connect(&db, &id1, &id3).await?;
         proof3_raw.connect(&db, &id2, &id4).await?;
-        let neighbors = id1.neighbors(&db, 2, None).await?;
+        let neighbors = id1.neighbors(&pool, 2, None).await?;
         assert_eq!(3, neighbors.len());
         // assert!(neighbors
         //     .iter()
@@ -680,13 +719,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_neighbors_with_traversal() -> Result<(), Error> {
-        let raw_db = new_raw_db_connection().await.unwrap();
-        let found = Identity::find_by_display_name(&raw_db, String::from("Kc37j5zNLG5RLxbWGOz"))
+        let pool = new_connection_pool().await;
+        let found = Identity::find_by_display_name(&pool, String::from("Kc37j5zNLG5RLxbWGOz"))
             .await?
             .expect("Record not found");
         println!("{:#?}", found);
         let neighbors = found
-            .neighbors_with_traversal(&raw_db, 3, None)
+            .neighbors_with_traversal(&pool, 3, None)
             .await
             .unwrap();
         println!("{:#?}", neighbors);

@@ -6,6 +6,7 @@ use crate::{
             contract::{Chain, ContractCategory, ContractLoadFn, ContractRecord},
             IdentifyLoadFn, IdentityRecord,
         },
+        ConnectionPool,
     },
     upstream::{fetch_all, DataFetcher, DataSource, Target},
 };
@@ -148,12 +149,12 @@ impl HoldQuery {
         )]
         address: Option<String>,
     ) -> Result<Option<HoldRecord>> {
-        let raw_db: &Database = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let contract_address = address
             .or(category.default_contract_address())
             .ok_or(Error::GraphQLError("Contract address is required.".into()))?;
         let target = Target::NFT(chain, category, contract_address.clone(), id.clone());
-        match Hold::find_by_id_chain_address_merge(raw_db, &id, &chain, &contract_address).await? {
+        match Hold::find_by_id_chain_address_merge(pool, &id, &chain, &contract_address).await? {
             Some(hold) => {
                 if hold.is_outdated() {
                     tokio::spawn(async move { fetch_all(target).await });
@@ -163,7 +164,7 @@ impl HoldQuery {
 
             None => {
                 fetch_all(target).await?;
-                Hold::find_by_id_chain_address_merge(raw_db, &id, &chain, &contract_address).await
+                Hold::find_by_id_chain_address_merge(pool, &id, &chain, &contract_address).await
             }
         }
     }
