@@ -77,7 +77,7 @@ async fn save_item(
         platform: Platform::Twitter,
         identity: item.twitter.handle.to_lowercase(),
         created_at: None,
-        display_name: Some(item.twitter.handle.to_lowercase()),
+        display_name: Some(item.twitter.handle.clone()),
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
@@ -99,7 +99,7 @@ async fn save_item(
     };
 
     proof.connect(db, &from_record, &to_record).await.ok()?;
-    Some((Platform::Twitter, item.twitter.handle))
+    Some((Platform::Twitter, item.twitter.handle.clone()))
 }
 
 /// Trigger a refetch from github.

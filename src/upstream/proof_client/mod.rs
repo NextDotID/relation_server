@@ -138,7 +138,7 @@ async fn fetch_connections_by_platform_identity(
         let to: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
             platform: to_platform,
-            identity: p.identity.to_string(),
+            identity: p.identity.to_string().to_lowercase(),
             created_at: Some(timestamp_to_naive(
                 p.created_at.to_string().parse().unwrap(),
                 0,

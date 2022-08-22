@@ -8,7 +8,6 @@ use crate::{
     upstream::{Fetcher, Target},
 };
 
-
 #[tokio::test]
 async fn test_smoke_nft_rss3() -> Result<(), Error> {
     let target = Target::Identity(
@@ -19,7 +18,6 @@ async fn test_smoke_nft_rss3() -> Result<(), Error> {
     let db = new_db_connection().await?;
 
     let owner = Identity::find_by_platform_identity(&db, &Platform::Ethereum, &target.identity()?)
-
         .await?
         .expect("Record not found");
     let contract = Contract::find_by_chain_address(

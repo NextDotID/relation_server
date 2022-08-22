@@ -116,7 +116,7 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: from_platform,
-        identity: p.sns_handle.clone(),
+        identity: p.sns_handle.clone().to_lowercase(),
         created_at: None,
         display_name: Some(p.sns_handle.clone()),
         added_at: naive_now(),
@@ -130,7 +130,7 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: to_platform,
-        identity: web3_addr.clone(),
+        identity: web3_addr.clone().to_lowercase(),
         created_at: None,
         // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
         display_name: None,
@@ -165,36 +165,5 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
     let _ = create_identity_to_identity_record(&db, &from, &to, &pf).await;
 
     targets.push(Target::Identity(to_platform, web3_addr.clone()));
-
-    // TODO: Don't use ENS result from aggregation service.
-    // if p.ens.is_some() {
-    //     let to_contract_identity: Contract = Contract {
-    //         uuid: Uuid::new_v4(),
-    //         category: ContractCategory::ENS,
-    //         address: ContractCategory::ENS.default_contract_address().unwrap(),
-    //         chain: Chain::Ethereum,
-    //         symbol: None,
-    //         updated_at: naive_now(),
-    //     };
-
-    //     let ens = p.ens.unwrap();
-    //     let hold: Hold = Hold {
-    //         uuid: Uuid::new_v4(),
-    //         transaction: None,
-    //         id: ens.clone(),
-    //         source: DataSource::from_str(p.source.as_str()).unwrap_or(DataSource::Unknown),
-    //         created_at: None,
-    //         updated_at: naive_now(),
-    //         fetcher: DataFetcher::AggregationService,
-    //     };
-    //     let _ = create_identity_to_contract_record(&db, &from, &to_contract_identity, &hold).await;
-
-    //     targets.push(Target::NFT(
-    //         Chain::Ethereum,
-    //         ContractCategory::ENS,
-    //         ContractCategory::ENS.default_contract_address().unwrap(),
-    //         ens.clone(),
-    //     ));
-    // }
     Ok(targets)
 }

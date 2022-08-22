@@ -157,7 +157,7 @@ async fn fetch_connections_by_platform_identity(
         let to: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
             platform: Platform::from_str(p.proof_type.as_str()).unwrap(),
-            identity: p.nametag.clone(),
+            identity: p.nametag.clone().to_lowercase(),
             created_at: None,
             display_name: Some(p.nametag.clone()),
             added_at: naive_now(),
