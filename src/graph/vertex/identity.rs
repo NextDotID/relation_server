@@ -245,6 +245,15 @@ pub struct ToIdentityRecord {
     pub identity: IdentityRecord,
 }
 
+#[derive(Clone, Deserialize, Serialize, Default, Debug)]
+pub struct FromToRecord {
+    /// ProofRecord _id
+    pub id: String,
+    /// Two vertices of proof
+    pub from_v: IdentityRecord,
+    pub to_v: IdentityRecord,
+}
+
 impl std::ops::Deref for IdentityRecord {
     type Target = DatabaseRecord<Identity>;
 
@@ -262,6 +271,26 @@ impl std::ops::DerefMut for IdentityRecord {
 impl From<DatabaseRecord<Identity>> for IdentityRecord {
     fn from(record: DatabaseRecord<Identity>) -> Self {
         Self(record)
+    }
+}
+
+pub struct FromToLoadFn {
+    pub pool: ConnectionPool,
+}
+
+#[async_trait::async_trait]
+impl BatchFn<String, Option<(IdentityRecord, IdentityRecord)>> for FromToLoadFn {
+    async fn load(
+        &mut self,
+        ids: &[String],
+    ) -> HashMap<String, Option<(IdentityRecord, IdentityRecord)>> {
+        debug!("Loading proof for: {:?}", ids);
+        let records = get_from_to_record(&self.pool, ids.to_vec()).await;
+        match records {
+            Ok(records) => records,
+            // HOLD ON: Not sure if `Err` need to return
+            Err(_) => ids.iter().map(|k| (k.to_owned(), None)).collect(),
+        }
     }
 }
 
@@ -320,6 +349,46 @@ async fn get_identities(
                 },
             );
 
+            Ok(dataloader_map)
+        }
+        Err(e) => Err(Error::ArangoLiteDBError(e)),
+    }
+}
+
+async fn get_from_to_record(
+    pool: &ConnectionPool,
+    ids: Vec<String>,
+) -> Result<HashMap<String, Option<(IdentityRecord, IdentityRecord)>>, Error> {
+    let db = pool.db().await?;
+    let proof_ids: Vec<Value> = ids.iter().map(|field| json!(field.to_string())).collect();
+    let aql_str = r###"WITH @@edge_collection_name
+    FOR d IN @@edge_collection_name
+        FILTER d._id IN @proof_ids
+            FOR from_v IN @@collection_name FILTER from_v._id == d._from
+            FOR to_v IN @@collection_name FILTER to_v._id == d._to
+        RETURN {"id": d._id, "from_v": from_v, "to_v": to_v}"###;
+
+    let aql = AqlQuery::new(aql_str)
+        .bind_var("@edge_collection_name", Proof::COLLECTION_NAME)
+        .bind_var("@collection_name", Identity::COLLECTION_NAME)
+        .bind_var("proof_ids", proof_ids.clone())
+        .batch_size(1)
+        .count(false);
+
+    let edges = db.aql_query::<FromToRecord>(aql).await;
+    match edges {
+        Ok(contents) => {
+            let id_tuple_map = contents
+                .into_iter()
+                .map(|content| (content.id.clone(), Some((content.from_v, content.to_v))))
+                .collect();
+            let dataloader_map = ids.into_iter().fold(
+                id_tuple_map,
+                |mut map: HashMap<String, Option<(IdentityRecord, IdentityRecord)>>, id| {
+                    map.entry(id).or_insert(None);
+                    map
+                },
+            );
             Ok(dataloader_map)
         }
         Err(e) => Err(Error::ArangoLiteDBError(e)),

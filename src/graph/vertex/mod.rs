@@ -5,7 +5,7 @@ mod identity;
 use aragog::{DatabaseConnection, Record};
 use async_trait::async_trait;
 pub use contract::{Contract, ContractRecord};
-pub use identity::{IdentifyLoadFn, Identity, IdentityRecord};
+pub use identity::{FromToLoadFn, IdentifyLoadFn, Identity, IdentityRecord};
 use uuid::Uuid;
 
 use crate::error::Error;

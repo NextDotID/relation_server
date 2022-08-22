@@ -3,11 +3,12 @@ use async_graphql::{Context, Object};
 use uuid::Uuid;
 
 use crate::error::{Error, Result};
+use crate::graph::edge::proof::ProofRecord;
 use crate::graph::edge::Proof;
-use crate::graph::vertex::IdentityRecord;
+use crate::graph::vertex::{FromToLoadFn, IdentityRecord};
 use crate::graph::Edge;
-use crate::graph::{edge::proof::ProofRecord, vertex::Identity};
 use crate::upstream::DataFetcher;
+use dataloader::non_cached::Loader;
 
 #[Object]
 impl ProofRecord {
@@ -46,18 +47,22 @@ impl ProofRecord {
 
     /// Which `IdentityRecord` does this connection starts at.
     async fn from(&self, ctx: &Context<'_>) -> Result<IdentityRecord> {
-        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let from_record: aragog::DatabaseRecord<Identity> = self.from_record(db).await?;
-
-        Ok(from_record.into())
+        let loader: &Loader<String, Option<(IdentityRecord, IdentityRecord)>, FromToLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        match loader.load(self.id().to_string()).await {
+            Some(tuple) => Ok(tuple.0),
+            None => Err(Error::GraphQLError("record from no found.".to_string())),
+        }
     }
 
     /// Which `IdentityRecord` does this connection ends at.
     async fn to(&self, ctx: &Context<'_>) -> Result<IdentityRecord> {
-        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let to_record: aragog::DatabaseRecord<Identity> = self.to_record(db).await?;
-
-        Ok(to_record.into())
+        let loader: &Loader<String, Option<(IdentityRecord, IdentityRecord)>, FromToLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        match loader.load(self.id().to_string()).await {
+            Some(tuple) => Ok(tuple.1),
+            None => Err(Error::GraphQLError("record to no found.".to_string())),
+        }
     }
 }
 
