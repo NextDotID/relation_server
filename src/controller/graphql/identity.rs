@@ -2,10 +2,10 @@ use crate::controller::vec_string_to_vec_platform;
 use crate::error::{Error, Result};
 use crate::graph::edge::{HoldRecord, ProofRecord};
 use crate::graph::vertex::{Identity, IdentityRecord, Vertex};
+use crate::graph::ConnectionPool;
 use crate::upstream::{fetch_all, DataSource, Platform, Target};
 
 use aragog::DatabaseConnection;
-use arangors_lite::Database;
 use async_graphql::{Context, Object};
 use log::debug;
 use strum::IntoEnumIterator;
@@ -116,9 +116,9 @@ impl IdentityRecord {
         // upstream: Option<String>,
         #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
     ) -> Result<Vec<IdentityRecord>> {
-        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         self.neighbors(
-            db,
+            pool,
             depth.unwrap_or(1),
             // upstream.map(|u| DataSource::from_str(&u).unwrap_or(DataSource::Unknown))
             None,
@@ -131,16 +131,16 @@ impl IdentityRecord {
         ctx: &Context<'_>,
         #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
     ) -> Result<Vec<ProofRecord>> {
-        let raw_db: &Database = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        self.neighbors_with_traversal(raw_db, depth.unwrap_or(1), None)
+        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        self.neighbors_with_traversal(pool, depth.unwrap_or(1), None)
             .await
     }
 
     /// NFTs owned by this identity.
     /// For now, there's only `platform: ethereum` identity has NFTs.
     async fn nft(&self, ctx: &Context<'_>) -> Result<Vec<HoldRecord>> {
-        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        self.nfts(db).await
+        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        self.nfts(pool).await
     }
 }
 
@@ -166,6 +166,7 @@ impl IdentityQuery {
         #[graphql(desc = "Platform to query")] platform: String,
         #[graphql(desc = "Identity on target Platform")] identity: String,
     ) -> Result<Option<IdentityRecord>> {
+        // let pool: &ConnectionPool = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let platform: Platform = platform.parse()?;
         let target = Target::Identity(platform, identity.clone());
@@ -194,18 +195,17 @@ impl IdentityQuery {
         #[graphql(desc = "Platform array to query")] platforms: Vec<String>,
         #[graphql(desc = "Identity on target Platform")] identity: String,
     ) -> Result<Vec<IdentityRecord>> {
-        let raw_db: &Database = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let platform_list = vec_string_to_vec_platform(platforms)?;
         let record: Vec<IdentityRecord> =
-            Identity::find_by_platforms_identity(&raw_db, &platform_list, identity.as_str())
-                .await?;
+            Identity::find_by_platforms_identity(&pool, &platform_list, identity.as_str()).await?;
         if record.len() == 0 {
             for platform in &platform_list {
                 let target = Target::Identity(platform.clone(), identity.clone());
                 fetch_all(target).await?;
             }
             Ok(
-                Identity::find_by_platforms_identity(&raw_db, &platform_list, identity.as_str())
+                Identity::find_by_platforms_identity(&pool, &platform_list, identity.as_str())
                     .await?,
             )
         } else {
