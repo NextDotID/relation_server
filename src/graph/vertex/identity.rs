@@ -3,6 +3,7 @@ use crate::{
     graph::ConnectionPool,
     graph::{
         edge::{Hold, HoldRecord, Proof, ProofRecord},
+        vertex::vec_string_to_vec_datasource,
         vertex::Vertex,
     },
     upstream::{DataSource, Platform},
@@ -13,6 +14,7 @@ use aragog::{
     DatabaseConnection, DatabaseRecord, Record,
 };
 use arangors_lite::AqlQuery;
+use array_tool::vec::Uniq;
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
 use dataloader::BatchFn;
@@ -268,6 +270,12 @@ pub struct ToIdentityRecord {
 }
 
 #[derive(Clone, Deserialize, Serialize, Default, Debug)]
+pub struct IdentityWithSource {
+    pub identity: IdentityRecord,
+    pub sources: Vec<DataSource>,
+}
+
+#[derive(Clone, Deserialize, Serialize, Default, Debug)]
 pub struct FromToRecord {
     /// ProofRecord _id
     pub id: String,
@@ -424,17 +432,16 @@ impl IdentityRecord {
         pool: &ConnectionPool,
         depth: u16,
         _source: Option<DataSource>,
-    ) -> Result<Vec<Self>, Error> {
-        // Use DISTINCT
+    ) -> Result<Vec<IdentityWithSource>, Error> {
         let db = pool.db().await?;
         let aql_str = r"
         WITH @@collection_name FOR d IN @@collection_name
           FILTER d._id == @id
           LIMIT 1
-          FOR vertex
+          FOR vertex, edge, path
             IN 1..@depth
             ANY d GRAPH @graph_name
-            RETURN DISTINCT vertex";
+            RETURN path";
 
         let aql = AqlQuery::new(aql_str)
             .bind_var("@collection_name", Identity::COLLECTION_NAME)
@@ -443,8 +450,48 @@ impl IdentityRecord {
             .bind_var("depth", depth)
             .batch_size(1)
             .count(false);
-        let vertices: Vec<Self> = db.aql_query(aql).await?;
-        Ok(vertices)
+
+        let resp: Vec<Value> = db.aql_query(aql).await?;
+        let mut identity_map: HashMap<String, IdentityRecord> = HashMap::new();
+        let mut sources_map: HashMap<String, Vec<String>> = HashMap::new();
+        for p in resp {
+            let path: Path = from_value(p)?;
+
+            let last = path.vertices.last().unwrap().to_owned();
+            let key = last.id().to_string();
+            let sources: Vec<String> = path
+                .edges
+                .into_iter()
+                .map(|e| e.source.to_string())
+                .collect();
+
+            identity_map.entry(key.clone()).or_insert(last);
+            sources_map
+                .entry(key.clone())
+                .or_insert_with(|| Vec::new())
+                .extend(sources)
+        }
+
+        let mut identity_sources: Vec<IdentityWithSource> = Vec::new();
+        for (k, v) in &identity_map {
+            let source_list = sources_map.get(k);
+            match source_list {
+                Some(ss) => {
+                    let unique_sources = ss.to_owned().unique();
+                    debug!("unique_sources = {:#?}", unique_sources);
+                    let _sources = vec_string_to_vec_datasource(unique_sources)?;
+                    if _sources.len() > 0 {
+                        let id = IdentityWithSource {
+                            sources: _sources,
+                            identity: v.to_owned(),
+                        };
+                        identity_sources.push(id);
+                    }
+                }
+                None => continue,
+            };
+        }
+        Ok(identity_sources)
     }
 
     // Return all neighbors of this identity with path<ProofRecord>
