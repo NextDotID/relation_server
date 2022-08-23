@@ -4,7 +4,7 @@ use crate::{
         edge::{Edge, Hold, HoldRecord},
         vertex::{
             contract::{Chain, ContractCategory, ContractLoadFn, ContractRecord},
-            IdentifyLoadFn, IdentityRecord,
+            IdentityLoadFn, IdentityRecord,
         },
         ConnectionPool,
     },
@@ -98,7 +98,7 @@ impl HoldRecord {
 
     /// Which `Identity` does this NFT belong to.
     async fn owner(&self, ctx: &Context<'_>) -> Result<IdentityRecord> {
-        let loader: &Loader<String, Option<IdentityRecord>, IdentifyLoadFn> =
+        let loader: &Loader<String, Option<IdentityRecord>, IdentityLoadFn> =
             ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         match loader.load(self.id.clone()).await {
             Some(identity) => Ok(identity),

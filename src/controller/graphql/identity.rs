@@ -1,7 +1,7 @@
 use crate::controller::vec_string_to_vec_platform;
 use crate::error::{Error, Result};
 use crate::graph::edge::{HoldRecord, ProofRecord};
-use crate::graph::vertex::{Identity, IdentityRecord, Vertex};
+use crate::graph::vertex::{Identity, IdentityRecord, IdentityWithSource, Vertex};
 use crate::graph::ConnectionPool;
 use crate::upstream::{fetch_all, DataSource, Platform, Target};
 
@@ -27,6 +27,17 @@ enum DataStatus {
     /// Come back later if you want a fresh one.
     #[graphql(name = "fetching")]
     Fetching,
+}
+
+#[Object]
+impl IdentityWithSource {
+    async fn sources(&self) -> Vec<DataSource> {
+        self.sources.clone()
+    }
+
+    async fn identity(&self) -> IdentityRecord {
+        self.identity.clone()
+    }
 }
 
 #[Object]
@@ -115,7 +126,7 @@ impl IdentityRecord {
         // )]
         // upstream: Option<String>,
         #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
-    ) -> Result<Vec<IdentityRecord>> {
+    ) -> Result<Vec<IdentityWithSource>> {
         let pool: &ConnectionPool = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         self.neighbors(
             pool,
