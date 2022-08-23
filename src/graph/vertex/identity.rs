@@ -316,14 +316,14 @@ impl BatchFn<String, Option<(IdentityRecord, IdentityRecord)>> for FromToLoadFn 
     }
 }
 
-pub struct IdentifyLoadFn {
+pub struct IdentityLoadFn {
     pub pool: ConnectionPool,
 }
 
 #[async_trait::async_trait]
-impl BatchFn<String, Option<IdentityRecord>> for IdentifyLoadFn {
+impl BatchFn<String, Option<IdentityRecord>> for IdentityLoadFn {
     async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<IdentityRecord>> {
-        debug!("Loading identify for: {:?}", ids);
+        debug!("Loading Identity for: {:?}", ids);
         let identities = get_identities(&self.pool, ids.to_vec()).await;
         match identities {
             Ok(identities) => identities,

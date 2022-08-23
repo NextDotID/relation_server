@@ -16,7 +16,7 @@ use relation_server::{
     graph::new_raw_db_connection,
     graph::vertex::contract::ContractLoadFn,
     graph::vertex::FromToLoadFn,
-    graph::vertex::IdentifyLoadFn,
+    graph::vertex::IdentityLoadFn,
 };
 use std::{convert::Infallible, net::SocketAddr};
 use warp::{http::Response as HttpResponse, Filter, Rejection};
@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
     let contract_loader_fn = ContractLoadFn {
         pool: pool.to_owned(),
     };
-    let identity_loader_fn = IdentifyLoadFn {
+    let identity_loader_fn = IdentityLoadFn {
         pool: pool.to_owned(),
     };
     let from_to_loader_fn = FromToLoadFn {
