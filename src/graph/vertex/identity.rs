@@ -458,18 +458,13 @@ impl IdentityRecord {
             let path: Path = from_value(p)?;
 
             let last = path.vertices.last().unwrap().to_owned();
+            let last_edge = path.edges.last().unwrap().to_owned();
             let key = last.id().to_string();
-            let sources: Vec<String> = path
-                .edges
-                .into_iter()
-                .map(|e| e.source.to_string())
-                .collect();
-
             identity_map.entry(key.clone()).or_insert(last);
             sources_map
                 .entry(key.clone())
                 .or_insert_with(|| Vec::new())
-                .extend(sources)
+                .push(last_edge.source.to_string());
         }
 
         let mut identity_sources: Vec<IdentityWithSource> = Vec::new();
