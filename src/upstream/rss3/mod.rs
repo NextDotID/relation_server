@@ -19,6 +19,8 @@ use http::uri::InvalidUri;
 use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
+use log::error;
+
 
 use super::DataFetcher;
 
@@ -68,11 +70,6 @@ pub struct MetaData {
     pub symbol: String,
     pub standard: Option<String>,
     pub contract_address: Option<String>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct ErrorResponse {
-    pub message: String,
 }
 
 /*
@@ -166,9 +163,9 @@ async fn fetch_nfts_by_account(
     let mut resp = client.get(uri).await?;
 
     if !resp.status().is_success() {
-        let body: ErrorResponse = parse_body(&mut resp).await?;
+        error!("Rss3 fetch error, statusCode: {}", resp.status());
         return Err(Error::General(
-            format!("Rss3 Result Get Error: {}", body.message),
+            format!("Rss3 Result Get Error"),
             resp.status(),
         ));
     }
