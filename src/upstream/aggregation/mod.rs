@@ -14,6 +14,7 @@ use futures::future::join_all;
 use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
+use log::{error, info};
 
 #[derive(Deserialize, Debug)]
 pub struct Pagination {
@@ -83,11 +84,13 @@ async fn fetch_connections_by_platform_identity(
 
         let mut resp = client.get(uri).await?;
         if !resp.status().is_success() {
+            error!("aggregation service fetch error, status {}", resp.status());
             break;
         }
 
         let body: Response = parse_body(&mut resp).await?;
         if body.records.is_empty() {
+            info!("aggregation service response is empty");
             break;
         }
 

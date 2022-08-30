@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
+use log::{error, info};
 
 use super::DataFetcher;
 
@@ -95,6 +96,7 @@ async fn fetch_connections_by_platform_identity(
 
     if !resp.status().is_success() {
         let body: ErrorResponse = parse_body(&mut resp).await?;
+        error!("Proof Service fetch error, status {}", resp.status());
         return Err(Error::General(
             format!("Proof Result Get Error: {}", body.message),
             resp.status(),
@@ -103,6 +105,7 @@ async fn fetch_connections_by_platform_identity(
 
     let mut body: ProofQueryResponse = parse_body(&mut resp).await?;
     if body.pagination.total == 0 {
+        info!("Proof Service response is empty");
         return Err(Error::NoResult);
     }
 

@@ -19,7 +19,7 @@ use http::uri::InvalidUri;
 use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
-use log::error;
+use log::{error, info};
 
 
 use super::DataFetcher;
@@ -172,8 +172,9 @@ async fn fetch_nfts_by_account(
 
     let body: Rss3Response = parse_body(&mut resp).await?;
     if body.total == 0 {
+        info!("Rss3 Response is empty");
         return Err(Error::General(
-            "rss3 Result Get Error".to_string(),
+            "Rss3 Response is empty".to_string(),
             resp.status(),
         ));
     }
