@@ -182,7 +182,13 @@ pub enum Platform {
     #[serde(rename = "reddit")]
     #[graphql(name = "reddit")]
     Reddit,
-    
+
+    /// Lens
+    #[strum(serialize = "lens")]
+    #[serde(rename = "lens")]
+    #[graphql(name = "lens")]
+    Lens,
+
     /// Unknown
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]

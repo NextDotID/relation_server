@@ -11,10 +11,10 @@ use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use async_trait::async_trait;
 use futures::future::join_all;
+use log::{error, info};
 use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
-use log::{error, info};
 
 #[derive(Deserialize, Debug)]
 pub struct Pagination {

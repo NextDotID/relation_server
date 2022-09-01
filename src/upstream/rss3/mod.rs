@@ -4,8 +4,8 @@ use crate::{
     config::C,
     error::Error,
     graph::{
-        create_identity_to_contract_record,
-        edge::hold::Hold,
+        create_identity_to_contract_record, create_identity_to_identity_record,
+        edge::{hold::Hold, proof::Proof},
         new_db_connection,
         vertex::{contract::Chain, contract::ContractCategory, Contract, Identity},
     },
@@ -16,11 +16,10 @@ use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime};
 use futures::future::join_all;
 use http::uri::InvalidUri;
+use log::{error, info};
 use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
-use log::{error, info};
-
 
 use super::DataFetcher;
 
@@ -41,6 +40,8 @@ pub struct ResultItem {
     pub address_to: String,
     pub network: Rss3Chain,
     pub tag: String,
+    #[serde(rename = "type")]
+    pub tag_type: String,
     pub success: bool,
     pub actions: Vec<ActionItem>,
 }
@@ -64,10 +65,10 @@ pub struct ActionItem {
 #[derive(Deserialize, Debug)]
 pub struct MetaData {
     pub id: Option<String>,
-    pub name: String,
+    pub name: Option<String>,
     pub image: Option<String>,
     pub value: Option<String>,
-    pub symbol: String,
+    pub symbol: Option<String>,
     pub standard: Option<String>,
     pub contract_address: Option<String>,
 }
@@ -154,7 +155,7 @@ async fn fetch_nfts_by_account(
 ) -> Result<TargetProcessedList, Error> {
     let client = make_client();
     let uri: http::Uri = format!(
-        "{}/{}?tag=collectible&include_poap=true&refresh=true",
+        "{}/{}?tag=collectible&tag=social&include_poap=true&refresh=true",
         C.upstream.rss3_service.url, identity
     )
     .parse()
@@ -217,14 +218,52 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         return Ok(vec![]);
     }
 
-    let found = p
-        .actions
-        .into_iter()
-        .find(|a| a.tag == "collectible".to_string());
+    let mut found = None;
+
+    for a in p.actions.iter() {
+        if p.tag == "social" && a.tag_type == "mint" {
+            found = Some(a);
+        } else if p.tag == "collectible" && a.tag_type == "collectible" {
+            found = Some(a);
+        }
+    }
+
     if found.is_none() {
         return Ok(vec![]);
     }
     let real_action = found.unwrap();
+
+    if p.tag == "social" {
+        let name = real_action.metadata.name.as_ref().unwrap().to_string();
+        let to_identity: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Lens,
+            identity: name.clone(),
+            created_at: Some(created_at_naive),
+            display_name: Some(name.clone()),
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+        };
+
+        let pf: Proof = Proof {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Rss3,
+            record_id: Some(real_action.metadata.id.as_ref().unwrap().to_string()),
+            created_at: None,
+            updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
+        };
+
+        create_identity_to_identity_record(&db, &from, &to_identity, &pf).await?;
+
+        return Ok(vec![Target::Identity(
+            Platform::Lens,
+            name.clone(),
+        )]);
+    }
+
     let mut nft_category =
         ContractCategory::from_str(real_action.metadata.standard.as_ref().unwrap().as_str())
             .unwrap_or_default();
@@ -236,17 +275,17 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
     let chain = p.network.into();
     let contract_addr = real_action
         .metadata
-        .contract_address
+        .contract_address.as_ref()
         .unwrap()
         .to_lowercase();
-    let nft_id = real_action.metadata.id.unwrap();
+    let nft_id = real_action.metadata.id.as_ref().unwrap();
 
     let to: Contract = Contract {
         uuid: Uuid::new_v4(),
         category: nft_category,
         address: contract_addr.clone(),
         chain,
-        symbol: Some(real_action.metadata.symbol),
+        symbol: Some(real_action.metadata.symbol.as_ref().unwrap().clone()),
         updated_at: naive_now(),
     };
 

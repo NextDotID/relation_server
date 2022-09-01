@@ -12,7 +12,7 @@ use crate::{
 async fn test_smoke_nft_rss3() -> Result<(), Error> {
     let target = Target::Identity(
         Platform::Ethereum,
-        "0x0bd793ea8334a77b2bfd604dbaedca11ea094306".to_lowercase(),
+        "0x934b510d4c9103e6a87aef13b816fb080286d649".to_lowercase(),
     );
     let _ = Rss3::fetch(&target).await?;
     let db = new_db_connection().await?;
