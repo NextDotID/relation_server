@@ -223,27 +223,26 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
     for a in p.actions.iter() {
         if p.tag == "social" && a.tag_type == "mint" {
             found = Some(a);
-        } else if p.tag == "collectible" && a.tag_type == "collectible" {
+        } else if p.tag == "collectible" && a.tag == "collectible" {
             found = Some(a);
         }
     }
-
     if found.is_none() {
         return Ok(vec![]);
     }
     let real_action = found.unwrap();
 
     if p.tag == "social" {
-        let name = real_action.metadata.name.as_ref().unwrap().to_string();
+        let handle = real_action.metadata.name.as_ref().unwrap().trim_start_matches('@').to_string();
         let to_identity: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
             platform: Platform::Lens,
-            identity: name.clone(),
+            identity: handle.clone(),
             created_at: Some(created_at_naive),
-            display_name: Some(name.clone()),
+            display_name: Some(handle.clone()),
             added_at: naive_now(),
             avatar_url: None,
-            profile_url: None,
+            profile_url: Some("https://lenster.xyz/u/".to_owned() + &handle),
             updated_at: naive_now(),
         };
 
@@ -251,7 +250,7 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
             uuid: Uuid::new_v4(),
             source: DataSource::Rss3,
             record_id: Some(real_action.metadata.id.as_ref().unwrap().to_string()),
-            created_at: None,
+            created_at: Some(created_at_naive),
             updated_at: naive_now(),
             fetcher: DataFetcher::RelationService,
         };
@@ -260,7 +259,7 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
 
         return Ok(vec![Target::Identity(
             Platform::Lens,
-            name.clone(),
+            handle.clone(),
         )]);
     }
 

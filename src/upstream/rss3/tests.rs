@@ -23,12 +23,12 @@ async fn test_smoke_nft_rss3() -> Result<(), Error> {
     let contract = Contract::find_by_chain_address(
         &db,
         &Chain::Ethereum,
-        "0x33eecbf908478c10614626a9d304bfe18b78dd73",
+        "0x596cfe8d6709a86d51ff0c18ebf0e66561b08ae3",
     )
     .await?
     .unwrap();
 
-    let _ = Hold::find_by_from_to_id(&db, &owner, &contract, "3294463383")
+    let _ = Hold::find_by_from_to_id(&db, &owner, &contract, "87")
         .await
         .expect("Record not found");
 
