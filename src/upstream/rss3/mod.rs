@@ -218,22 +218,23 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         return Ok(vec![]);
     }
 
-    let mut found = None;
-
-    for a in p.actions.iter() {
-        if p.tag == "social" && a.tag_type == "mint" {
-            found = Some(a);
-        } else if p.tag == "collectible" && a.tag == "collectible" {
-            found = Some(a);
-        }
-    }
+    let found = p.actions.iter().find(|a| {
+        (p.tag == "social" && a.tag_type == "mint")
+            || (p.tag == "collectible" && a.tag == "collectible")
+    });
     if found.is_none() {
         return Ok(vec![]);
     }
     let real_action = found.unwrap();
 
     if p.tag == "social" {
-        let handle = real_action.metadata.name.as_ref().unwrap().trim_start_matches('@').to_string();
+        let handle = real_action
+            .metadata
+            .name
+            .as_ref()
+            .unwrap()
+            .trim_start_matches('@')
+            .to_string();
         let to_identity: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
             platform: Platform::Lens,
@@ -257,10 +258,7 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
 
         create_identity_to_identity_record(&db, &from, &to_identity, &pf).await?;
 
-        return Ok(vec![Target::Identity(
-            Platform::Lens,
-            handle.clone(),
-        )]);
+        return Ok(vec![Target::Identity(Platform::Lens, handle.clone())]);
     }
 
     let mut nft_category =
@@ -274,7 +272,8 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
     let chain = p.network.into();
     let contract_addr = real_action
         .metadata
-        .contract_address.as_ref()
+        .contract_address
+        .as_ref()
         .unwrap()
         .to_lowercase();
     let nft_id = real_action.metadata.id.as_ref().unwrap();
