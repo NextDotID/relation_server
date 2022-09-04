@@ -161,13 +161,13 @@ pub struct IdentityQuery;
 #[Object]
 impl IdentityQuery {
     /// Returns a list of all platforms supported by RelationService.
-    async fn available_platforms(&self) -> Result<Vec<String>> {
-        Ok(Platform::iter().map(|p| p.to_string()).collect())
+    async fn available_platforms(&self) -> Result<Vec<Platform>> {
+        Ok(Platform::iter().collect())
     }
 
     /// Returns a list of all upstreams (data sources) supported by RelationService.
-    async fn available_upstreams(&self) -> Result<Vec<String>> {
-        Ok(DataSource::iter().map(|p| p.to_string()).collect())
+    async fn available_upstreams(&self) -> Result<Vec<DataSource>> {
+        Ok(DataSource::iter().collect())
     }
 
     /// Query an `identity` by given `platform` and `identity`.
