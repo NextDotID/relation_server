@@ -147,6 +147,7 @@ impl IdentityRecord {
             .await
     }
 
+    /// there's only `platform: lens` identity `ownedBy` is not null
     async fn owned_by(&self, ctx: &Context<'_>) -> Result<Option<IdentityRecord>> {
         if self.platform != Platform::Lens {
             return Ok(None);
