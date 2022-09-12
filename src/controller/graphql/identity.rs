@@ -147,6 +147,16 @@ impl IdentityRecord {
             .await
     }
 
+    async fn owned_by(&self, ctx: &Context<'_>) -> Result<Option<IdentityRecord>> {
+        if self.platform != Platform::Lens {
+            return Ok(None);
+        } else {
+            let pool: &ConnectionPool =
+                ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+            self.lens_owned_by(pool).await
+        }
+    }
+
     /// NFTs owned by this identity.
     /// For now, there's only `platform: ethereum` identity has NFTs.
     async fn nft(&self, ctx: &Context<'_>) -> Result<Vec<HoldRecord>> {

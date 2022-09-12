@@ -473,7 +473,7 @@ impl IdentityRecord {
             match source_list {
                 Some(ss) => {
                     let unique_sources = ss.to_owned().unique();
-                    debug!("unique_sources = {:#?}", unique_sources);
+                    // debug!("unique_sources = {:#?}", unique_sources);
                     let _sources = vec_string_to_vec_datasource(unique_sources)?;
                     if _sources.len() > 0 {
                         let id = IdentityWithSource {
@@ -487,6 +487,38 @@ impl IdentityRecord {
             };
         }
         Ok(identity_sources)
+    }
+
+    // Return lens owned by wallet address.
+    pub async fn lens_owned_by(
+        &self,
+        pool: &ConnectionPool,
+    ) -> Result<Option<IdentityRecord>, Error> {
+        let db = pool.db().await?;
+        let aql_str = r"
+          WITH @@collection_name
+            FOR d IN @@collection_name
+            FILTER d._id == @id AND d.platform == @platform
+            LIMIT 1
+            FOR vertex
+                IN 1..1 ANY d GRAPH @graph_name
+                RETURN DISTINCT vertex";
+
+        let aql = AqlQuery::new(aql_str)
+            .bind_var("@collection_name", Identity::COLLECTION_NAME)
+            .bind_var("graph_name", "identities_proofs_graph")
+            .bind_var("id", self.id().as_str())
+            .bind_var("platform", "lens")
+            .batch_size(1)
+            .count(false);
+
+        let result = db.aql_query::<IdentityRecord>(aql).await?;
+
+        if result.len() == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(result.first().unwrap().to_owned().into()))
+        }
     }
 
     // Return all neighbors of this identity with path<ProofRecord>
