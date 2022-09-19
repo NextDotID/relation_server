@@ -237,7 +237,8 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         if p.platform.is_none() {
             return Ok(vec![]);
         }
-        let social_platform =  Platform::from_str(p.platform.unwrap().as_str()).unwrap_or(Platform::Unknown);
+        let social_platform =
+            Platform::from_str(p.platform.unwrap().as_str()).unwrap_or(Platform::Unknown);
         if social_platform == Platform::Unknown {
             return Ok(vec![]);
         }
@@ -267,7 +268,9 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         return Ok(vec![Target::Identity(Platform::Lens, handle.clone())]);
     }
 
-    if real_action.metadata.symbol.is_none() || real_action.metadata.symbol.as_ref().unwrap() == &String::from("ENS") {
+    if real_action.metadata.symbol.is_none()
+        || real_action.metadata.symbol.as_ref().unwrap() == &String::from("ENS")
+    {
         return Ok(vec![]);
     }
     let mut nft_category =
