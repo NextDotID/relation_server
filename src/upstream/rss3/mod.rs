@@ -239,7 +239,7 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         }
         let social_platform =
             Platform::from_str(p.platform.unwrap().as_str()).unwrap_or(Platform::Unknown);
-        if social_platform == Platform::Unknown {
+        if social_platform != Platform::Lens {
             return Ok(vec![]);
         }
         let handle = real_action.metadata.handle.as_ref().unwrap().to_string();
