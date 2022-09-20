@@ -9,6 +9,9 @@ mod sybil_list;
 mod tests;
 mod the_graph;
 
+use std::{sync::{Arc, Mutex}, ops::DerefMut};
+
+use self::ens_reverse::ENSReverseLookup;
 use crate::{
     error::Error,
     graph::vertex::contract::{Chain, ContractCategory},
@@ -20,11 +23,14 @@ use crate::{
 use async_trait::async_trait;
 use futures::future::join_all;
 use http::StatusCode;
-use log::{debug, info, trace};
+use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
 
-use self::ens_reverse::ENSReverseLookup;
+lazy_static! {
+    /// Global upstream fetching process job queue.
+    pub static ref QUEUE: Arc<Mutex<TargetProcessedList>> = Arc::new(Mutex::new(vec![]));
+}
 
 /// List when processing identities.
 type TargetProcessedList = Vec<Target>;
@@ -331,45 +337,59 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
     let mut up_next: TargetProcessedList = vec![initial_target];
     let mut processed: TargetProcessedList = vec![];
     while !up_next.is_empty() {
-        info!("fetch_all::up_next | {:?}", up_next);
+        debug!("fetch_all::up_next | {:?}", up_next);
         let target = up_next.pop().unwrap();
-        let fetched = fetch_one(&target).await?;
+        // let fetched = fetch_one(&target).await?;
         processed.push(target.clone());
-        fetched.into_iter().for_each(|f| {
-            if processed.contains(&f) || up_next.contains(&f) {
-                info!("fetch_all::iter | Fetched {} | duplicated", f);
-            } else {
-                up_next.push(f.clone());
-                info!(
-                    "fetch_all::iter | Fetched {} | pushed into up_next",
-                    f.clone()
-                );
-            }
-        });
+        // fetched.into_iter().for_each(|f| {
+        //     if processed.contains(&f) || up_next.contains(&f) {
+        //         info!("fetch_all::iter | Fetched {} | duplicated", f);
+        //     } else {
+        //         up_next.push(f.clone());
+        //         info!(
+        //             "fetch_all::iter | Fetched {} | pushed into up_next",
+        //             f.clone()
+        //         );
+        //     }
+        // });
     }
     Ok(())
 }
 
 /// Find one (platform, identity) pair in all upstreams.
 /// Returns identities just fetched for next iter..
-pub async fn fetch_one(target: &Target) -> Result<TargetProcessedList, Error> {
-    // FIXME: Yeah yeah I know it's stupid.
-    let results: TargetProcessedList = join_all(vec![
-        Aggregation::fetch(target),
-        SybilList::fetch(target),
-        Keybase::fetch(target),
-        ProofClient::fetch(target),
-        Rss3::fetch(target),
-        Knn3::fetch(target),
-        TheGraph::fetch(target),
-        ENSReverseLookup::fetch(target),
-    ])
-    .await
-    .into_iter()
-    .flat_map(|res| res.unwrap_or_default())
-    .collect();
+pub async fn fetch_one(_target: &Target) -> Result<TargetProcessedList, Error> {
+    // Get global job queue
+    let mutex_queue = QUEUE.clone();
+    let target: Option<Target>;
+    {
+        let mut queue = mutex_queue.lock().unwrap();
+        target = queue.deref_mut().pop(); // Get last job
+    } // Unlock queue. Since `await` below will cost a lot of time.
 
-    Ok(results)
+    match target {
+        Some(ref target) => {
+            let mut results: TargetProcessedList = join_all(vec![
+                Aggregation::fetch(target),
+                SybilList::fetch(target),
+                Keybase::fetch(target),
+                ProofClient::fetch(target),
+                Rss3::fetch(target),
+                Knn3::fetch(target),
+                TheGraph::fetch(target),
+                ENSReverseLookup::fetch(target),
+            ])
+            .await
+            .into_iter()
+            .flat_map(|res| res.unwrap_or_default()) // FIXME: print error message here
+            .collect();
+
+            mutex_queue.lock().unwrap().deref_mut().append(&mut results);
+
+            Ok(results)
+        }
+        None => Ok(vec![]),
+    }
 }
 
 /// Prefetch all prefetchable upstreams, e.g. SybilList.
