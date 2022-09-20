@@ -213,6 +213,7 @@ impl Vertex<IdentityRecord> for Identity {
                 if need_refetch {
                     let found =
                         Self::find_by_platform_identity(db, &self.platform, &self.identity).await?;
+                    // FIXME: `.except()` below DOES have chance to be triggered. Really should take a look at the whole fn.
                     Ok(found.expect("Not found after an race condition in create_or_update"))
                 } else {
                     Err(Error::General("Impossible: no refetch triggered nor record found / created in create_or_update".into(), StatusCode::INTERNAL_SERVER_ERROR))

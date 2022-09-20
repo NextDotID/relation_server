@@ -1,3 +1,8 @@
+use std::{
+    ops::DerefMut,
+    sync::{Arc, Mutex},
+};
+
 use crate::error::Error;
 use chrono::NaiveDateTime;
 use http::Response;
@@ -44,4 +49,41 @@ where
     let body = std::str::from_utf8(&body_bytes).unwrap();
 
     Ok(serde_json::from_str(body)?)
+}
+
+/// Get current snapshot of queue.
+/// Notice: deep clone will happen.
+pub(crate) fn queue_unwrap<T>(queue: &Arc<Mutex<Vec<T>>>) -> Vec<T>
+where
+    T: Clone,
+{
+    queue.clone().lock().unwrap().clone()
+}
+
+/// Pop an item from the queue
+pub(crate) fn queue_pop<T>(queue: &Arc<Mutex<Vec<T>>>) -> Option<T>
+where
+    T: Sized,
+{
+    let mutex_queue = queue.clone();
+    let mut queue = mutex_queue.lock().unwrap();
+    queue.deref_mut().pop()
+}
+
+/// Push an item into queue
+pub(crate) fn queue_push<T>(queue: &Arc<Mutex<Vec<T>>>, item: T)
+where
+    T: Sized,
+{
+    let mutex_queue = queue.clone();
+    mutex_queue.lock().unwrap().deref_mut().push(item);
+}
+
+/// Append another Vec to a queue vec.
+pub(crate) fn queue_append<T>(queue: &Arc<Mutex<Vec<T>>>, another: &mut Vec<T>)
+where
+    T: Sized,
+{
+    let mutex_queue = queue.clone();
+    mutex_queue.lock().unwrap().deref_mut().append(another);
 }

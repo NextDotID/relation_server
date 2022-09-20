@@ -124,7 +124,6 @@ impl From<Rss3Chain> for Chain {
             Rss3Chain::Arbitrum => Chain::Arbitrum,
             Rss3Chain::Optimism => Chain::Optimism,
             Rss3Chain::Gnosis => Chain::Gnosis,
-            _ => Chain::Unknown,
         }
     }
 }
@@ -150,7 +149,7 @@ impl Fetcher for Rss3 {
 }
 
 async fn fetch_nfts_by_account(
-    platform: &Platform,
+    _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
     let client = make_client();

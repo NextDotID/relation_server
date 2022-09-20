@@ -11,11 +11,11 @@ pub enum Error {
     ParamMissing(String),
     #[error("Param error: {0}")]
     ParamError(String),
-    #[error("no body provided")]
+    #[error("No body provided")]
     BodyMissing,
-    #[error("JSON parse error")]
-    NoResult,
     #[error("No result")]
+    NoResult,
+    #[error("JSON parse error: {0}")]
     JSONParseError(#[from] serde_json::error::Error),
     #[error("HTTP general error")]
     HttpError(#[from] lambda_http::http::Error),

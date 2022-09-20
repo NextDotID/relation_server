@@ -9,34 +9,37 @@ mod sybil_list;
 mod tests;
 mod the_graph;
 
-use std::{sync::{Arc, Mutex}, ops::DerefMut};
+use std::sync::{Arc, Mutex};
 
-use self::ens_reverse::ENSReverseLookup;
 use crate::{
     error::Error,
     graph::vertex::contract::{Chain, ContractCategory},
     upstream::{
-        aggregation::Aggregation, keybase::Keybase, knn3::Knn3, proof_client::ProofClient,
-        rss3::Rss3, sybil_list::SybilList, the_graph::TheGraph,
+        aggregation::Aggregation, ens_reverse::ENSReverseLookup, keybase::Keybase, knn3::Knn3,
+        proof_client::ProofClient, rss3::Rss3, sybil_list::SybilList, the_graph::TheGraph,
     },
+    util::{queue_append, queue_pop},
 };
+
 use async_trait::async_trait;
 use futures::future::join_all;
 use http::StatusCode;
-use log::{debug, info};
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
 
 lazy_static! {
     /// Global upstream fetching process job queue.
-    pub static ref QUEUE: Arc<Mutex<TargetProcessedList>> = Arc::new(Mutex::new(vec![]));
+    pub static ref UP_NEXT: Arc<Mutex<TargetProcessedList>> = Arc::new(Mutex::new(vec![]));
+
+    // TODO: recent processed list.
 }
 
 /// List when processing identities.
 type TargetProcessedList = Vec<Target>;
 
 /// Target to fetch.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Target {
     /// Identity with given platform and identity.
     Identity(Platform, String),
@@ -358,37 +361,42 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
 
 /// Find one (platform, identity) pair in all upstreams.
 /// Returns identities just fetched for next iter..
-pub async fn fetch_one(_target: &Target) -> Result<TargetProcessedList, Error> {
+pub async fn fetch_one() -> Result<TargetProcessedList, Error> {
     // Get global job queue
-    let mutex_queue = QUEUE.clone();
-    let target: Option<Target>;
-    {
-        let mut queue = mutex_queue.lock().unwrap();
-        target = queue.deref_mut().pop(); // Get last job
-    } // Unlock queue. Since `await` below will cost a lot of time.
+    let target = queue_pop(&UP_NEXT);
 
-    match target {
-        Some(ref target) => {
-            let mut results: TargetProcessedList = join_all(vec![
-                Aggregation::fetch(target),
-                SybilList::fetch(target),
-                Keybase::fetch(target),
-                ProofClient::fetch(target),
-                Rss3::fetch(target),
-                Knn3::fetch(target),
-                TheGraph::fetch(target),
-                ENSReverseLookup::fetch(target),
-            ])
-            .await
-            .into_iter()
-            .flat_map(|res| res.unwrap_or_default()) // FIXME: print error message here
-            .collect();
+    if let Some(ref target) = target {
+        info!("Now processing {}", target);
+        let mut up_next: TargetProcessedList = join_all(vec![
+            Aggregation::fetch(target),
+            SybilList::fetch(target),
+            Keybase::fetch(target),
+            ProofClient::fetch(target),
+            Rss3::fetch(target),
+            Knn3::fetch(target),
+            TheGraph::fetch(target),
+            ENSReverseLookup::fetch(target),
+        ])
+        .await
+        .into_iter()
+        .flat_map(|res| {
+            match res {
+                Ok(up_next_list) => up_next_list,
+                Err(err) => {
+                    warn!("Error happened when fetching {}: {}", target, err);
+                    vec![] // Silent ignore
+                },
+            }
+        })
+        .collect();
+        up_next.dedup();
+        let mut up_next_to_append = up_next.clone();
+        queue_append(&UP_NEXT, &mut up_next_to_append);
+        info!("UP_NEXT: added {} items.", up_next.len());
 
-            mutex_queue.lock().unwrap().deref_mut().append(&mut results);
-
-            Ok(results)
-        }
-        None => Ok(vec![]),
+        Ok(up_next)
+    } else {
+        Ok(vec![])
     }
 }
 
