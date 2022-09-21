@@ -114,6 +114,7 @@ async fn main() -> Result<()> {
 
     let address = SocketAddr::new(config::C.web.listen.parse().unwrap(), config::C.web.port);
     println!("Playground: http://{}", address);
+
     warp::serve(routes).run(address).await;
 
     println!("Shutting down...");
