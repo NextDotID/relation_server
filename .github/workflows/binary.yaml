@@ -31,14 +31,14 @@ jobs:
 
       - name: Build
         run: |
-          cargo build --examples --release
-          strip target/release/examples/lambda
-          strip target/release/examples/standalone
+          cargo build --bins --release
+          strip target/release/lambda
+          strip target/release/standalone
 
       - name: Artifact
         uses: actions/upload-artifact@v3
         with:
           name: release
           path: |
-            target/release/examples/lambda
-            target/release/examples/standalone
+            target/release/lambda
+            target/release/standalone

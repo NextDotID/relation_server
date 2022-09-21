@@ -1,25 +1,18 @@
 # Build standalone Docker image
-FROM rust:buster AS builder
+FROM docker.io/rust:buster AS builder
 
 WORKDIR /app
 
-# Stupid, I know.
-# SEE ALSO: https://github.com/rust-lang/cargo/issues/2644
-RUN mkdir src && touch src/lib.rs
-ADD Cargo.toml .
-ADD Cargo.lock .
-RUN cargo build --release && rm -r src
-
 ADD . .
-RUN cargo build --release --example standalone && strip target/release/examples/standalone
+RUN cargo build --bins --release && strip target/release/standalone
 
 # =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-FROM debian:buster AS runner
+FROM docker.io/debian:buster AS runner
 LABEL maintainer="Nyk Ma <nykma@mask.io>"
 
 WORKDIR /app
 
-COPY --from=builder /app/target/release/examples/standalone /app/server
+COPY --from=builder /app/target/release/standalone /app/server
 
 RUN chmod a+x server && \
     mkdir config && \

@@ -7,4 +7,4 @@ pub mod error;
 pub mod graph;
 pub mod util;
 
-mod upstream;
+pub mod upstream;

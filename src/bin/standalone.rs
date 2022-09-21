@@ -17,6 +17,7 @@ use relation_server::{
     graph::vertex::contract::ContractLoadFn,
     graph::vertex::FromToLoadFn,
     graph::vertex::IdentityLoadFn,
+    upstream::start_fetch_workers,
 };
 use std::{convert::Infallible, net::SocketAddr};
 use warp::{http::Response as HttpResponse, Filter, Rejection};
@@ -114,6 +115,7 @@ async fn main() -> Result<()> {
 
     let address = SocketAddr::new(config::C.web.listen.parse().unwrap(), config::C.web.port);
     println!("Playground: http://{}", address);
+    start_fetch_workers(4);
 
     warp::serve(routes).run(address).await;
 
