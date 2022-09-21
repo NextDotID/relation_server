@@ -6,9 +6,9 @@ use log::info;
 
 #[tokio::test]
 async fn test_fetcher_result() -> Result<(), Error> {
-    fetch_all(Target::Identity(Platform::Twitter, "suji_yan".into()))
-        .await
-        .expect("fetch_all should success");
+    fetch_all(Target::Identity(Platform::Twitter, "suji_yan".into()));
+    let queue: Vec<Target> = queue_unwrap(&UP_NEXT);
+    assert_eq!(1, queue.len());
 
     Ok(())
 }

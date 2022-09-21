@@ -7,7 +7,7 @@ use crate::upstream::{fetch_all, DataSource, Platform, Target};
 
 use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
-use log::debug;
+use log::{debug, info};
 use strum::IntoEnumIterator;
 
 /// Status for a record in RelationService DB
@@ -195,16 +195,18 @@ impl IdentityQuery {
         // FIXME: Still kinda dirty. Should be in an background queue/worker-like shape.
         match Identity::find_by_platform_identity(db, &platform, &identity).await? {
             None => {
-                fetch_all(target).await?;
-                Identity::find_by_platform_identity(db, &platform, &identity).await
+                fetch_all(target);
+                // FIXME: should return `fetching` status since `fetch_all()` cannot receive finish signal now.
+                Ok(None)
+                // Identity::find_by_platform_identity(db, &platform, &identity).await
             }
             Some(found) => {
                 if found.is_outdated() {
-                    debug!(
+                    info!(
                         "Identity: {}/{} is outdated. Refetching...",
                         platform, identity
                     );
-                    tokio::spawn(async move { fetch_all(target).await });
+                    fetch_all(target);
                 }
                 Ok(Some(found))
             }
@@ -224,17 +226,15 @@ impl IdentityQuery {
         if record.len() == 0 {
             for platform in &platform_list {
                 let target = Target::Identity(platform.clone(), identity.clone());
-                fetch_all(target).await?;
+                fetch_all(target);
             }
-            Ok(
-                Identity::find_by_platforms_identity(&pool, &platform_list, identity.as_str())
-                    .await?,
-            )
+            // FIXME: should return `fetching` status since `fetch_all()` cannot receive finish signal now.
+            Ok(vec![])
         } else {
             record.iter().filter(|r| r.is_outdated()).for_each(|r| {
                 let platform = r.platform.clone();
                 let identity = r.identity.clone();
-                tokio::spawn(async move { fetch_all(Target::Identity(platform, identity)).await });
+                fetch_all(Target::Identity(platform, identity));
             });
             Ok(record)
         }

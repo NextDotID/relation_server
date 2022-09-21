@@ -14,7 +14,7 @@ pub(crate) use types::{DataFetcher, DataSource, Platform, Target, TargetProcesse
 #[cfg(test)]
 mod tests;
 
-use std::sync::{Arc, Mutex};
+use std::{sync::{Arc, Mutex}, thread};
 
 use crate::{
     error::Error,
@@ -47,7 +47,7 @@ pub trait Fetcher {
 }
 
 /// Find all available (platform, identity) in all `Upstream`s.
-pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
+pub fn fetch_all(initial_target: Target) {
     queue_push(&UP_NEXT, initial_target);
 
     // let mut up_next: TargetProcessedList = vec![initial_target];
@@ -69,7 +69,6 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
     //     //     }
     //     // });
     // }
-    Ok(())
 }
 
 /// Find one (platform, identity) pair in all upstreams.
@@ -121,24 +120,26 @@ pub async fn prefetch() -> Result<(), Error> {
 }
 
 /// Start an upstream fetching worker.
-/// NOTE: how about reporesent worker as a `struct`?
+/// NOTE: how about represent worker as a `struct`?
 pub fn start_fetch_worker(worker_name: String) {
     info!("Upstream worker {}: started.", worker_name);
-    tokio::spawn(async move {
-        loop {
-            match fetch_one().await {
-                Ok(up_next) => if up_next.len() == 0 {
-                    debug!("Upstream worker {}: nothing fetched.", worker_name);
-                    sleep(Duration::from_millis(300)).await;
-                } else {
-                    debug!("Upstream worker {}: {} fetched.", worker_name, up_next.len());
-                },
-                Err(err) => {
-                    debug!("Upstream worker {}: error when fetching upstreams: {}", worker_name, err);
-                    sleep(Duration::from_millis(300)).await;
-                },
+    thread::spawn(move || {
+        tokio::spawn(async move {
+            loop {
+                match fetch_one().await {
+                    Ok(up_next) => if up_next.len() == 0 {
+                        debug!("Upstream worker {}: nothing fetched.", worker_name);
+                        sleep(Duration::from_millis(300)).await;
+                    } else {
+                        debug!("Upstream worker {}: {} fetched.", worker_name, up_next.len());
+                    },
+                    Err(err) => {
+                        debug!("Upstream worker {}: error when fetching upstreams: {}", worker_name, err);
+                        sleep(Duration::from_millis(300)).await;
+                    },
+                }
             }
-        }
+        })
     });
 }
 

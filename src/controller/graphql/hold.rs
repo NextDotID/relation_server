@@ -157,14 +157,15 @@ impl HoldQuery {
         match Hold::find_by_id_chain_address_merge(pool, &id, &chain, &contract_address).await? {
             Some(hold) => {
                 if hold.is_outdated() {
-                    tokio::spawn(async move { fetch_all(target).await });
+                    fetch_all(target);
                 }
                 Ok(Some(hold))
             }
 
             None => {
-                fetch_all(target).await?;
-                Hold::find_by_id_chain_address_merge(pool, &id, &chain, &contract_address).await
+                fetch_all(target);
+                // FIXME: should return `fetching` status since `fetch_all()` cannot receive finish signal now.
+                Ok(None)
             }
         }
     }

@@ -1,7 +1,7 @@
 version: "3.8"
 services:
   arangodb_x86_64:
-    image: arangodb/arangodb:3.9.2
+    image: arangodb/arangodb:3.9.3
     ports:
     - 127.0.0.1:8529:8529
     environment:
@@ -9,7 +9,7 @@ services:
 
   # !!!!!FOR M1 MAC USER ONLY!!!!!!
   arangodb_arm64:
-    image: arangodb/arangodb:3.9.2-noavx
+    image: arangodb/arangodb:3.9.3-noavx
     ports:
     - 127.0.0.1:8529:8529
     environment:
