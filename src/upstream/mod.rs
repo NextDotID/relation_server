@@ -184,7 +184,7 @@ pub enum Platform {
     Reddit,
 
     /// Lens
-    #[strum(serialize = "lens", serialize = "Lens")]
+    #[strum(serialize = "Lens", serialize = "lens")]
     #[serde(rename = "lens")]
     #[graphql(name = "lens")]
     Lens,
