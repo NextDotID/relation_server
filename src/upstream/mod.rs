@@ -12,8 +12,10 @@ mod the_graph;
 mod types;
 
 use std::{
+    collections::HashSet,
+    ops::DerefMut,
     sync::{Arc, Mutex},
-    thread, collections::HashSet, ops::DerefMut,
+    thread,
 };
 
 use crate::{
@@ -22,7 +24,7 @@ use crate::{
         aggregation::Aggregation, ens_reverse::ENSReverseLookup, keybase::Keybase, knn3::Knn3,
         proof_client::ProofClient, rss3::Rss3, sybil_list::SybilList, the_graph::TheGraph,
     },
-    util::{hashset_append, hashset_pop, hashset_push},
+    util::{hashset_append, hashset_exists, hashset_pop, hashset_push},
 };
 use async_trait::async_trait;
 use futures::future::join_all;
@@ -52,61 +54,51 @@ pub trait Fetcher {
 
 /// Find all available (platform, identity) in all `Upstream`s.
 pub fn fetch_all(initial_target: Target) {
-    hashset_push(&UP_NEXT, initial_target);
-
-    // let mut up_next: TargetProcessedList = vec![initial_target];
-    // let mut processed: TargetProcessedList = vec![];
-    // while !up_next.is_empty() {
-    //     debug!("fetch_all::up_next | {:?}", up_next);
-    //     let target = up_next.pop().unwrap();
-    //     // let fetched = fetch_one(&target).await?;
-    //     processed.push(target.clone());
-    //     // fetched.into_iter().for_each(|f| {
-    //     //     if processed.contains(&f) || up_next.contains(&f) {
-    //     //         info!("fetch_all::iter | Fetched {} | duplicated", f);
-    //     //     } else {
-    //     //         up_next.push(f.clone());
-    //     //         info!(
-    //     //             "fetch_all::iter | Fetched {} | pushed into up_next",
-    //     //             f.clone()
-    //     //         );
-    //     //     }
-    //     // });
-    // }
+    if hashset_exists(&PROCESSED, &initial_target) {
+        return;
+    }
+    // Later be `pop()`-ed by fetch worker.
+    hashset_push(&UP_NEXT, initial_target.clone());
 }
 
 /// Find one (platform, identity) pair in all upstreams.
 /// Returns identities just fetched for next iter..
 pub async fn fetch_one() -> Result<TargetProcessedList, Error> {
-    let ref target = hashset_pop(&UP_NEXT);
-    info!("Now processing {}", target);
-    let mut up_next: TargetProcessedList = join_all(vec![
-        Aggregation::fetch(target),
-        SybilList::fetch(target),
-        Keybase::fetch(target),
-        ProofClient::fetch(target),
-        Rss3::fetch(target),
-        Knn3::fetch(target),
-        TheGraph::fetch(target),
-        ENSReverseLookup::fetch(target),
-    ])
-        .await
-        .into_iter()
-        .flat_map(|res| {
-            match res {
-                Ok(up_next_list) => up_next_list,
-                Err(err) => {
-                    warn!("Error happened when fetching {}: {}", target, err);
-                    vec![] // Don't break the procedure
+    match hashset_pop(&UP_NEXT) {
+        Some(ref target) => {
+            if !hashset_push(&PROCESSED, target.clone()) { // Already processed.
+                return Ok(vec![]);
+            };
+            let mut up_next: TargetProcessedList = join_all(vec![
+                Aggregation::fetch(target),
+                SybilList::fetch(target),
+                Keybase::fetch(target),
+                ProofClient::fetch(target),
+                Rss3::fetch(target),
+                Knn3::fetch(target),
+                TheGraph::fetch(target),
+                ENSReverseLookup::fetch(target),
+            ])
+            .await
+            .into_iter()
+            .flat_map(|res| {
+                match res {
+                    Ok(up_next_list) => up_next_list,
+                    Err(err) => {
+                        warn!("Error happened when fetching {}: {}", target, err);
+                        vec![] // Don't break the procedure
+                    }
                 }
-            }
-        })
-        .collect();
-    up_next.dedup();
-    hashset_append(&UP_NEXT, up_next.clone());
-    info!("UP_NEXT: added {} items.", up_next.len());
+            })
+            .collect();
+            up_next.dedup();
+            hashset_append(&UP_NEXT, up_next.clone());
+            info!("UP_NEXT: added {} items.", up_next.len());
 
-    Ok(up_next)
+            Ok(up_next)
+        }
+        None => Ok(vec![]),
+    }
 }
 
 /// Prefetch all prefetchable upstreams, e.g. SybilList.

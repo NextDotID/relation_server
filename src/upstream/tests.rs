@@ -15,10 +15,10 @@ async fn test_fetcher_result() -> Result<(), Error> {
 #[tokio::test]
 async fn test_fetch_one_result() -> Result<(), Error> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
-    hashset_push(
+    assert!(hashset_push(
         &UP_NEXT,
         Target::Identity(Platform::Twitter, "0xsannie".into()),
-    );
+    ));
     let result = fetch_one().await?;
     assert_ne!(result.len(), 0);
 

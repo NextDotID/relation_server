@@ -56,14 +56,18 @@ where
     Ok(serde_json::from_str(body)?)
 }
 
-pub(crate) fn hashset_pop<T>(set: &Arc<Mutex<HashSet<T>>>) -> T
+pub(crate) fn hashset_pop<T>(set: &Arc<Mutex<HashSet<T>>>) -> Option<T>
 where
     T: Eq + Hash + Clone,
 {
     let mutex_hashset = set.clone();
     let mut set = mutex_hashset.lock().unwrap();
-    let elt = set.iter().next().cloned().unwrap();
-    set.take(&elt).unwrap()
+    if set.is_empty() {
+        None
+    } else {
+        let elt = set.iter().next().cloned().unwrap();
+        Some(set.take(&elt).unwrap())
+    }
 }
 
 /// Get current snapshot of HashSet.
@@ -75,11 +79,13 @@ where
     set.clone().lock().unwrap().clone()
 }
 
-pub(crate) fn hashset_push<T>(set: &Arc<Mutex<HashSet<T>>>, item: T)
+/// - `true`: item inserted.
+/// - `false`: item duplicated.
+pub(crate) fn hashset_push<T>(set: &Arc<Mutex<HashSet<T>>>, item: T) -> bool
 where
     T: Clone + Eq + Hash,
 {
-    set.clone().lock().unwrap().deref_mut().insert(item);
+    set.clone().lock().unwrap().deref_mut().insert(item)
 }
 
 pub(crate) fn hashset_append<T>(set: &Arc<Mutex<HashSet<T>>>, items: Vec<T>)
