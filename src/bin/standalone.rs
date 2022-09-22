@@ -7,7 +7,7 @@ use async_graphql_warp::{GraphQLBadRequest, GraphQLResponse};
 use dataloader::non_cached::Loader;
 use env_logger::Env;
 use http::StatusCode;
-use log::warn;
+use log::{info, warn};
 use relation_server::{
     config::{self, C},
     controller::graphql::Query,
@@ -17,7 +17,7 @@ use relation_server::{
     graph::vertex::contract::ContractLoadFn,
     graph::vertex::FromToLoadFn,
     graph::vertex::IdentityLoadFn,
-    upstream::start_fetch_workers,
+    upstream::{start_cleanse_worker, start_fetch_workers},
 };
 use std::{convert::Infallible, net::SocketAddr};
 use warp::{http::Response as HttpResponse, Filter, Rejection};
@@ -114,8 +114,9 @@ async fn main() -> Result<()> {
         });
 
     let address = SocketAddr::new(config::C.web.listen.parse().unwrap(), config::C.web.port);
-    println!("Playground: http://{}", address);
+    info!("Playground: http://{}", address);
     start_fetch_workers(4);
+    start_cleanse_worker();
 
     warp::serve(routes).run(address).await;
 

@@ -15,7 +15,6 @@ use std::{
     collections::HashSet,
     ops::DerefMut,
     sync::{Arc, Mutex},
-    thread,
 };
 
 use crate::{
@@ -114,44 +113,46 @@ pub async fn prefetch() -> Result<(), Error> {
 /// NOTE: how about represent worker as a `struct`?
 pub fn start_fetch_worker(worker_name: String) {
     const SLEEP_DURATION: core::time::Duration = Duration::from_millis(300);
-
     info!("Upstream worker {}: started.", worker_name);
-    thread::spawn(move || {
-        tokio::spawn(async move {
-            loop {
-                match fetch_one().await {
-                    Ok(0) => {
-                        debug!("Upstream worker {}: nothing fetched.", worker_name);
-                        sleep(SLEEP_DURATION).await
-                    }
-                    Ok(up_next_len) => {
-                        debug!("Upstream worker {}: {} fetched.", worker_name, up_next_len);
-                        // Start next fetch process immediately.
-                    }
-                    Err(err) => {
-                        debug!(
-                            "Upstream worker {}: error when fetching upstreams: {}",
-                            worker_name, err
-                        );
-                        sleep(SLEEP_DURATION).await;
-                    }
+    tokio::spawn(async move {
+        loop {
+            match fetch_one().await {
+                Ok(0) => {
+                    debug!("Upstream worker {}: nothing fetched.", worker_name);
+                    sleep(SLEEP_DURATION).await
+                }
+                Ok(up_next_len) => {
+                    debug!("Upstream worker {}: {} fetched.", worker_name, up_next_len);
+                    // Start next fetch process immediately.
+                }
+                Err(err) => {
+                    debug!(
+                        "Upstream worker {}: error when fetching upstreams: {}",
+                        worker_name, err
+                    );
+                    sleep(SLEEP_DURATION).await;
                 }
             }
-        })
+        }
     });
+    // FIXME: Do we need to make a new thread for this?
+    // Pros: multi-core CPU support(?), fault-tolerant
+    // Cons: none?
+    // thread::Builder::new()
+    //     .name(worker_name.clone())
+    //     .spawn(move || {
+    //     });
 }
 
 /// Start a PROCESSED set cleanse worker.
 pub fn start_cleanse_worker() {
     info!("Cleanse worker: started.");
-    thread::spawn(move || {
-        tokio::spawn(async move {
-            loop {
-                sleep(Duration::from_secs(60)).await;
-                PROCESSED.clone().lock().unwrap().deref_mut().clear();
-                debug!("Cleanse worker: PROCESSED queue cleaned.");
-            }
-        })
+    tokio::spawn(async move {
+        loop {
+            sleep(Duration::from_secs(60)).await;
+            PROCESSED.clone().lock().unwrap().deref_mut().clear();
+            debug!("Cleanse worker: PROCESSED queue cleaned.");
+        }
     });
 }
 
