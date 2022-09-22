@@ -6,15 +6,15 @@ mod knn3;
 mod proof_client;
 mod rss3;
 mod sybil_list;
-mod the_graph;
-
-mod types;
-pub(crate) use types::{DataFetcher, DataSource, Platform, Target, TargetProcessedList};
-
 #[cfg(test)]
 mod tests;
+mod the_graph;
+mod types;
 
-use std::{sync::{Arc, Mutex}, thread};
+use std::{
+    sync::{Arc, Mutex},
+    thread, collections::HashSet, ops::DerefMut,
+};
 
 use crate::{
     error::Error,
@@ -22,18 +22,22 @@ use crate::{
         aggregation::Aggregation, ens_reverse::ENSReverseLookup, keybase::Keybase, knn3::Knn3,
         proof_client::ProofClient, rss3::Rss3, sybil_list::SybilList, the_graph::TheGraph,
     },
-    util::{queue_append, queue_pop, queue_push},
+    util::{hashset_append, hashset_pop, hashset_push},
 };
 use async_trait::async_trait;
 use futures::future::join_all;
 use log::{debug, info, warn};
 use tokio::time::{sleep, Duration};
+pub(crate) use types::{DataFetcher, DataSource, Platform, Target, TargetProcessedList};
 
+// Maybe we should use Actor model to achieve the same goal here.
+// or stream::buffer_unordered ?
 lazy_static! {
     /// Global upstream fetching process job queue.
-    pub static ref UP_NEXT: Arc<Mutex<TargetProcessedList>> = Arc::new(Mutex::new(vec![]));
+    pub static ref UP_NEXT: Arc<Mutex<HashSet<Target>>> = Arc::new(Mutex::new(HashSet::new()));
 
-    // TODO: recent processed list.
+    /// Recent processed list.
+    pub static ref PROCESSED: Arc<Mutex<HashSet<Target>>> = Arc::new(Mutex::new(HashSet::new()));
 }
 
 /// Fetcher defines how to fetch data from upstream.
@@ -48,7 +52,7 @@ pub trait Fetcher {
 
 /// Find all available (platform, identity) in all `Upstream`s.
 pub fn fetch_all(initial_target: Target) {
-    queue_push(&UP_NEXT, initial_target);
+    hashset_push(&UP_NEXT, initial_target);
 
     // let mut up_next: TargetProcessedList = vec![initial_target];
     // let mut processed: TargetProcessedList = vec![];
@@ -74,20 +78,18 @@ pub fn fetch_all(initial_target: Target) {
 /// Find one (platform, identity) pair in all upstreams.
 /// Returns identities just fetched for next iter..
 pub async fn fetch_one() -> Result<TargetProcessedList, Error> {
-    let target = queue_pop(&UP_NEXT);
-
-    if let Some(ref target) = target {
-        info!("Now processing {}", target);
-        let mut up_next: TargetProcessedList = join_all(vec![
-            Aggregation::fetch(target),
-            SybilList::fetch(target),
-            Keybase::fetch(target),
-            ProofClient::fetch(target),
-            Rss3::fetch(target),
-            Knn3::fetch(target),
-            TheGraph::fetch(target),
-            ENSReverseLookup::fetch(target),
-        ])
+    let ref target = hashset_pop(&UP_NEXT);
+    info!("Now processing {}", target);
+    let mut up_next: TargetProcessedList = join_all(vec![
+        Aggregation::fetch(target),
+        SybilList::fetch(target),
+        Keybase::fetch(target),
+        ProofClient::fetch(target),
+        Rss3::fetch(target),
+        Knn3::fetch(target),
+        TheGraph::fetch(target),
+        ENSReverseLookup::fetch(target),
+    ])
         .await
         .into_iter()
         .flat_map(|res| {
@@ -100,15 +102,11 @@ pub async fn fetch_one() -> Result<TargetProcessedList, Error> {
             }
         })
         .collect();
-        up_next.dedup();
-        let mut up_next_to_append = up_next.clone();
-        queue_append(&UP_NEXT, &mut up_next_to_append);
-        info!("UP_NEXT: added {} items.", up_next.len());
+    up_next.dedup();
+    hashset_append(&UP_NEXT, up_next.clone());
+    info!("UP_NEXT: added {} items.", up_next.len());
 
-        Ok(up_next)
-    } else {
-        Ok(vec![])
-    }
+    Ok(up_next)
 }
 
 /// Prefetch all prefetchable upstreams, e.g. SybilList.
@@ -127,17 +125,40 @@ pub fn start_fetch_worker(worker_name: String) {
         tokio::spawn(async move {
             loop {
                 match fetch_one().await {
-                    Ok(up_next) => if up_next.len() == 0 {
-                        debug!("Upstream worker {}: nothing fetched.", worker_name);
-                        sleep(Duration::from_millis(300)).await;
-                    } else {
-                        debug!("Upstream worker {}: {} fetched.", worker_name, up_next.len());
-                    },
+                    Ok(up_next) => {
+                        if up_next.len() == 0 {
+                            debug!("Upstream worker {}: nothing fetched.", worker_name);
+                            sleep(Duration::from_millis(300)).await;
+                        } else {
+                            debug!(
+                                "Upstream worker {}: {} fetched.",
+                                worker_name,
+                                up_next.len()
+                            );
+                        }
+                    }
                     Err(err) => {
-                        debug!("Upstream worker {}: error when fetching upstreams: {}", worker_name, err);
+                        debug!(
+                            "Upstream worker {}: error when fetching upstreams: {}",
+                            worker_name, err
+                        );
                         sleep(Duration::from_millis(300)).await;
-                    },
+                    }
                 }
+            }
+        })
+    });
+}
+
+/// Start a PROCESSED set cleanse worker.
+pub fn start_cleanse_worker() {
+    info!("Cleanse worker: started.");
+    thread::spawn(move || {
+        tokio::spawn(async move {
+            loop {
+                sleep(Duration::from_secs(60)).await;
+                PROCESSED.clone().lock().unwrap().deref_mut().clear();
+                debug!("Cleanse worker: PROCESSED queue cleaned.");
             }
         })
     });

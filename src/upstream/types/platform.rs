@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
-use strum_macros::{EnumString, EnumIter, Display};
+use serde::{Deserialize, Serialize};
+use strum_macros::{Display, EnumIter, EnumString};
 
 /// All identity platform.
 /// TODO: move this definition into `graph/vertex/identity`, since it is not specific to upstream.
@@ -15,6 +15,7 @@ use strum_macros::{EnumString, EnumIter, Display};
     Eq,
     EnumIter,
     Default,
+    Hash,
     async_graphql::Enum,
 )]
 pub enum Platform {

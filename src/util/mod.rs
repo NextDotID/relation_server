@@ -1,4 +1,9 @@
+#[cfg(test)]
+mod tests;
+
 use std::{
+    collections::HashSet,
+    hash::Hash,
     ops::DerefMut,
     sync::{Arc, Mutex},
 };
@@ -51,39 +56,47 @@ where
     Ok(serde_json::from_str(body)?)
 }
 
-/// Get current snapshot of queue.
+pub(crate) fn hashset_pop<T>(set: &Arc<Mutex<HashSet<T>>>) -> T
+where
+    T: Eq + Hash + Clone,
+{
+    let mutex_hashset = set.clone();
+    let mut set = mutex_hashset.lock().unwrap();
+    let elt = set.iter().next().cloned().unwrap();
+    set.take(&elt).unwrap()
+}
+
+/// Get current snapshot of HashSet.
 /// Notice: deep clone will happen.
-pub(crate) fn queue_unwrap<T>(queue: &Arc<Mutex<Vec<T>>>) -> Vec<T>
+pub(crate) fn hashset_unwrap<T>(set: &Arc<Mutex<HashSet<T>>>) -> HashSet<T>
 where
-    T: Clone,
+    T: Clone + Eq + Hash,
 {
-    queue.clone().lock().unwrap().clone()
+    set.clone().lock().unwrap().clone()
 }
 
-/// Pop an item from the queue
-pub(crate) fn queue_pop<T>(queue: &Arc<Mutex<Vec<T>>>) -> Option<T>
+pub(crate) fn hashset_push<T>(set: &Arc<Mutex<HashSet<T>>>, item: T)
 where
-    T: Sized,
+    T: Clone + Eq + Hash,
 {
-    let mutex_queue = queue.clone();
-    let mut queue = mutex_queue.lock().unwrap();
-    queue.deref_mut().pop()
+    set.clone().lock().unwrap().deref_mut().insert(item);
 }
 
-/// Push an item into queue
-pub(crate) fn queue_push<T>(queue: &Arc<Mutex<Vec<T>>>, item: T)
+pub(crate) fn hashset_append<T>(set: &Arc<Mutex<HashSet<T>>>, items: Vec<T>)
 where
-    T: Sized,
+    T: Eq + Hash + Clone,
 {
-    let mutex_queue = queue.clone();
-    mutex_queue.lock().unwrap().deref_mut().push(item);
+    let mutex_hashset = set.clone();
+    let mut hashset = mutex_hashset.lock().unwrap();
+    let set = hashset.deref_mut();
+    for i in items {
+        set.insert(i);
+    }
 }
 
-/// Append another Vec to a queue vec.
-pub(crate) fn queue_append<T>(queue: &Arc<Mutex<Vec<T>>>, another: &mut Vec<T>)
+pub(crate) fn hashset_exists<T>(set: &Arc<Mutex<HashSet<T>>>, item: &T) -> bool
 where
-    T: Sized,
+    T: Eq + Hash,
 {
-    let mutex_queue = queue.clone();
-    mutex_queue.lock().unwrap().deref_mut().append(another);
+    set.clone().lock().unwrap().contains(item)
 }

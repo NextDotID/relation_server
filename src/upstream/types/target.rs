@@ -8,7 +8,7 @@ use super::platform::Platform;
 pub type TargetProcessedList = Vec<Target>;
 
 /// Target to fetch.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Target {
     /// Identity with given platform and identity.
     Identity(Platform, String),
