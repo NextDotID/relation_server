@@ -135,6 +135,7 @@ pub async fn new_raw_db_connection() -> Result<Database, Error> {
                 "includeAllFields":true,
                 "fields":{
                     "identity":{"analyzers":["text_en"]},
+                    "platform":{"analyzers":["text_en"]},
                     "display_name":{"analyzers":["text_en"]}
                 }
             }
