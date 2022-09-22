@@ -156,6 +156,11 @@ pub enum Chain {
     #[graphql(name = "optimism")]
     Optimism,
 
+    #[serde(rename = "crossbell")]
+    #[strum(serialize = "crossbell")]
+    #[graphql(name = "crossbell")]
+    Crossbell,
+
     #[default]
     #[serde(rename = "unknown")]
     #[strum(serialize = "unknown")]
@@ -206,6 +211,7 @@ impl Chain {
             Arweave => ChainType::Arweave,
             Arbitrum => ChainType::EVM(42161),
             Optimism => ChainType::EVM(10),
+            Crossbell => ChainType::EVM(3737),
             Unknown => todo!(),
         }
     }
