@@ -72,6 +72,7 @@ where
 
 /// Get current snapshot of HashSet.
 /// Notice: deep clone will happen.
+#[allow(dead_code)]
 pub(crate) fn hashset_unwrap<T>(set: &Arc<Mutex<HashSet<T>>>) -> HashSet<T>
 where
     T: Clone + Eq + Hash,

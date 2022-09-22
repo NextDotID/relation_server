@@ -62,12 +62,13 @@ pub fn fetch_all(initial_target: Target) {
 }
 
 /// Find one (platform, identity) pair in all upstreams.
-/// Returns identities just fetched for next iter..
-pub async fn fetch_one() -> Result<TargetProcessedList, Error> {
+/// Returns amount of identities just fetched for next iter.
+pub async fn fetch_one() -> Result<usize, Error> {
     match hashset_pop(&UP_NEXT) {
         Some(ref target) => {
-            if !hashset_push(&PROCESSED, target.clone()) { // Already processed.
-                return Ok(vec![]);
+            if !hashset_push(&PROCESSED, target.clone()) {
+                // Already processed.
+                return Ok(0);
             };
             let mut up_next: TargetProcessedList = join_all(vec![
                 Aggregation::fetch(target),
@@ -95,9 +96,9 @@ pub async fn fetch_one() -> Result<TargetProcessedList, Error> {
             hashset_append(&UP_NEXT, up_next.clone());
             info!("UP_NEXT: added {} items.", up_next.len());
 
-            Ok(up_next)
+            Ok(up_next.len())
         }
-        None => Ok(vec![]),
+        None => Ok(0),
     }
 }
 
@@ -112,29 +113,27 @@ pub async fn prefetch() -> Result<(), Error> {
 /// Start an upstream fetching worker.
 /// NOTE: how about represent worker as a `struct`?
 pub fn start_fetch_worker(worker_name: String) {
+    const SLEEP_DURATION: core::time::Duration = Duration::from_millis(300);
+
     info!("Upstream worker {}: started.", worker_name);
     thread::spawn(move || {
         tokio::spawn(async move {
             loop {
                 match fetch_one().await {
-                    Ok(up_next) => {
-                        if up_next.len() == 0 {
-                            debug!("Upstream worker {}: nothing fetched.", worker_name);
-                            sleep(Duration::from_millis(300)).await;
-                        } else {
-                            debug!(
-                                "Upstream worker {}: {} fetched.",
-                                worker_name,
-                                up_next.len()
-                            );
-                        }
+                    Ok(0) => {
+                        debug!("Upstream worker {}: nothing fetched.", worker_name);
+                        sleep(SLEEP_DURATION).await
+                    }
+                    Ok(up_next_len) => {
+                        debug!("Upstream worker {}: {} fetched.", worker_name, up_next_len);
+                        // Start next fetch process immediately.
                     }
                     Err(err) => {
                         debug!(
                             "Upstream worker {}: error when fetching upstreams: {}",
                             worker_name, err
                         );
-                        sleep(Duration::from_millis(300)).await;
+                        sleep(SLEEP_DURATION).await;
                     }
                 }
             }
