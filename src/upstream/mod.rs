@@ -1,10 +1,12 @@
 mod aggregation;
+mod dotbit;
 mod ens_reverse;
 mod keybase;
 mod knn3;
 mod proof_client;
 mod rss3;
 mod sybil_list;
+
 #[cfg(test)]
 mod tests;
 mod the_graph;
@@ -184,10 +186,16 @@ pub enum Platform {
     Reddit,
 
     /// Lens
-    #[strum(serialize = "lens", serialize = "Lens")]
+    #[strum(serialize = "Lens", serialize = "lens")]
     #[serde(rename = "lens")]
     #[graphql(name = "lens")]
     Lens,
+
+    /// .bit
+    #[strum(serialize = "dotbit")]
+    #[serde(rename = "dotbit")]
+    #[graphql(name = "dotbit")]
+    Dotbit,
 
     /// Unknown
     #[strum(serialize = "unknown")]
@@ -263,6 +271,11 @@ pub enum DataSource {
     #[serde(rename = "rpc_server")]
     #[graphql(name = "rpc_server")]
     RPCServer,
+
+    #[strum(serialize = "dotbit")]
+    #[serde(rename = "dotbit")]
+    #[graphql(name = "dotbit")]
+    Dotbit,
 
     /// Unknown
     #[strum(serialize = "unknown")]
