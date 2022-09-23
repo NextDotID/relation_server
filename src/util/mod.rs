@@ -56,12 +56,10 @@ where
     Ok(serde_json::from_str(body)?)
 }
 
-pub(crate) fn hashset_pop<T>(set: &Arc<Mutex<HashSet<T>>>) -> Option<T>
+pub(crate) fn hashset_pop<T>(set: &mut HashSet<T>) -> Option<T>
 where
     T: Eq + Hash + Clone,
 {
-    let mutex_hashset = set.clone();
-    let mut set = mutex_hashset.lock().unwrap();
     if set.is_empty() {
         None
     } else {
@@ -70,40 +68,11 @@ where
     }
 }
 
-/// Get current snapshot of HashSet.
-/// Notice: deep clone will happen.
-#[allow(dead_code)]
-pub(crate) fn hashset_unwrap<T>(set: &Arc<Mutex<HashSet<T>>>) -> HashSet<T>
+pub(crate) fn hashset_append<T>(set: &mut HashSet<T>, items: Vec<T>)
 where
-    T: Clone + Eq + Hash,
+    T: Eq + Clone + Hash,
 {
-    set.clone().lock().unwrap().clone()
-}
-
-/// - `true`: item inserted.
-/// - `false`: item duplicated.
-pub(crate) fn hashset_push<T>(set: &Arc<Mutex<HashSet<T>>>, item: T) -> bool
-where
-    T: Clone + Eq + Hash,
-{
-    set.clone().lock().unwrap().deref_mut().insert(item)
-}
-
-pub(crate) fn hashset_append<T>(set: &Arc<Mutex<HashSet<T>>>, items: Vec<T>)
-where
-    T: Eq + Hash + Clone,
-{
-    let mutex_hashset = set.clone();
-    let mut hashset = mutex_hashset.lock().unwrap();
-    let set = hashset.deref_mut();
     for i in items {
         set.insert(i);
     }
-}
-
-pub(crate) fn hashset_exists<T>(set: &Arc<Mutex<HashSet<T>>>, item: &T) -> bool
-where
-    T: Eq + Hash,
-{
-    set.clone().lock().unwrap().contains(item)
 }

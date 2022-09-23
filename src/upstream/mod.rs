@@ -23,23 +23,13 @@ use crate::{
         aggregation::Aggregation, ens_reverse::ENSReverseLookup, keybase::Keybase, knn3::Knn3,
         proof_client::ProofClient, rss3::Rss3, sybil_list::SybilList, the_graph::TheGraph,
     },
-    util::{hashset_append, hashset_exists, hashset_pop, hashset_push},
+    util::{hashset_append,hashset_pop},
 };
 use async_trait::async_trait;
 use futures::future::join_all;
 use log::{debug, info, warn};
 use tokio::time::{sleep, Duration};
 pub(crate) use types::{DataFetcher, DataSource, Platform, Target, TargetProcessedList};
-
-// Maybe we should use Actor model to achieve the same goal here.
-// or stream::buffer_unordered ?
-lazy_static! {
-    /// Global upstream fetching process job queue.
-    pub static ref UP_NEXT: Arc<Mutex<HashSet<Target>>> = Arc::new(Mutex::new(HashSet::new()));
-
-    /// Recent processed list.
-    pub static ref PROCESSED: Arc<Mutex<HashSet<Target>>> = Arc::new(Mutex::new(HashSet::new()));
-}
 
 /// Fetcher defines how to fetch data from upstream.
 #[async_trait]
@@ -52,20 +42,33 @@ pub trait Fetcher {
 }
 
 /// Find all available (platform, identity) in all `Upstream`s.
-pub fn fetch_all(initial_target: Target) {
-    if hashset_exists(&PROCESSED, &initial_target) {
-        return;
-    }
+/// Each `fetch_all` action will spawn 4 workers.
+pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
+    const WORKERS: usize = 4;
+    // queues of this session.
+    let mut up_next: HashSet<Target> = HashSet::new();
+    let mut processed: HashSet<Target> = HashSet::new();
+
+    // TODO: Is global processed queue really needed?
+    // if hashset_exists(&PROCESSED, &initial_target) {
+    //     return;
+    // }
     // Later be `pop()`-ed by fetch worker.
-    hashset_push(&UP_NEXT, initial_target.clone());
+    up_next.insert(initial_target.clone());
+    fetch_one(&mut up_next, &mut processed).await?;
+
+    Ok(())
 }
 
 /// Find one (platform, identity) pair in all upstreams.
 /// Returns amount of identities just fetched for next iter.
-pub async fn fetch_one() -> Result<usize, Error> {
-    match hashset_pop(&UP_NEXT) {
+pub async fn fetch_one(
+    up_next_queue: &mut HashSet<Target>,
+    processed: &mut HashSet<Target>,
+) -> Result<usize, Error> {
+    match hashset_pop(up_next_queue) {
         Some(ref target) => {
-            if !hashset_push(&PROCESSED, target.clone()) {
+            if !processed.insert(target.clone()) {
                 // Already processed.
                 return Ok(0);
             };
@@ -92,10 +95,12 @@ pub async fn fetch_one() -> Result<usize, Error> {
             })
             .collect();
             up_next.dedup();
-            hashset_append(&UP_NEXT, up_next.clone());
-            info!("UP_NEXT: added {} items.", up_next.len());
-
-            Ok(up_next.len())
+            hashset_append(up_next_queue, up_next.clone());
+            let len = up_next.len();
+            if len != 0 {
+                info!("UP_NEXT: added {} items.", len);
+            }
+            Ok(len)
         }
         None => Ok(0),
     }
