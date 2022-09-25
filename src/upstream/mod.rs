@@ -11,11 +11,7 @@ mod tests;
 mod the_graph;
 mod types;
 
-use std::{
-    collections::HashSet,
-    ops::DerefMut,
-    sync::{Arc, Mutex},
-};
+use std::collections::HashSet;
 
 use crate::{
     error::Error,
@@ -23,12 +19,12 @@ use crate::{
         aggregation::Aggregation, ens_reverse::ENSReverseLookup, keybase::Keybase, knn3::Knn3,
         proof_client::ProofClient, rss3::Rss3, sybil_list::SybilList, the_graph::TheGraph,
     },
-    util::{hashset_append,hashset_pop},
+    util::hashset_append,
 };
 use async_trait::async_trait;
 use futures::future::join_all;
-use log::{debug, info, warn};
-use tokio::time::{sleep, Duration};
+use log::{info, warn};
+
 pub(crate) use types::{DataFetcher, DataSource, Platform, Target, TargetProcessedList};
 
 /// Fetcher defines how to fetch data from upstream.
@@ -44,66 +40,65 @@ pub trait Fetcher {
 /// Find all available (platform, identity) in all `Upstream`s.
 /// Each `fetch_all` action will spawn 4 workers.
 pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
-    const WORKERS: usize = 4;
     // queues of this session.
-    let mut up_next: HashSet<Target> = HashSet::new();
+    let mut up_next = HashSet::from([initial_target.clone()]);
     let mut processed: HashSet<Target> = HashSet::new();
 
-    // TODO: Is global processed queue really needed?
-    // if hashset_exists(&PROCESSED, &initial_target) {
-    //     return;
-    // }
-    // Later be `pop()`-ed by fetch worker.
-    up_next.insert(initial_target.clone());
-    fetch_one(&mut up_next, &mut processed).await?;
+    while up_next.len() > 0 {
+        let futures: Vec<_> = up_next
+            .iter()
+            .filter(|target| !processed.contains(target))
+            .map(|target| fetch_one(target))
+            .collect();
+        let mut result: Vec<Target> = join_all(futures)
+            .await
+            .into_iter()
+            .flat_map(|handle_result| match handle_result {
+                Ok(result) => result,
+                Err(err) => {
+                    warn!("Error happened in fetching task: {}", err);
+                    vec![]
+                }
+            })
+            .collect();
+        result.dedup();
+
+        // Add previous up_next into processed, and replace with new up_next
+        hashset_append(&mut processed, up_next.into_iter().collect());
+        up_next = HashSet::from_iter(result.into_iter());
+    }
 
     Ok(())
 }
 
 /// Find one (platform, identity) pair in all upstreams.
 /// Returns amount of identities just fetched for next iter.
-pub async fn fetch_one(
-    up_next_queue: &mut HashSet<Target>,
-    processed: &mut HashSet<Target>,
-) -> Result<usize, Error> {
-    match hashset_pop(up_next_queue) {
-        Some(ref target) => {
-            if !processed.insert(target.clone()) {
-                // Already processed.
-                return Ok(0);
-            };
-            let mut up_next: TargetProcessedList = join_all(vec![
-                Aggregation::fetch(target),
-                SybilList::fetch(target),
-                Keybase::fetch(target),
-                ProofClient::fetch(target),
-                Rss3::fetch(target),
-                Knn3::fetch(target),
-                TheGraph::fetch(target),
-                ENSReverseLookup::fetch(target),
-            ])
-            .await
-            .into_iter()
-            .flat_map(|res| {
-                match res {
-                    Ok(up_next_list) => up_next_list,
-                    Err(err) => {
-                        warn!("Error happened when fetching {}: {}", target, err);
-                        vec![] // Don't break the procedure
-                    }
-                }
-            })
-            .collect();
-            up_next.dedup();
-            hashset_append(up_next_queue, up_next.clone());
-            let len = up_next.len();
-            if len != 0 {
-                info!("UP_NEXT: added {} items.", len);
+pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
+    let mut up_next: TargetProcessedList = join_all(vec![
+        Aggregation::fetch(target),
+        SybilList::fetch(target),
+        Keybase::fetch(target),
+        ProofClient::fetch(target),
+        Rss3::fetch(target),
+        Knn3::fetch(target),
+        TheGraph::fetch(target),
+        ENSReverseLookup::fetch(target),
+    ])
+    .await
+    .into_iter()
+    .flat_map(|res| {
+        match res {
+            Ok(up_next_list) => up_next_list,
+            Err(err) => {
+                warn!("Error happened when fetching {}: {}", target, err);
+                vec![] // Don't break the procedure
             }
-            Ok(len)
         }
-        None => Ok(0),
-    }
+    })
+    .collect();
+    up_next.dedup();
+
+    Ok(up_next)
 }
 
 /// Prefetch all prefetchable upstreams, e.g. SybilList.
@@ -114,56 +109,52 @@ pub async fn prefetch() -> Result<(), Error> {
     Ok(())
 }
 
-/// Start an upstream fetching worker.
-/// NOTE: how about represent worker as a `struct`?
-pub fn start_fetch_worker(worker_name: String) {
-    const SLEEP_DURATION: core::time::Duration = Duration::from_millis(300);
-    info!("Upstream worker {}: started.", worker_name);
-    tokio::spawn(async move {
-        loop {
-            match fetch_one().await {
-                Ok(0) => {
-                    debug!("Upstream worker {}: nothing fetched.", worker_name);
-                    sleep(SLEEP_DURATION).await
-                }
-                Ok(up_next_len) => {
-                    debug!("Upstream worker {}: {} fetched.", worker_name, up_next_len);
-                    // Start next fetch process immediately.
-                }
-                Err(err) => {
-                    debug!(
-                        "Upstream worker {}: error when fetching upstreams: {}",
-                        worker_name, err
-                    );
-                    sleep(SLEEP_DURATION).await;
-                }
-            }
-        }
-    });
-    // FIXME: Do we need to make a new thread for this?
-    // Pros: multi-core CPU support(?), fault-tolerant
-    // Cons: none?
-    // thread::Builder::new()
-    //     .name(worker_name.clone())
-    //     .spawn(move || {
-    //     });
-}
+// Start an upstream fetching worker.
+// NOTE: how about represent worker as a `struct`?
+// pub fn start_fetch_worker<'a>(
+//     up_next_queue: &mut HashSet<Target>,
+//     processed: &mut HashSet<Target>,
+//     worker_name: String,
+// ) {
+//     const SLEEP_DURATION: core::time::Duration = Duration::from_millis(300);
+//     info!("Upstream worker {}: started.", worker_name);
+//     tokio::spawn(async move {
+//         loop {
+//             match fetch_one(up_next_queue, processed).await {
+//                 Ok(0) => {
+//                     debug!("Upstream worker {}: nothing fetched.", worker_name);
+//                     sleep(SLEEP_DURATION).await
+//                 }
+//                 Ok(up_next_len) => {
+//                     debug!("Upstream worker {}: {} fetched.", worker_name, up_next_len);
+//                     // Start next fetch process immediately.
+//                 }
+//                 Err(err) => {
+//                     debug!(
+//                         "Upstream worker {}: error when fetching upstreams: {}",
+//                         worker_name, err
+//                     );
+//                     sleep(SLEEP_DURATION).await;
+//                 }
+//             }
+//         }
+//     });
+//     // FIXME: Do we need to make a new thread for this?
+//     // Pros: multi-core CPU support(?), fault-tolerant
+//     // Cons: none?
+//     // thread::Builder::new()
+//     //     .name(worker_name.clone())
+//     //     .spawn(move || {
+//     //     });
+// }
 
-/// Start a PROCESSED set cleanse worker.
-pub fn start_cleanse_worker() {
-    info!("Cleanse worker: started.");
-    tokio::spawn(async move {
-        loop {
-            sleep(Duration::from_secs(60)).await;
-            PROCESSED.clone().lock().unwrap().deref_mut().clear();
-            debug!("Cleanse worker: PROCESSED queue cleaned.");
-        }
-    });
-}
-
-/// Start a batch of upstream fetching workers.
-pub fn start_fetch_workers(count: usize) {
-    for i in 0..count {
-        start_fetch_worker(format!("{}", i));
-    }
-}
+// Start a batch of upstream fetching workers.
+// pub fn start_fetch_workers(
+//     up_next_queue: &mut HashSet<Target>,
+//     processed: &mut HashSet<Target>,
+//     count: usize,
+// ) {
+//     for i in 0..count {
+//         start_fetch_worker(up_next_queue, processed, format!("{}", i));
+//     }
+// }

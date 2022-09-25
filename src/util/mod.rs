@@ -1,12 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use std::{
-    collections::HashSet,
-    hash::Hash,
-    ops::DerefMut,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashSet, hash::Hash};
 
 use crate::error::Error;
 use chrono::NaiveDateTime;
@@ -54,18 +49,6 @@ where
     let body = std::str::from_utf8(&body_bytes).unwrap();
 
     Ok(serde_json::from_str(body)?)
-}
-
-pub(crate) fn hashset_pop<T>(set: &mut HashSet<T>) -> Option<T>
-where
-    T: Eq + Hash + Clone,
-{
-    if set.is_empty() {
-        None
-    } else {
-        let elt = set.iter().next().cloned().unwrap();
-        Some(set.take(&elt).unwrap())
-    }
 }
 
 pub(crate) fn hashset_append<T>(set: &mut HashSet<T>, items: Vec<T>)
