@@ -7,7 +7,7 @@ use crate::upstream::{fetch_all, DataSource, Platform, Target};
 
 use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
-use log::debug;
+use log::info;
 use strum::IntoEnumIterator;
 
 /// Status for a record in RelationService DB
@@ -195,16 +195,16 @@ impl IdentityQuery {
         // FIXME: Still kinda dirty. Should be in an background queue/worker-like shape.
         match Identity::find_by_platform_identity(db, &platform, &identity).await? {
             None => {
-                fetch_all(target).await?;
-                Identity::find_by_platform_identity(db, &platform, &identity).await
+                let _ = fetch_all(target).await; // TODO: print error message here (but not break the return value)
+                Ok(Identity::find_by_platform_identity(db, &platform, &identity).await?)
             }
             Some(found) => {
                 if found.is_outdated() {
-                    debug!(
+                    info!(
                         "Identity: {}/{} is outdated. Refetching...",
                         platform, identity
                     );
-                    tokio::spawn(async move { fetch_all(target).await });
+                    let _ = fetch_all(target); // Fetch in the background
                 }
                 Ok(Some(found))
             }
@@ -226,15 +226,11 @@ impl IdentityQuery {
                 let target = Target::Identity(platform.clone(), identity.clone());
                 fetch_all(target).await?;
             }
-            Ok(
-                Identity::find_by_platforms_identity(&pool, &platform_list, identity.as_str())
-                    .await?,
-            )
+            Identity::find_by_platforms_identity(&pool, &platform_list, identity.as_str()).await
         } else {
             record.iter().filter(|r| r.is_outdated()).for_each(|r| {
-                let platform = r.platform.clone();
-                let identity = r.identity.clone();
-                tokio::spawn(async move { fetch_all(Target::Identity(platform, identity)).await });
+                // Refetch in the background
+                let _ = fetch_all(Target::Identity(r.platform.clone(), r.identity.clone()));
             });
             Ok(record)
         }

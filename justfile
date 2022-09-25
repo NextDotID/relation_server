@@ -19,7 +19,7 @@ prepare: peri
 	@if [ ! -f config/testing.toml ]; then printf "[db]\ndb = \"relation_server_test\"" > config/testing.toml; fi
 
 # Do database migration.
-migrate: peri
+migrate:
 	aragog --db-name relation_server_development migrate
 	aragog --db-name relation_server_test migrate
 

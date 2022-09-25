@@ -13,6 +13,7 @@ use crate::{
 use async_graphql::{Context, Object};
 // use dataloader::cached::Loader;
 use dataloader::non_cached::Loader;
+use log::warn;
 use strum::IntoEnumIterator;
 use uuid::Uuid;
 
@@ -157,7 +158,8 @@ impl HoldQuery {
         match Hold::find_by_id_chain_address_merge(pool, &id, &chain, &contract_address).await? {
             Some(hold) => {
                 if hold.is_outdated() {
-                    tokio::spawn(async move { fetch_all(target).await });
+                    // Refetch in the background
+                    let _ = fetch_all(target);
                 }
                 Ok(Some(hold))
             }
