@@ -204,7 +204,7 @@ impl IdentityQuery {
                         "Identity: {}/{} is outdated. Refetching...",
                         platform, identity
                     );
-                    let _ = fetch_all(target); // Fetch in the background
+                    tokio::spawn(fetch_all(target)); // Fetch in the background
                 }
                 Ok(Some(found))
             }
@@ -230,7 +230,10 @@ impl IdentityQuery {
         } else {
             record.iter().filter(|r| r.is_outdated()).for_each(|r| {
                 // Refetch in the background
-                let _ = fetch_all(Target::Identity(r.platform.clone(), r.identity.clone()));
+                tokio::spawn(fetch_all(Target::Identity(
+                    r.platform.clone(),
+                    r.identity.clone(),
+                )));
             });
             Ok(record)
         }

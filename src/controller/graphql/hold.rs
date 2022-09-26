@@ -159,7 +159,7 @@ impl HoldQuery {
             Some(hold) => {
                 if hold.is_outdated() {
                     // Refetch in the background
-                    let _ = fetch_all(target);
+                    tokio::spawn(fetch_all(target));
                 }
                 Ok(Some(hold))
             }
