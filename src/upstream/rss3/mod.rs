@@ -39,7 +39,6 @@ pub struct ResultItem {
     #[serde(default)]
     pub address_to: String,
     pub network: Rss3Chain,
-    pub platform: Option<String>,
     pub tag: String,
     #[serde(rename = "type")]
     pub tag_type: String,
@@ -72,7 +71,6 @@ pub struct MetaData {
     pub symbol: Option<String>,
     pub standard: Option<String>,
     pub contract_address: Option<String>,
-    pub handle: Option<String>,
 }
 
 /*
@@ -111,9 +109,6 @@ pub enum Rss3Chain {
 
     #[serde(rename = "gnosis")]
     Gnosis,
-
-    #[serde(rename = "crossbell")]
-    Crossbell,
 }
 
 impl From<Rss3Chain> for Chain {
@@ -129,8 +124,6 @@ impl From<Rss3Chain> for Chain {
             Rss3Chain::Arbitrum => Chain::Arbitrum,
             Rss3Chain::Optimism => Chain::Optimism,
             Rss3Chain::Gnosis => Chain::Gnosis,
-            Rss3Chain::Crossbell => Chain::Crossbell,
-            _ => Chain::Unknown,
         }
     }
 }
@@ -156,7 +149,7 @@ impl Fetcher for Rss3 {
 }
 
 async fn fetch_nfts_by_account(
-    platform: &Platform,
+    _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
     let client = make_client();
@@ -225,7 +218,7 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
     }
 
     let found = p.actions.iter().find(|a| {
-        (p.tag == "social" && a.tag_type == "create")
+        (p.tag == "social" && a.tag_type == "mint")
             || (p.tag == "collectible" && a.tag == "collectible")
     });
     if found.is_none() {
@@ -234,18 +227,16 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
     let real_action = found.unwrap();
 
     if p.tag == "social" {
-        if p.platform.is_none() {
-            return Ok(vec![]);
-        }
-        let social_platform =
-            Platform::from_str(p.platform.unwrap().as_str()).unwrap_or(Platform::Unknown);
-        if social_platform != Platform::Lens {
-            return Ok(vec![]);
-        }
-        let handle = real_action.metadata.handle.as_ref().unwrap().to_string();
+        let handle = real_action
+            .metadata
+            .name
+            .as_ref()
+            .unwrap()
+            .trim_start_matches('@')
+            .to_string();
         let to_identity: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
-            platform: social_platform,
+            platform: Platform::Lens,
             identity: handle.clone(),
             created_at: Some(created_at_naive),
             display_name: Some(handle.clone()),
@@ -258,21 +249,17 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         let pf: Proof = Proof {
             uuid: Uuid::new_v4(),
             source: DataSource::Rss3,
-            record_id: Some(p.hash),
+            record_id: Some(real_action.metadata.id.as_ref().unwrap().to_string()),
             created_at: Some(created_at_naive),
             updated_at: naive_now(),
             fetcher: DataFetcher::RelationService,
         };
 
         create_identity_to_identity_record(&db, &from, &to_identity, &pf).await?;
+
         return Ok(vec![Target::Identity(Platform::Lens, handle.clone())]);
     }
 
-    if real_action.metadata.symbol.is_none()
-        || real_action.metadata.symbol.as_ref().unwrap() == &String::from("ENS")
-    {
-        return Ok(vec![]);
-    }
     let mut nft_category =
         ContractCategory::from_str(real_action.metadata.standard.as_ref().unwrap().as_str())
             .unwrap_or_default();

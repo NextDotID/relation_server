@@ -9,6 +9,16 @@ readme = "README.org"
 repository = "https://github.com/nextdotid/relation_server"
 publish = false
 
+[[bin]]
+name = "standalone"
+test = false
+bench = false
+
+[[bin]]
+name = "lambda"
+test = false
+bench = false
+
 [dependencies]
 config = "0.12"
 lazy_static = "1.4"

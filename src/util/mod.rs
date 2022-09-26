@@ -1,3 +1,8 @@
+#[cfg(test)]
+mod tests;
+
+use std::{collections::HashSet, hash::Hash};
+
 use crate::error::Error;
 use chrono::NaiveDateTime;
 use http::Response;
@@ -44,4 +49,13 @@ where
     let body = std::str::from_utf8(&body_bytes).unwrap();
 
     Ok(serde_json::from_str(body)?)
+}
+
+pub(crate) fn hashset_append<T>(set: &mut HashSet<T>, items: Vec<T>)
+where
+    T: Eq + Clone + Hash,
+{
+    for i in items {
+        set.insert(i);
+    }
 }

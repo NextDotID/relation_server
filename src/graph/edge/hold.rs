@@ -233,7 +233,7 @@ mod tests {
         let hold1: Hold = Faker.fake();
         let hold2: Hold = Faker.fake();
         let hold1_record = hold1.connect(&db, &id1, &contract1).await?;
-        let hold2_record = hold2.connect(&db, &id2, &contract2).await?;
+        let _hold2_record = hold2.connect(&db, &id2, &contract2).await?;
         let found =
             Hold::find_by_id_chain_address(&db, &hold1.id, &contract1.chain, &contract1.address)
                 .await

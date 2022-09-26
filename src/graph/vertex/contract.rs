@@ -32,6 +32,7 @@ use uuid::Uuid;
     async_graphql::Enum,
     EnumString,
     EnumIter,
+    Hash,
 )]
 pub enum Chain {
     /// The Blockchain.
@@ -229,6 +230,7 @@ impl Chain {
     PartialEq,
     Eq,
     async_graphql::Enum,
+    Hash,
 )]
 pub enum ContractCategory {
     #[strum(serialize = "ENS")]

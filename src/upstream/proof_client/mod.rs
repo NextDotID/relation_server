@@ -10,7 +10,7 @@ use crate::upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 
 use async_trait::async_trait;
-use log::{error, info};
+use log::{debug, info, error};
 use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -106,10 +106,10 @@ async fn fetch_connections_by_platform_identity(
 
     let mut body: ProofQueryResponse = parse_body(&mut resp).await?;
     if body.pagination.total == 0 {
-        info!("Proof Service response is empty");
         return Err(Error::NoResult);
     }
 
+    debug!("Found {} results.", body.ids.len());
     let proofs = match body.ids.pop() {
         Some(i) => i,
         None => {
