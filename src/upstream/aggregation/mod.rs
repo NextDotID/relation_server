@@ -116,6 +116,10 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
     let mut targets = Vec::new();
 
     let from_platform = Platform::from_str(p.sns_platform.as_str()).unwrap_or(Platform::Unknown);
+    if from_platform == Platform::Unknown {
+        error!("AggregationService from_platform unknown , original data is: {:?}", p);
+        return Ok(vec![]);
+    }
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: from_platform,
@@ -129,6 +133,10 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
     };
 
     let to_platform = Platform::from_str(p.web3_platform.as_str()).unwrap_or_default();
+    if to_platform == Platform::Unknown {
+        error!("AggregationService to_platform unknown , original data is: {:?}", p);
+        return Ok(vec![]);
+    }
     let web3_addr = p.web3_addr.to_lowercase();
     let to: Identity = Identity {
         uuid: Some(Uuid::new_v4()),

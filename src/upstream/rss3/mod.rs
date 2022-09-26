@@ -38,7 +38,7 @@ pub struct ResultItem {
     pub address_from: String,
     #[serde(default)]
     pub address_to: String,
-    pub network: Rss3Chain,
+    pub network: String,
     pub tag: String,
     #[serde(rename = "type")]
     pub tag_type: String,
@@ -71,61 +71,6 @@ pub struct MetaData {
     pub symbol: Option<String>,
     pub standard: Option<String>,
     pub contract_address: Option<String>,
-}
-
-/*
-ethereum, ethereum_classic,
-binance_smart_chain, polygon, zksync, xdai,
-arweave, arbitrum, optimism, fantom, avalanche, crossbell
-*/
-#[derive(Deserialize, Debug)]
-pub enum Rss3Chain {
-    #[serde(rename = "ethereum")]
-    Ethereum,
-
-    #[serde(rename = "ethereum_classic")]
-    EthereumClassic,
-
-    #[serde(rename = "binance_smart_chain")]
-    BinanceSmartChain,
-
-    #[serde(rename = "polygon")]
-    Polygon,
-
-    #[serde(rename = "zksync")]
-    Zksync,
-
-    #[serde(rename = "xdai")]
-    Xdai,
-
-    #[serde(rename = "arweave")]
-    Arweave,
-
-    #[serde(rename = "arbitrum")]
-    Arbitrum,
-
-    #[serde(rename = "optimism")]
-    Optimism,
-
-    #[serde(rename = "gnosis")]
-    Gnosis,
-}
-
-impl From<Rss3Chain> for Chain {
-    fn from(network: Rss3Chain) -> Self {
-        match network {
-            Rss3Chain::Ethereum => Chain::Ethereum,
-            Rss3Chain::Polygon => Chain::Polygon,
-            Rss3Chain::EthereumClassic => Chain::EthereumClassic,
-            Rss3Chain::BinanceSmartChain => Chain::BNBSmartChain,
-            Rss3Chain::Zksync => Chain::ZKSync,
-            Rss3Chain::Xdai => Chain::Gnosis,
-            Rss3Chain::Arweave => Chain::Arweave,
-            Rss3Chain::Arbitrum => Chain::Arbitrum,
-            Rss3Chain::Optimism => Chain::Optimism,
-            Rss3Chain::Gnosis => Chain::Gnosis,
-        }
-    }
 }
 
 pub struct Rss3 {}
@@ -268,7 +213,11 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         nft_category = ContractCategory::POAP;
     }
 
-    let chain = p.network.into();
+    let chain = Chain::from_str(p.network.as_str()).unwrap_or_default();
+    if chain == Chain::Unknown {
+        error!("Rss3 Fetch data | Unknown Chain, original data: {:?}", p);
+        return Ok(vec![]);
+    }
     let contract_addr = real_action
         .metadata
         .contract_address
