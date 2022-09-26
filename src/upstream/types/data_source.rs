@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
-use strum_macros::{Display, EnumString, EnumIter};
+use serde::{Deserialize, Serialize};
+use strum_macros::{Display, EnumIter, EnumString};
 
 /// All data respource platform.
 #[derive(
@@ -67,6 +67,12 @@ pub enum DataSource {
     #[serde(rename = "rpc_server")]
     #[graphql(name = "rpc_server")]
     RPCServer,
+
+    /// .bit
+    #[strum(serialize = "dotbit")]
+    #[serde(rename = "dotbit")]
+    #[graphql(name = "dotbit")]
+    Dotbit,
 
     /// Unknown
     #[strum(serialize = "unknown")]

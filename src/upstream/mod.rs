@@ -1,11 +1,13 @@
 // Upstreams
 mod aggregation;
+mod dotbit;
 mod ens_reverse;
 mod keybase;
 mod knn3;
 mod proof_client;
 mod rss3;
 mod sybil_list;
+
 #[cfg(test)]
 mod tests;
 mod the_graph;

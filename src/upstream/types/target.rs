@@ -1,6 +1,9 @@
 use http::StatusCode;
 
-use crate::{graph::vertex::contract::{ContractCategory, Chain}, error::Error};
+use crate::{
+    error::Error,
+    graph::vertex::contract::{Chain, ContractCategory},
+};
 
 use super::platform::Platform;
 

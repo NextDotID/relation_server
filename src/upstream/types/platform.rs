@@ -61,6 +61,12 @@ pub enum Platform {
     #[graphql(name = "lens")]
     Lens,
 
+    /// .bit
+    #[strum(serialize = "dotbit")]
+    #[serde(rename = "dotbit")]
+    #[graphql(name = "dotbit")]
+    Dotbit,
+
     /// Unknown
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]

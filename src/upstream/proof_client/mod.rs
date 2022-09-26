@@ -10,7 +10,7 @@ use crate::upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 
 use async_trait::async_trait;
-use log::{debug, error};
+use log::{debug, error, info};
 use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -76,6 +76,7 @@ impl Fetcher for ProofClient {
             Platform::Twitter,
             Platform::NextID,
             Platform::Github,
+            Platform::Dotbit,
         ])
     }
 }
@@ -137,6 +138,15 @@ async fn fetch_connections_by_platform_identity(
 
         let from_record = from.create_or_update(&db).await?;
         let to_platform = Platform::from_str(p.platform.as_str()).unwrap_or(Platform::Unknown);
+        if to_platform == Platform::Unknown {
+            info!(
+                "{}:{} found unknown connected platform: {}",
+                platform.to_string(),
+                identity.to_string(),
+                p.platform
+            );
+            continue;
+        }
 
         let to: Identity = Identity {
             uuid: Some(Uuid::new_v4()),

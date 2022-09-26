@@ -76,7 +76,7 @@ pub enum Chain {
     /// BNB Smart Chain (BSC) (Previously Binance Smart Chain) - EVM compatible, consensus layers, and with hubs to multi-chains.
     /// https://www.binance.com/en/support/announcement/854415cf3d214371a7b60cf01ead0918
     #[serde(rename = "bsc")]
-    #[strum(serialize = "bsc")]
+    #[strum(serialize = "bsc", serialize = "binance_smart_chain")]
     #[graphql(name = "bsc")]
     BNBSmartChain,
 
@@ -127,6 +127,10 @@ pub enum Chain {
     #[graphql(name = "zksync")]
     ZKSync,
 
+    #[serde(rename = "xdai")]
+    #[strum(serialize = "xdai")]
+    #[graphql(name = "xdai")]
+    Xdai,
     /// Gnosis Chain provides stability, scalability and an extendable beacon chain framework.
     /// Established in 2018 as the xDai Chain, the updated Gnosis Chain gives devs the tools and resources they need to create enhanced user experiences and optimized applications.
     /// https://developers.gnosischain.com
@@ -207,6 +211,7 @@ impl Chain {
             ConfluxESpace => ChainType::EVM(71),
             EthereumClassic => ChainType::EVM(61),
             ZKSync => ChainType::ZKSync,
+            Xdai => ChainType::EVM(100),
             Gnosis => ChainType::EVM(100),
             Arweave => ChainType::Arweave,
             Arbitrum => ChainType::EVM(42161),

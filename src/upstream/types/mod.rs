@@ -1,14 +1,14 @@
-pub(crate) mod target;
-pub(crate) mod platform;
-pub(crate) mod data_source;
 pub(crate) mod data_fetcher;
+pub(crate) mod data_source;
+pub(crate) mod platform;
+pub(crate) mod target;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-pub use target::{Target, TargetProcessedList};
-pub use platform::Platform;
-pub use data_source::DataSource;
 pub use data_fetcher::DataFetcher;
+pub use data_source::DataSource;
+pub use platform::Platform;
+pub use target::{Target, TargetProcessedList};
 
 /// All asymmetric cryptography algorithm supported by RelationService.
 #[derive(Serialize, Deserialize)]
