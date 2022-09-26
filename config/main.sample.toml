@@ -32,3 +32,6 @@ ens = "https://api.thegraph.com/subgraphs/name/ensdomains/ens"
 
 [upstream.ens_reverse]
 url = "https://ens.fafrd.workers.dev/ens/"
+
+[upstream.dotbit_service]
+url = "https://indexer-v1.did.id"

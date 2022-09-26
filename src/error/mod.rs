@@ -31,8 +31,6 @@ pub enum Error {
     ArangoDBError(#[from] aragog::Error),
     #[error("ArangoLiteDB error: {0}")]
     ArangoLiteDBError(#[from] arangors_lite::ClientError),
-    #[error("reqwest error: {0}")]
-    ReqwestError(#[from] reqwest::Error),
     #[error("Parse error: {0}")]
     EnumParseError(#[from] strum::ParseError),
     #[error("Parse Int error: {0}")]
@@ -62,7 +60,6 @@ impl Error {
             Error::ParseIntError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::UuidError(_) => StatusCode::BAD_REQUEST,
             Error::ArangoLiteDBError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Error::ReqwestError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::PoolError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

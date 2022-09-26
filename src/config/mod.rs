@@ -39,6 +39,7 @@ pub struct Upstream {
     pub rss3_service: ConfigRss3Service,
     pub the_graph: ConfigUpstreamTheGraph,
     pub ens_reverse: ConfigENSReverse,
+    pub dotbit_service: ConfigDotbitService,
 }
 
 #[derive(Clone, Deserialize, Default)]
@@ -93,6 +94,11 @@ pub struct ConfigUpstreamTheGraph {
 
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigENSReverse {
+    pub url: String,
+}
+
+#[derive(Clone, Deserialize, Default)]
+pub struct ConfigDotbitService {
     pub url: String,
 }
 

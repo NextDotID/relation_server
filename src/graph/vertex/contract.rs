@@ -76,7 +76,7 @@ pub enum Chain {
     /// BNB Smart Chain (BSC) (Previously Binance Smart Chain) - EVM compatible, consensus layers, and with hubs to multi-chains.
     /// https://www.binance.com/en/support/announcement/854415cf3d214371a7b60cf01ead0918
     #[serde(rename = "bsc")]
-    #[strum(serialize = "bsc", serialize="binance_smart_chain")]
+    #[strum(serialize = "bsc", serialize = "binance_smart_chain")]
     #[graphql(name = "bsc")]
     BNBSmartChain,
 

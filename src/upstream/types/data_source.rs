@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
-use strum_macros::{Display, EnumString, EnumIter};
+use serde::{Deserialize, Serialize};
+use strum_macros::{Display, EnumIter, EnumString};
 
 /// All data respource platform.
 #[derive(

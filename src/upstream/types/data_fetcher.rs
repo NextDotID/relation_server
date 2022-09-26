@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
-use strum_macros::{Display, EnumString, EnumIter};
+use serde::{Deserialize, Serialize};
+use strum_macros::{Display, EnumIter, EnumString};
 
 /// Who collects all the data.
 /// It works as a "data cleansing" or "proxy" between `Upstream`s and us.

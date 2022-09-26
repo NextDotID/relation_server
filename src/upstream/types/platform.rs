@@ -66,7 +66,7 @@ pub enum Platform {
     #[serde(rename = "dotbit")]
     #[graphql(name = "dotbit")]
     Dotbit,
-    
+
     /// Unknown
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]

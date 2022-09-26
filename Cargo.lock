@@ -1923,7 +1923,6 @@ dependencies = [
  "log",
  "num_cpus",
  "rand",
- "reqwest",
  "serde",
  "serde_json",
  "strum",

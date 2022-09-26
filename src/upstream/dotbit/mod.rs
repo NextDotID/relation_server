@@ -2,16 +2,16 @@
 mod tests;
 use crate::config::C;
 use crate::error::Error;
+use crate::graph::create_identity_to_identity_record;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
-use crate::graph::{Edge, Vertex, create_identity_to_identity_record};
-use crate::upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList, DataFetcher};
-use crate::util::{naive_now, timestamp_to_naive};
+use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
+use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use async_trait::async_trait;
+use hyper::{Body, Method, Request};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use uuid::Uuid;
-use reqwest;
 
 pub struct DotBit {}
 
@@ -34,7 +34,6 @@ impl Fetcher for DotBit {
         target.in_platform_supported(vec![Platform::Dotbit])
     }
 }
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RequestParams {
@@ -106,7 +105,6 @@ pub struct DotbitResponse {
     pub result: DotbitResult,
 }
 
-
 async fn fetch_connections_by_platform_identity(
     platform: &Platform,
     identity: &str,
@@ -120,28 +118,30 @@ async fn fetch_connections_by_platform_identity(
         method: "das_accountInfo".to_string(),
         params: vec![request_acc],
     };
+    let json_params = serde_json::to_vec(&params)?;
 
-    let client = reqwest::Client::new();
-    let resp: DotbitResponse = client
-        .post("https://indexer-v1.did.id")
-        .json(&params)
-        .send()
-        .await?
-        .json()
-        .await?;
+    let client = make_client();
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri(C.upstream.dotbit_service.url.clone())
+        .body(Body::from(json_params))
+        .expect("request builder");
+
+    let mut result = client.request(req).await?;
+
+    let resp: DotbitResponse = parse_body(&mut result).await?;
     if resp.result.errno.unwrap() != 0 {
-        info!("fail to fetch the result from .bit, resp {:?}", resp);
+        error!("fail to fetch the result from .bit, resp {:?}", resp);
         return Err(Error::NoResult);
     }
     let info = resp.result.data.unwrap();
     let account_info = info.account_info.unwrap();
     let out_point = info.out_point.unwrap();
-    // add to db 
 
-
+    // add to db
     let db = new_db_connection().await?;
     let created_at_naive = timestamp_to_naive(account_info.create_at_unix, 0);
-    
+
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Dotbit,
@@ -174,8 +174,10 @@ async fn fetch_connections_by_platform_identity(
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
     };
-    
-    create_identity_to_identity_record(&db, &from, &to_identity, &pf).await?;
-    return Ok(vec![Target::Identity(Platform::Ethereum, account_info.owner_key)]);
 
+    create_identity_to_identity_record(&db, &from, &to_identity, &pf).await?;
+    return Ok(vec![Target::Identity(
+        Platform::Ethereum,
+        account_info.owner_key,
+    )]);
 }
