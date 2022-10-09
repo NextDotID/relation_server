@@ -1,9 +1,11 @@
 pub mod hold;
+pub mod hold2;
 pub mod proof;
 pub mod resolve;
 // mod pubkey_derivation;
 
 pub use hold::{Hold, HoldRecord};
+pub use hold2::{Hold2, HoldRecord2};
 pub use proof::{Proof, ProofRecord};
 pub use resolve::{Resolve, ResolveRecord};
 

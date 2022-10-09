@@ -18,7 +18,7 @@ use serde::Deserialize;
 pub use vertex::Vertex;
 
 use self::{
-    edge::{Hold, HoldRecord, Proof},
+    edge::{Hold, Hold2, HoldRecord, HoldRecord2, Proof},
     vertex::{Contract, ContractRecord, Identity, IdentityRecord},
 };
 
@@ -115,6 +115,18 @@ pub async fn create_identity_to_identity_record(
     let from_record = from.create_or_update(db).await?;
     let to_record = to.create_or_update(db).await?;
     proof.connect(db, &from_record, &to_record).await?;
+    Ok(())
+}
+
+pub async fn create_identity_to_identity_hold_record(
+    db: &DatabaseConnection,
+    from: &Identity,
+    to: &Identity,
+    hold: &Hold2,
+) -> Result<(), Error> {
+    let from_record = from.create_or_update(db).await?;
+    let to_record = to.create_or_update(db).await?;
+    hold.connect(db, &from_record, &to_record).await?;
     Ok(())
 }
 

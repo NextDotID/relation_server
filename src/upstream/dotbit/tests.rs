@@ -5,7 +5,7 @@ use crate::{
 };
 
 #[tokio::test]
-async fn test_smoke_dotbit() -> Result<(), Error> {
+async fn test_smoke_dotbit_by_dotbit_identity() -> Result<(), Error> {
     let target = Target::Identity(Platform::Dotbit, "test0920.bit".into());
 
     DotBit::fetch(&target).await?;

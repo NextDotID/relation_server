@@ -34,4 +34,4 @@ ens = "https://api.thegraph.com/subgraphs/name/ensdomains/ens"
 url = "https://ens.fafrd.workers.dev/ens/"
 
 [upstream.dotbit_service]
-url = "https://indexer-v1.did.id"
+url = "https://indexer-basic.did.id"

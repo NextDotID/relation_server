@@ -2,7 +2,8 @@
 mod tests;
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::create_identity_to_identity_record;
+use crate::graph::create_identity_to_identity_hold_record;
+use crate::graph::edge::hold2::Hold2;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
@@ -31,7 +32,7 @@ impl Fetcher for DotBit {
     }
 
     fn can_fetch(target: &Target) -> bool {
-        target.in_platform_supported(vec![Platform::Dotbit])
+        target.in_platform_supported(vec![Platform::Dotbit, Platform::Ethereum])
     }
 }
 
@@ -109,6 +110,17 @@ async fn fetch_connections_by_platform_identity(
     platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
+    if platform == &Platform::Dotbit {
+        return fetch_connections_by_account_info(platform, identity).await;
+    } else {
+        return Ok(vec![]);
+    }
+}
+
+async fn fetch_connections_by_account_info(
+    platform: &Platform,
+    identity: &str,
+) -> Result<TargetProcessedList, Error> {
     let request_acc = RequestParams {
         account: identity.to_string(),
     };
@@ -144,18 +156,6 @@ async fn fetch_connections_by_platform_identity(
 
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
-        platform: Platform::Dotbit,
-        identity: identity.to_string(),
-        created_at: Some(created_at_naive),
-        display_name: Some(identity.to_string()),
-        added_at: naive_now(),
-        avatar_url: None,
-        profile_url: None,
-        updated_at: naive_now(),
-    };
-
-    let to_identity: Identity = Identity {
-        uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: account_info.owner_key.clone(),
         created_at: Some(created_at_naive),
@@ -166,16 +166,30 @@ async fn fetch_connections_by_platform_identity(
         updated_at: naive_now(),
     };
 
-    let pf: Proof = Proof {
+    let to: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Dotbit,
+        identity: identity.to_string(),
+        created_at: Some(created_at_naive),
+        display_name: Some(identity.to_string()),
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+    };
+
+    let hold: Hold2 = Hold2 {
         uuid: Uuid::new_v4(),
         source: DataSource::Dotbit,
-        record_id: Some(out_point.tx_hash),
+        transaction: Some(out_point.tx_hash),
+        id: out_point.index.to_string(),
         created_at: Some(created_at_naive),
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
     };
 
-    create_identity_to_identity_record(&db, &from, &to_identity, &pf).await?;
+    create_identity_to_identity_hold_record(&db, &from, &to, &hold).await?;
+
     return Ok(vec![Target::Identity(
         Platform::Ethereum,
         account_info.owner_key,
