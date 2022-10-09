@@ -13,7 +13,7 @@ mod tests;
 mod the_graph;
 mod types;
 
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::{Mutex, Arc}};
 
 use crate::{
     error::Error,
@@ -29,6 +29,11 @@ use log::{info, warn};
 
 pub(crate) use types::{DataFetcher, DataSource, Platform, Target, TargetProcessedList};
 
+lazy_static! {
+    /// Global processing queue to prevent duplicated query. i.e. multiple same request from frontend.
+    pub static ref FETCHING: Arc<Mutex<HashSet<Target>>> = Arc::new(Mutex::new(HashSet::new()));
+}
+
 /// Fetcher defines how to fetch data from upstream.
 #[async_trait]
 pub trait Fetcher {
@@ -40,8 +45,13 @@ pub trait Fetcher {
 }
 
 /// Find all available (platform, identity) in all `Upstream`s.
-/// Each `fetch_all` action will spawn 4 workers.
 pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
+    if FETCHING.lock().unwrap().contains(&initial_target) {
+        info!("{} is fetching. Skipped.", initial_target);
+        return Ok(());
+    }
+
+    FETCHING.lock().unwrap().insert(initial_target.clone());
     // queues of this session.
     let mut up_next = HashSet::from([initial_target.clone()]);
     let mut processed: HashSet<Target> = HashSet::new();
@@ -70,6 +80,7 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
         up_next = HashSet::from_iter(result.into_iter());
     }
 
+    FETCHING.lock().unwrap().remove(&initial_target);
     Ok(())
 }
 
