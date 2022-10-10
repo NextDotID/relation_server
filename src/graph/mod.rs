@@ -1,10 +1,11 @@
+pub mod arangopool;
 pub mod edge;
 pub mod pool;
 mod tests;
 pub mod vertex;
 use deadpool::managed::Pool;
-use tracing::debug;
 use std::collections::HashMap;
+use tracing::debug;
 
 use crate::{config::C, error::Error};
 use aragog::{AuthMode, DatabaseConnection, OperationOptions};
