@@ -1,9 +1,22 @@
 use crate::{config::C, error::Error};
 use aragog::{AuthMode, DatabaseAccess, DatabaseConnection, OperationOptions};
-use deadpool::managed::{Manager, Pool, RecycleError, RecycleResult};
-use std::ops::Deref;
-use std::sync::Arc;
+use deadpool::managed::{Manager, Object, Pool, PoolConfig, RecycleError, RecycleResult, Timeouts};
+use std::fmt;
+// use deadpool::Runtime;
+use serde::Deserialize;
+use std::ops::{Deref, DerefMut};
 use tracing::{debug, error};
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ArangoConfig {
+    /// ArangoDB Connection Params
+    /// See [Arangors Connection](arangors_lite::Connection::establish).
+    pub host: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub db: Option<String>,
+    pub schema_path: Option<String>,
+}
 
 pub struct ArangoConnectionManager {
     pub host: String,
@@ -13,101 +26,86 @@ pub struct ArangoConnectionManager {
     pub schema_path: String,
 }
 
-// #[derive(Clone)]
-pub struct ArcArangoConnection {
-    pub connection: Arc<dyn DatabaseAccess + Send + Sync + 'static>,
-}
+impl ArangoConnectionManager {
+    /// Creates a new [`ArangoConnectionManager`] with the given params.
+    pub fn new(host: &str, username: &str, password: &str, db: &str, schema_path: &str) -> Self {
+        Self {
+            host: host.to_string(),
+            username: username.to_string(),
+            password: password.to_string(),
+            db: db.to_string(),
+            schema_path: schema_path.to_string(),
+        }
+    }
 
-impl ArcArangoConnection {
-    pub fn connection(&self) -> &dyn DatabaseAccess {
-        self.connection.deref()
+    /// Creates a new [`ArangoConnectionManager`] with the given params.
+    pub fn from_config(config: ArangoConfig) -> Result<Self, Error> {
+        Ok(Self {
+            host: config
+                .host
+                .ok_or(Error::ArangoConfigError(ArangoConfigError::MissingUrl))?,
+            username: config
+                .username
+                .ok_or(Error::ArangoConfigError(ArangoConfigError::MissingUsername))?,
+            password: config
+                .password
+                .ok_or(Error::ArangoConfigError(ArangoConfigError::MissingPassword))?,
+            db: config
+                .db
+                .ok_or(Error::ArangoConfigError(ArangoConfigError::MissingDB))?,
+            schema_path: config.schema_path.ok_or(Error::ArangoConfigError(
+                ArangoConfigError::MissingSchemaPath,
+            ))?,
+        })
     }
 }
 
-// #[derive(Clone)]
-
-pub struct ConnectionPool {
-    // pub pool: Pool<ArcArangoConnection, Error>,
-    pub pool: Arc<Pool<ArcArangoConnection, Error>>,
-}
-
-impl ConnectionPool {
-    pub async fn db(&self) -> Result<&dyn DatabaseAccess, Error> {
-        let pool_status = &self.pool.status();
-        debug!(
-            "Connection pool status: max_size={}, size={}, available={}",
-            pool_status.max_size, pool_status.size, pool_status.available
-        );
-        let connection = &self.pool.get().await;
-        match connection {
-            Ok(conn) => Ok(conn.connection()),
-            Err(err) => Err(Error::PoolError(err.to_string())),
+impl Default for ArangoConfig {
+    fn default() -> Self {
+        Self {
+            host: None,
+            username: None,
+            password: None,
+            db: None,
+            schema_path: None,
         }
     }
 }
 
-#[async_trait::async_trait]
-impl Manager<ArcArangoConnection, Error> for ArangoConnectionManager {
-    /// Create a new instance of the connection
-    async fn create(&self) -> Result<ArcArangoConnection, Error> {
-        debug!("Create a new instance of the arangodb connection");
-        let connection = DatabaseConnection::builder()
-            .with_credentials(&C.db.host, &C.db.db, &C.db.username, &C.db.password)
-            .with_auth_mode(AuthMode::Basic)
-            .with_operation_options(OperationOptions::default())
-            .with_schema_path(&C.db.schema_path)
-            .build()
-            .await?;
-        let boxed_connection = ArcArangoConnection {
-            connection: Arc::new(connection),
-        };
-        Ok(boxed_connection)
-    }
+#[derive(Debug)]
+pub enum ArangoConfigError {
+    /// The `host` is invalid
+    InvalidHost(String, url::ParseError),
+    /// The `host` is `None`
+    MissingUrl,
+    /// The `username` is `None`
+    MissingUsername,
+    /// The `password` is None
+    MissingPassword,
+    /// The `db` is None
+    MissingDB,
+    /// The `schema_path` is None
+    MissingSchemaPath,
+}
 
-    /// Try to recycle a connection
-    async fn recycle(&self, conn: &mut ArcArangoConnection) -> RecycleResult<Error> {
-        match conn
-            .connection()
-            .database()
-            .aql_str::<i8>(r"RETURN 1")
-            .await
-        {
-            Ok(result) => match result {
-                _ if result[0] == 1 => {
-                    debug!("==arc_conn Recycle exist connection");
-                    Ok(()) // recycle
-                }
-                _ => {
-                    error!("==arc_conn Can not to recycle connection: arangodb response invalid");
-                    Err(RecycleError::Message(
-                        "==arc_conn Can not to recycle connection: arangodb response invalid"
-                            .to_string(),
-                    ))
-                }
-            },
-            Err(err) => {
-                error!("==arc_conn Can not to recycle connection: arangodb unreachable");
-                Err(RecycleError::Message(err.to_string()))
-            }
+impl fmt::Display for ArangoConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidHost(host, e) => write!(f, "InvalidHost: {} - Error: {}", host, e),
+            Self::MissingUrl => write!(f, "Missing URL"),
+            Self::MissingUsername => write!(f, "Missing username"),
+            Self::MissingPassword => write!(f, "Missing password"),
+            Self::MissingDB => write!(f, "Missing db"),
+            Self::MissingSchemaPath => write!(f, "Missing schema_path"),
         }
     }
 }
 
-/// Create connection pool for arangodb
-pub async fn new_connection_pool() -> ConnectionPool {
-    let max_pool_size = 24;
-    let connection_pool = Pool::new(
-        ArangoConnectionManager {
-            host: C.db.host.to_string(),
-            username: C.db.username.to_string(),
-            password: C.db.password.to_string(),
-            db: C.db.db.to_string(),
-            schema_path: C.db.schema_path.to_string(),
-        },
-        max_pool_size,
-    );
-    debug!("Creating connection pool(db={})", &C.db.db);
-    ConnectionPool {
-        pool: Arc::new(connection_pool),
+impl std::error::Error for ArangoConfigError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidHost(_, e) => Some(e),
+            _ => None,
+        }
     }
 }
