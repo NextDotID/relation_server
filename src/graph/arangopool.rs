@@ -94,6 +94,54 @@ pub type ConnectionPool = Pool<ArangoConnectionManager>;
 //     }
 // }
 
+#[async_trait::async_trait]
+impl Manager for ArangoConnectionManager {
+    type Type = DatabaseConnection;
+    type Error = Error;
+    /// Create a new instance of the connection
+    async fn create(&self) -> Result<Self::Type, Self::Error> {
+        debug!("==newtry Create a new instance of the arangodb connection");
+        let connection = DatabaseConnection::builder()
+            .with_credentials(&C.db.host, &C.db.db, &C.db.username, &C.db.password)
+            .with_auth_mode(AuthMode::Basic)
+            .with_operation_options(OperationOptions::default())
+            .with_schema_path(&C.db.schema_path)
+            .build()
+            .await?;
+        Ok(connection)
+    }
+
+    /// Try to recycle a connection
+    async fn recycle(&self, conn: &mut DatabaseConnection) -> RecycleResult<Error> {
+        let check = conn.check_database(&self.db).await;
+        match check {
+            Ok(_) => match conn.database().aql_str::<i8>(r"RETURN 1").await {
+                Ok(result) => match result {
+                    _ if result[0] == 1 => {
+                        debug!("==newtry Recycle exist connection");
+                        Ok(()) // recycle
+                    }
+                    _ => {
+                        error!("==newtry Can not to recycle connection: arangodb response invalid");
+                        Err(RecycleError::Message(
+                            "Can not to recycle connection: arangodb response invalid".to_string(),
+                        ))
+                    }
+                },
+
+                Err(err) => {
+                    error!("==newtry Can not to recycle connection: arangodb ping unsuccessful)");
+                    Err(RecycleError::Message(err.to_string()))
+                }
+            },
+            Err(err) => {
+                error!("==newtry Can not to recycle connection: arangodb unreachable");
+                Err(RecycleError::Message(err.to_string()))
+            }
+        }
+    }
+}
+
 impl Default for ArangoConfig {
     fn default() -> Self {
         Self {
