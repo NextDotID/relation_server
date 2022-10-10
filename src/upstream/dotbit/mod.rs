@@ -10,9 +10,7 @@ use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use async_trait::async_trait;
 use hyper::{Body, Method, Request};
 use serde::{Deserialize, Serialize};
-use std::process::id;
-use std::str::FromStr;
-use tracing::{error, info};
+use tracing::error;
 use uuid::Uuid;
 
 pub struct DotBit {}
@@ -177,7 +175,7 @@ pub struct ReverseResponse {
 }
 
 async fn fetch_connections_by_platform_identity(
-    platform: &Platform,
+    _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
     if platform == &Platform::Dotbit {
