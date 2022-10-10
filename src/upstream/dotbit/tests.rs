@@ -19,3 +19,15 @@ async fn test_smoke_dotbit_by_dotbit_identity() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_smoke_dotbit_reverse_record() -> Result<(), Error> {
+    let target = Target::Identity(
+        Platform::Ethereum,
+        "0x9176acd39a3a9ae99dcb3922757f8af4f94cdf3c".into(),
+    );
+
+    DotBit::fetch(&target).await?;
+
+    Ok(())
+}

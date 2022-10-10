@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use hyper::{Body, Method, Request};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
+use std::process::id;
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -37,16 +38,16 @@ impl Fetcher for DotBit {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct RequestParams {
+pub struct AccInfoRequestParams {
     pub account: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct DotbitRequest {
+pub struct AccInfoRequest {
     pub jsonrpc: String,
     pub id: i32,
     pub method: String,
-    pub params: Vec<RequestParams>,
+    pub params: Vec<AccInfoRequestParams>,
 }
 
 /**
@@ -87,23 +88,92 @@ pub struct AccountInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Data {
+pub struct AccountInfoData {
     pub out_point: Option<OutPoint>,
     pub account_info: Option<AccountInfo>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct DotbitResult {
+pub struct AccountInfoResult {
     pub errno: Option<i32>,
     pub errmsg: String,
-    pub data: Option<Data>,
+    pub data: Option<AccountInfoData>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct DotbitResponse {
+pub struct AccountInfoResponse {
     pub id: Option<i32>,
     pub jsonrpc: String,
-    pub result: DotbitResult,
+    pub result: AccountInfoResult,
+}
+/**
+ * {
+    "jsonrpc":"2.0",
+    "id":1,
+    "method":"das_reverseRecord",
+    "params":[
+        {
+            "type":"blockchain",
+            "key_info":{
+                "coin_type":"60",
+                "chain_id":"1",
+                "key":"0x9176acd39a3a9ae99dcb3922757f8af4f94cdf3c"
+            }
+        }
+    ]
+}
+{
+    "id":1,
+    "jsonrpc":"2.0",
+    "result":{
+        "errno":0,
+        "errmsg":"",
+        "data":{
+            "account":"XXX.bit",
+            "account_alias":"XXX.bit"
+        }
+    }
+}
+*/
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RequestKeyInfo {
+    pub coin_type: String,
+    pub chain_id: String,
+    pub key: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReverseRecordRequestParams {
+    #[serde(rename = "type")]
+    pub req_type: String,
+    pub key_info: RequestKeyInfo,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReverseRecordRequest {
+    pub jsonrpc: String,
+    pub id: i32,
+    pub method: String,
+    pub params: Vec<ReverseRecordRequestParams>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReverseData {
+    pub account: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReverseResult {
+    pub errno: Option<i32>,
+    pub errmsg: String,
+    pub data: Option<ReverseData>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReverseResponse {
+    pub id: Option<i32>,
+    pub jsonrpc: String,
+    pub result: ReverseResult,
 }
 
 async fn fetch_connections_by_platform_identity(
@@ -113,7 +183,7 @@ async fn fetch_connections_by_platform_identity(
     if platform == &Platform::Dotbit {
         return fetch_connections_by_account_info(platform, identity).await;
     } else {
-        return Ok(vec![]);
+        return fetch_reverse_record_by_addrs(platform, identity).await;
     }
 }
 
@@ -121,10 +191,10 @@ async fn fetch_connections_by_account_info(
     platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
-    let request_acc = RequestParams {
+    let request_acc = AccInfoRequestParams {
         account: identity.to_string(),
     };
-    let params = DotbitRequest {
+    let params = AccInfoRequest {
         jsonrpc: "2.0".to_string(),
         id: 1,
         method: "das_accountInfo".to_string(),
@@ -141,7 +211,7 @@ async fn fetch_connections_by_account_info(
 
     let mut result = client.request(req).await?;
 
-    let resp: DotbitResponse = parse_body(&mut result).await?;
+    let resp: AccountInfoResponse = parse_body(&mut result).await?;
     if resp.result.errno.unwrap() != 0 {
         error!("fail to fetch the result from .bit, resp {:?}", resp);
         return Err(Error::NoResult);
@@ -194,4 +264,83 @@ async fn fetch_connections_by_account_info(
         Platform::Ethereum,
         account_info.owner_key,
     )]);
+}
+
+async fn fetch_reverse_record_by_addrs(
+    platform: &Platform,
+    identity: &str,
+) -> Result<TargetProcessedList, Error> {
+    let req_key_info: RequestKeyInfo = RequestKeyInfo {
+        coin_type: "60".to_string(),
+        chain_id: "1".to_string(),
+        key: identity.to_string(),
+    };
+    let request_params = ReverseRecordRequestParams {
+        req_type: "blockchain".to_string(),
+        key_info: req_key_info,
+    };
+    let params = ReverseRecordRequest {
+        jsonrpc: "2.0".to_string(),
+        id: 1,
+        method: "das_reverseRecord".to_string(),
+        params: vec![request_params],
+    };
+    let json_params = serde_json::to_vec(&params)?;
+
+    let client = make_client();
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri(C.upstream.dotbit_service.url.clone())
+        .body(Body::from(json_params))
+        .expect("request builder");
+
+    let mut result = client.request(req).await?;
+
+    let resp: ReverseResponse = parse_body(&mut result).await?;
+    if resp.result.errno.unwrap() != 0 {
+        error!("fail to fetch the result from .bit, resp {:?}", resp);
+        return Err(Error::NoResult);
+    }
+    println!("resp {:?}", resp);
+    let result_data = resp.result.data.unwrap();
+
+    // add to db
+    let db = new_db_connection().await?;
+
+    let from: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Ethereum,
+        identity: identity.to_string(),
+        created_at: None,
+        display_name: None,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+    };
+
+    let to: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Dotbit,
+        identity: result_data.account.clone(),
+        created_at: None,
+        display_name: Some(result_data.account),
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+    };
+
+    let hold: Hold2 = Hold2 {
+        uuid: Uuid::new_v4(),
+        source: DataSource::Dotbit,
+        transaction: None,
+        id: "".to_string(),
+        created_at: None,
+        updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
+    };
+
+    create_identity_to_identity_hold_record(&db, &from, &to, &hold).await?;
+    return Ok(vec![]);
 }
