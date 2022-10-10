@@ -11,7 +11,7 @@ use aragog::{
 use arangors_lite::AqlQuery;
 use chrono::{Duration, NaiveDateTime};
 use dataloader::BatchFn;
-use log::debug;
+use tracing::debug;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, value::Value};
 use std::collections::HashMap;

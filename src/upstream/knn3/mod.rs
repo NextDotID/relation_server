@@ -14,7 +14,7 @@ use crate::{
 
 use async_trait::async_trait;
 use gql_client::Client;
-use log::{info, warn};
+use tracing::{info, warn};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

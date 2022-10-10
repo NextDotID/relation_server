@@ -3,7 +3,7 @@ pub mod pool;
 mod tests;
 pub mod vertex;
 use deadpool::managed::Pool;
-use log::debug;
+use tracing::debug;
 use std::collections::HashMap;
 
 use crate::{config::C, error::Error};

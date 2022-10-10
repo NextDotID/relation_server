@@ -25,7 +25,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::future::join_all;
-use log::{info, warn};
+use tracing::{info, warn};
 
 pub(crate) use types::{DataFetcher, DataSource, Platform, Target, TargetProcessedList};
 

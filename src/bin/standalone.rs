@@ -5,9 +5,8 @@ use async_graphql::{
 };
 use async_graphql_warp::{GraphQLBadRequest, GraphQLResponse};
 use dataloader::non_cached::Loader;
-use env_logger::Env;
 use http::StatusCode;
-use log::{info, warn};
+use tracing::{info, warn, Level};
 use relation_server::{
     config::{self, C},
     controller::graphql::Query,
@@ -23,9 +22,10 @@ use warp::{http::Response as HttpResponse, Filter, Rejection};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::Builder::from_env(Env::default().default_filter_or("debug"))
-        .try_init()
-        .expect("Failed to initialize logger");
+    let log_subscriber = tracing_subscriber::FmtSubscriber::builder()
+        .with_max_level(Level::DEBUG).finish();
+    tracing::subscriber::set_global_default(log_subscriber).expect("Setting default subscriber failed");
+
     let middleware_cors = warp::cors()
         .allow_any_origin() // : maybe more strict CORS in production?
         .allow_methods(vec!["GET", "POST"])

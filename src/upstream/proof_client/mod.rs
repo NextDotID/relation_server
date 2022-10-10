@@ -10,7 +10,7 @@ use crate::upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 
 use async_trait::async_trait;
-use log::{debug, error, info};
+use tracing::{debug, error, info};
 use serde::Deserialize;
 use std::str::FromStr;
 use uuid::Uuid;

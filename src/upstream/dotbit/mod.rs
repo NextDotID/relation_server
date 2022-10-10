@@ -8,7 +8,7 @@ use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, Target
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use async_trait::async_trait;
 use hyper::{Body, Method, Request};
-use log::{error, info};
+use tracing::{error, info};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use uuid::Uuid;
