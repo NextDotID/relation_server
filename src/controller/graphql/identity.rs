@@ -7,8 +7,8 @@ use crate::upstream::{fetch_all, DataSource, Platform, Target};
 
 use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
-use tracing::info;
 use strum::IntoEnumIterator;
+use tracing::info;
 
 /// Status for a record in RelationService DB
 #[derive(Default, Copy, Clone, PartialEq, Eq, async_graphql::Enum)]

@@ -3,8 +3,8 @@ pub mod pool;
 mod tests;
 pub mod vertex;
 use deadpool::managed::Pool;
-use tracing::debug;
 use std::collections::HashMap;
+use tracing::debug;
 
 use crate::{config::C, error::Error};
 use aragog::{AuthMode, DatabaseConnection, OperationOptions};
@@ -18,7 +18,7 @@ use serde::Deserialize;
 pub use vertex::Vertex;
 
 use self::{
-    edge::{Hold, Hold2, HoldRecord, HoldRecord2, Proof},
+    edge::{Hold, HoldRecord, Proof},
     vertex::{Contract, ContractRecord, Identity, IdentityRecord},
 };
 
@@ -122,7 +122,7 @@ pub async fn create_identity_to_identity_hold_record(
     db: &DatabaseConnection,
     from: &Identity,
     to: &Identity,
-    hold: &Hold2,
+    hold: &Hold,
 ) -> Result<(), Error> {
     let from_record = from.create_or_update(db).await?;
     let to_record = to.create_or_update(db).await?;

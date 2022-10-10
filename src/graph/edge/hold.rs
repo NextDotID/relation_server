@@ -72,10 +72,10 @@ impl From<DatabaseRecord<EdgeRecord<Hold>>> for HoldRecord {
 
 impl Hold {
     /// Find a hold record by from, to and NFT_ID.
-    pub async fn find_by_from_to_id(
+    pub async fn find_by_from_to_id<T: Record + std::marker::Sync>(
         db: &DatabaseConnection,
         from: &DatabaseRecord<Identity>,
-        to: &DatabaseRecord<Contract>,
+        to: &DatabaseRecord<T>,
         id: &str,
     ) -> Result<Option<HoldRecord>, Error> {
         let filter = Filter::new(Comparison::field("_from").equals_str(from.id()))
@@ -145,10 +145,18 @@ impl Hold {
             Ok(Some(holds.first().unwrap().clone().into()))
         }
     }
+
+    pub fn is_outdated(&self) -> bool {
+        let outdated_in = Duration::hours(8);
+        self.updated_at
+            .checked_add_signed(outdated_in)
+            .unwrap()
+            .lt(&naive_now())
+    }
 }
 
 #[async_trait::async_trait]
-impl Edge<Identity, Contract, HoldRecord> for Hold {
+impl<T: Record + std::marker::Sync> Edge<Identity, T, HoldRecord> for Hold {
     /// Returns UUID of self.
     fn uuid(&self) -> Option<Uuid> {
         Some(self.uuid)
@@ -159,7 +167,7 @@ impl Edge<Identity, Contract, HoldRecord> for Hold {
         &self,
         db: &DatabaseConnection,
         from: &DatabaseRecord<Identity>,
-        to: &DatabaseRecord<Contract>,
+        to: &DatabaseRecord<T>,
     ) -> Result<HoldRecord, Error> {
         let found = Self::find_by_from_to_id(db, from, to, &self.id).await?;
         match found {
@@ -185,14 +193,6 @@ impl Edge<Identity, Contract, HoldRecord> for Hold {
         } else {
             Ok(Some(result.first().unwrap().to_owned().into()))
         }
-    }
-
-    fn is_outdated(&self) -> bool {
-        let outdated_in = Duration::hours(8);
-        self.updated_at
-            .checked_add_signed(outdated_in)
-            .unwrap()
-            .lt(&naive_now())
     }
 }
 

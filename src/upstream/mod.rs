@@ -13,7 +13,10 @@ mod tests;
 mod the_graph;
 mod types;
 
-use std::{collections::HashSet, sync::{Mutex, Arc}};
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     error::Error,

@@ -19,10 +19,10 @@ use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
 use dataloader::BatchFn;
 use http::StatusCode;
-use tracing::debug;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, json, value::Value};
 use std::collections::HashMap;
+use tracing::debug;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Record)]

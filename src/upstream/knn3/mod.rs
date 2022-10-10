@@ -14,8 +14,8 @@ use crate::{
 
 use async_trait::async_trait;
 use gql_client::Client;
-use tracing::{info, warn};
 use serde::{Deserialize, Serialize};
+use tracing::{info, warn};
 use uuid::Uuid;
 
 #[derive(Deserialize, Debug)]

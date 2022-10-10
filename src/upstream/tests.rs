@@ -5,8 +5,10 @@ use crate::upstream::{fetch_all, fetch_one, Platform, Target};
 
 fn init_log() {
     let log_subscriber = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(Level::DEBUG).finish();
-    tracing::subscriber::set_global_default(log_subscriber).expect("Setting default subscriber failed");
+        .with_max_level(Level::DEBUG)
+        .finish();
+    tracing::subscriber::set_global_default(log_subscriber)
+        .expect("Setting default subscriber failed");
 }
 
 #[tokio::test]

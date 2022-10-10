@@ -7,8 +7,8 @@ use lambda_http::{
     Body as LambdaBody, Error as LambdaError, IntoResponse, Request as LambdaRequest,
     Response as LambdaResponse,
 };
-use tracing::info;
 use std::future::Future;
+use tracing::info;
 
 /// Translate between `lambda_http` `Body` and our `Body`.
 async fn parse<F>(req: LambdaRequest, controller: fn(OurRequest) -> F) -> LambdaResponse<LambdaBody>

@@ -101,6 +101,14 @@ impl Resolve {
             Ok(Some(result.first().unwrap().clone().into()))
         }
     }
+
+    fn is_outdated(&self) -> bool {
+        let outdated_in = Duration::days(1);
+        self.updated_at
+            .checked_add_signed(outdated_in)
+            .unwrap()
+            .lt(&naive_now())
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -170,13 +178,5 @@ impl Edge<Contract, Identity, ResolveRecord> for Resolve {
         } else {
             Ok(Some(result.first().unwrap().to_owned().into()))
         }
-    }
-
-    fn is_outdated(&self) -> bool {
-        let outdated_in = Duration::days(1);
-        self.updated_at
-            .checked_add_signed(outdated_in)
-            .unwrap()
-            .lt(&naive_now())
     }
 }

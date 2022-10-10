@@ -11,9 +11,9 @@ use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use async_trait::async_trait;
 use futures::future::join_all;
-use tracing::{error, info};
 use serde::Deserialize;
 use std::str::FromStr;
+use tracing::{error, info};
 use uuid::Uuid;
 
 #[derive(Deserialize, Debug)]

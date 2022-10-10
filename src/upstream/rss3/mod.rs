@@ -16,9 +16,9 @@ use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime};
 use futures::future::join_all;
 use http::uri::InvalidUri;
-use tracing::{error, info};
 use serde::Deserialize;
 use std::str::FromStr;
+use tracing::{error, info};
 use uuid::Uuid;
 
 use super::DataFetcher;

@@ -13,8 +13,8 @@ use aragog::query::{Comparison, Filter, QueryResult};
 use aragog::{DatabaseConnection, DatabaseRecord, EdgeRecord, Record};
 use async_trait::async_trait;
 use http::StatusCode;
-use tracing::{debug, info};
 use serde::Deserialize;
+use tracing::{debug, info};
 
 use serde_json::{Map, Value};
 
