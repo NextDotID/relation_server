@@ -8,7 +8,7 @@ use crate::{
     util::{make_client, parse_body},
 };
 use async_trait::async_trait;
-use log::info;
+use tracing::info;
 use serde::Deserialize;
 
 use super::{Fetcher, Platform, Target, TargetProcessedList};

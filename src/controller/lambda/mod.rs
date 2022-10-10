@@ -7,7 +7,7 @@ use lambda_http::{
     Body as LambdaBody, Error as LambdaError, IntoResponse, Request as LambdaRequest,
     Response as LambdaResponse,
 };
-use log::info;
+use tracing::info;
 use std::future::Future;
 
 /// Translate between `lambda_http` `Body` and our `Body`.

@@ -20,7 +20,7 @@ use crate::{
 use aragog::DatabaseConnection;
 use async_trait::async_trait;
 use gql_client::Client;
-use log::{debug, info, warn};
+use tracing::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

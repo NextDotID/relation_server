@@ -7,7 +7,7 @@ use crate::upstream::{fetch_all, DataSource, Platform, Target};
 
 use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
-use log::info;
+use tracing::info;
 use strum::IntoEnumIterator;
 
 /// Status for a record in RelationService DB

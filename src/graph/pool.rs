@@ -1,7 +1,7 @@
 use crate::error::Error;
 use arangors_lite::Connection;
 use deadpool::managed::{Manager, RecycleError, RecycleResult};
-use log::{debug, error};
+use tracing::{debug, error};
 
 pub struct ConnectionManager {
     pub host: String,
