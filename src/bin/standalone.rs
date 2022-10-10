@@ -1,4 +1,3 @@
-use aragog::{AuthMode, DatabaseConnection, OperationOptions};
 use async_graphql::{
     http::{playground_source, GraphQLPlaygroundConfig},
     EmptyMutation, EmptySubscription, Schema,
@@ -10,12 +9,12 @@ use relation_server::{
     config::{self, C},
     controller::graphql::Query,
     error::Result,
-    graph::new_connection_pool,
-    graph::new_raw_db_connection,
+    graph::arangopool::new_connection_pool,
     graph::vertex::contract::ContractLoadFn,
     graph::vertex::FromToLoadFn,
     graph::vertex::IdentityLoadFn,
 };
+// use aragog::{AuthMode, DatabaseConnection, OperationOptions};
 use std::{convert::Infallible, net::SocketAddr};
 use tracing::{info, warn};
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
@@ -41,16 +40,17 @@ async fn main() -> Result<()> {
         .allow_headers(vec!["Accept", "Content-Type", "Length"]);
 
     // TODO: Not sure reuse of this connection instance will cause data race.
-    let db = DatabaseConnection::builder()
-        .with_credentials(&C.db.host, &C.db.db, &C.db.username, &C.db.password)
-        .with_auth_mode(AuthMode::Basic)
-        .with_operation_options(OperationOptions::default())
-        .with_schema_path(&C.db.schema_path)
-        .apply_schema() // Only apply database migration here.
-        .build()
-        .await?;
-    let raw_db = new_raw_db_connection().await?;
-    let pool = new_connection_pool().await;
+    // let db = DatabaseConnection::builder()
+    //     .with_credentials(&C.db.host, &C.db.db, &C.db.username, &C.db.password)
+    //     .with_auth_mode(AuthMode::Basic)
+    //     .with_operation_options(OperationOptions::default())
+    //     .with_schema_path(&C.db.schema_path)
+    //     .apply_schema() // Only apply database migration here.
+    //     .build()
+    //     .await?;
+
+    // Runtime::Tokio1
+    let pool = new_connection_pool().await?;
     let contract_loader_fn = ContractLoadFn {
         pool: pool.to_owned(),
     };
@@ -72,8 +72,6 @@ async fn main() -> Result<()> {
         .with_yield_count(10);
 
     let schema = Schema::build(Query::default(), EmptyMutation, EmptySubscription)
-        .data(db)
-        .data(raw_db)
         .data(pool)
         .data(contract_loader)
         .data(identity_loader)

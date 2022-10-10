@@ -6,16 +6,16 @@ use crate::{
 };
 use aragog::{
     query::{Comparison, Filter},
-    DatabaseConnection, DatabaseRecord, Record,
+    AqlQuery, DatabaseAccess, DatabaseConnection, DatabaseRecord, Record,
 };
-use arangors_lite::AqlQuery;
+// use arangors_lite::AqlQuery;
 use chrono::{Duration, NaiveDateTime};
 use dataloader::BatchFn;
-use tracing::debug;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, value::Value};
 use std::collections::HashMap;
 use strum_macros::{Display, EnumIter, EnumString};
+use tracing::debug;
 use uuid::Uuid;
 
 /// List of chains supported by RelationService.
@@ -309,7 +309,12 @@ async fn get_contracts(
     pool: &ConnectionPool,
     ids: Vec<String>,
 ) -> Result<HashMap<String, Option<ContractRecord>>, Error> {
-    let db = pool.db().await?;
+    // let db = pool.db().await?;
+    let conn = pool
+        .get()
+        .await
+        .map_err(|err| Error::PoolError(err.to_string()))?;
+    let db = conn.database();
     let nft_ids: Vec<Value> = ids.iter().map(|field| json!(field.to_string())).collect();
 
     let aql = r###"WITH @@edge_collection_name
@@ -481,7 +486,7 @@ impl From<DatabaseRecord<Contract>> for ContractRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::new_connection_pool;
+    use crate::graph::arangopool::new_connection_pool;
     use crate::graph::new_db_connection;
     use fake::{Dummy, Fake, Faker};
 
@@ -526,7 +531,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_contracts_hashmap() -> Result<(), Error> {
-        let pool = new_connection_pool().await;
+        let pool = new_connection_pool().await?;
         let ids = vec![
             String::from("2NOea6D9n8T8fQf464L"),
             String::from("lJTcEp2"),

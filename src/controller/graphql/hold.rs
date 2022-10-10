@@ -1,4 +1,5 @@
 use crate::{
+    controller::graphql::show_pool_status,
     error::{Error, Result},
     graph::{
         edge::{Edge, Hold, HoldRecord},
@@ -149,7 +150,8 @@ impl HoldQuery {
         )]
         address: Option<String>,
     ) -> Result<Option<HoldRecord>> {
-        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
+        show_pool_status(pool.status());
         let contract_address = address
             .or(category.default_contract_address())
             .ok_or(Error::GraphQLError("Contract address is required.".into()))?;
