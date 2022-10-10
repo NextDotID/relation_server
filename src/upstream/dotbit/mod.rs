@@ -8,9 +8,8 @@ use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, Target
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use async_trait::async_trait;
 use hyper::{Body, Method, Request};
-use tracing::{error, info};
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use tracing::error;
 use uuid::Uuid;
 
 pub struct DotBit {}
@@ -106,7 +105,7 @@ pub struct DotbitResponse {
 }
 
 async fn fetch_connections_by_platform_identity(
-    platform: &Platform,
+    _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
     let request_acc = RequestParams {

@@ -1,5 +1,3 @@
-use tracing::info;
-
 use crate::{
     error::Error,
     graph::new_db_connection,

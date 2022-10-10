@@ -68,9 +68,9 @@ pub enum Platform {
     Dotbit,
 
     /// DNS
-    #[strum(serialize = "lens")]
-    #[serde(rename = "lens")]
-    #[graphql(name = "lens")]
+    #[strum(serialize = "dns")]
+    #[serde(rename = "dns")]
+    #[graphql(name = "dns")]
     DNS,
 
     /// Minds
