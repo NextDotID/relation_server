@@ -178,10 +178,10 @@ async fn fetch_connections_by_platform_identity(
     _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
-    if platform == &Platform::Dotbit {
-        return fetch_connections_by_account_info(platform, identity).await;
+    if _platform == &Platform::Dotbit {
+        return fetch_connections_by_account_info(_platform, identity).await;
     } else {
-        return fetch_reverse_record_by_addrs(platform, identity).await;
+        return fetch_reverse_record_by_addrs(_platform, identity).await;
     }
 }
 
