@@ -6,7 +6,6 @@ use async_graphql::{
 use async_graphql_warp::{GraphQLBadRequest, GraphQLResponse};
 use dataloader::non_cached::Loader;
 use http::StatusCode;
-use tracing::{info, warn, Level};
 use relation_server::{
     config::{self, C},
     controller::graphql::Query,
@@ -18,13 +17,24 @@ use relation_server::{
     graph::vertex::IdentityLoadFn,
 };
 use std::{convert::Infallible, net::SocketAddr};
+use tracing::{info, warn};
+use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 use warp::{http::Response as HttpResponse, Filter, Rejection};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let log_subscriber = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(Level::DEBUG).finish();
-    tracing::subscriber::set_global_default(log_subscriber).expect("Setting default subscriber failed");
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env_lossy()
+                .add_directive("hyper=info".parse().unwrap()),
+        )
+        .finish();
+
+    // .with_max_level(Level::DEBUG).finish();
+    tracing::subscriber::set_global_default(log_subscriber)
+        .expect("Setting default subscriber failed");
 
     let middleware_cors = warp::cors()
         .allow_any_origin() // : maybe more strict CORS in production?
