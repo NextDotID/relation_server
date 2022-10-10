@@ -60,6 +60,40 @@ impl ArangoConnectionManager {
     }
 }
 
+pub struct ArangoConnection {
+    connection: Object<ArangoConnectionManager>,
+}
+
+impl ArangoConnection {
+    #[must_use]
+    pub fn take(this: Self) -> DatabaseConnection {
+        Object::take(this.connection)
+    }
+}
+
+pub type ConnectionPool = Pool<ArangoConnectionManager>;
+
+// pub struct ArangoConnectionPool {
+//     // pub pool: Pool<ArangoConnection, Error>,
+//     pub pool: Pool<ArangoConnectionManager>,
+// }
+
+// impl ArangoConnectionPool {
+//     pub async fn connection(&self) -> Result<DatabaseConnection, Error> {
+//         let pool_status = &self.pool.status();
+//         debug!(
+//             "==newtry Connection pool status: max_size={}, size={}, available={}",
+//             pool_status.max_size, pool_status.size, pool_status.available
+//         );
+//         let conn = self
+//             .pool
+//             .get()
+//             .await
+//             .map_err(|err| Error::PoolError(err.to_string()))?;
+//         Ok(Object::take(conn))
+//     }
+// }
+
 impl Default for ArangoConfig {
     fn default() -> Self {
         Self {
