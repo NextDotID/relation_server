@@ -32,7 +32,6 @@ async fn main() -> Result<()> {
         )
         .finish();
 
-    // .with_max_level(Level::DEBUG).finish();
     tracing::subscriber::set_global_default(log_subscriber)
         .expect("Setting default subscriber failed");
 

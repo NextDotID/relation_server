@@ -1,3 +1,5 @@
+use tracing::info;
+
 use crate::{
     error::Error,
     graph::new_db_connection,
@@ -16,6 +18,6 @@ async fn test_smoke_keybase() -> Result<(), Error> {
         .await?
         .expect("Record not found");
 
-    assert_eq!(found.updated_at.timestamp(), naive_now().timestamp());
+    assert!((found.updated_at.timestamp() - naive_now().timestamp()).abs() < 3);
     Ok(())
 }

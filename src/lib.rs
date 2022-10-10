@@ -8,3 +8,6 @@ pub mod graph;
 pub mod util;
 
 pub mod upstream;
+
+#[cfg(test)]
+mod tests;

@@ -63,3 +63,4 @@ gql_client = "1.0.4"
 fake = { version = "2.4", features = ["uuid", "chrono"] }
 rand = "0.8"
 insta = "0.16"
+ctor = "*"
