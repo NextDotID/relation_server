@@ -142,6 +142,65 @@ impl Manager for ArangoConnectionManager {
     }
 }
 
+/// Create connection pool for arangodb
+pub async fn new_connection_pool() -> Result<ConnectionPool, Error> {
+    let manager = ArangoConnectionManager {
+        host: C.db.host.to_string(),
+        username: C.db.username.to_string(),
+        password: C.db.password.to_string(),
+        db: C.db.db.to_string(),
+        schema_path: C.db.schema_path.to_string(),
+    };
+
+    let pool_config = PoolConfig {
+        max_size: 24,
+        timeouts: Timeouts::default(),
+    };
+
+    let pool = Pool::builder(manager)
+        .config(pool_config)
+        // .runtime(runtime)
+        .build()
+        .map_err(|err| Error::PoolError(err.to_string()));
+
+    match pool {
+        Ok(p) => Ok(p),
+        Err(err) => todo!(),
+    }
+}
+
+impl From<Object<ArangoConnectionManager>> for ArangoConnection {
+    fn from(connection: Object<ArangoConnectionManager>) -> Self {
+        Self { connection }
+    }
+}
+
+impl Deref for ArangoConnection {
+    type Target = DatabaseConnection;
+
+    fn deref(&self) -> &DatabaseConnection {
+        &self.connection
+    }
+}
+
+impl DerefMut for ArangoConnection {
+    fn deref_mut(&mut self) -> &mut DatabaseConnection {
+        &mut self.connection
+    }
+}
+
+impl AsRef<DatabaseConnection> for ArangoConnection {
+    fn as_ref(&self) -> &DatabaseConnection {
+        &self.connection
+    }
+}
+
+impl AsMut<DatabaseConnection> for ArangoConnection {
+    fn as_mut(&mut self) -> &mut DatabaseConnection {
+        &mut self.connection
+    }
+}
+
 impl Default for ArangoConfig {
     fn default() -> Self {
         Self {
