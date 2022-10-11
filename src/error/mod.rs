@@ -39,6 +39,8 @@ pub enum Error {
     GraphQLError(String),
     #[error("PoolError error: {0}")]
     PoolError(String),
+    #[error("ArangoConfigError error: {0}")]
+    ArangoConfigError(#[from] crate::graph::arangopool::ArangoConfigError),
 }
 
 impl Error {
@@ -61,6 +63,7 @@ impl Error {
             Error::UuidError(_) => StatusCode::BAD_REQUEST,
             Error::ArangoLiteDBError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::PoolError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::ArangoConfigError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

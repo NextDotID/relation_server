@@ -53,7 +53,7 @@ strum = "*"
 async-graphql = { version = "4", features = ["uuid", "chrono"] }
 async-graphql-warp = "*"
 dataloader = "0.14.0"
-deadpool = { version = "0.7.0", features = ["managed"] }
+deadpool = { version = "0.9.5", features = ["managed"] }
 num_cpus = "1.13.0"
 array_tool = "1.0.3"
 

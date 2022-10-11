@@ -11,7 +11,7 @@ use crate::{
 };
 use aragog::{
     query::{Comparison, Filter},
-    DatabaseConnection, DatabaseRecord, Record,
+    DatabaseAccess, DatabaseConnection, DatabaseRecord, Record,
 };
 use arangors_lite::AqlQuery;
 use array_tool::vec::Uniq;
@@ -131,7 +131,13 @@ impl Identity {
         platforms: &Vec<Platform>,
         identity: &str,
     ) -> Result<Vec<IdentityRecord>, Error> {
-        let db = pool.db().await?;
+        // let db = pool.db().await?;
+        let conn = pool
+            .get()
+            .await
+            .map_err(|err| Error::PoolError(err.to_string()))?;
+        let db = conn.database();
+
         let platform_array: Vec<Value> = platforms
             .into_iter()
             .map(|field| json!(field.to_string()))
@@ -155,7 +161,13 @@ impl Identity {
         pool: &ConnectionPool,
         display_name: String,
     ) -> Result<Option<IdentityRecord>, Error> {
-        let db = pool.db().await?;
+        // let db = pool.db().await?;
+        let conn = pool
+            .get()
+            .await
+            .map_err(|err| Error::PoolError(err.to_string()))?;
+        let db = conn.database();
+
         let aql = r"FOR v IN @@collection_name
         SEARCH ANALYZER(v.display_name IN TOKENS(@display_name, 'text_en'), 'text_en')
         RETURN v";
@@ -347,7 +359,13 @@ async fn get_identities(
     pool: &ConnectionPool,
     ids: Vec<String>,
 ) -> Result<HashMap<String, Option<IdentityRecord>>, Error> {
-    let db = pool.db().await?;
+    // let db = pool.db().await?;
+    let conn = pool
+        .get()
+        .await
+        .map_err(|err| Error::PoolError(err.to_string()))?;
+    let db = conn.database();
+
     let nft_ids: Vec<Value> = ids.iter().map(|field| json!(field.to_string())).collect();
 
     let aql = r###"WITH @@edge_collection_name
@@ -390,7 +408,13 @@ async fn get_from_to_record(
     pool: &ConnectionPool,
     ids: Vec<String>,
 ) -> Result<HashMap<String, Option<(IdentityRecord, IdentityRecord)>>, Error> {
-    let db = pool.db().await?;
+    // let db = pool.db().await?;
+    let conn = pool
+        .get()
+        .await
+        .map_err(|err| Error::PoolError(err.to_string()))?;
+    let db = conn.database();
+
     let proof_ids: Vec<Value> = ids.iter().map(|field| json!(field.to_string())).collect();
     let aql_str = r###"WITH @@edge_collection_name
     FOR d IN @@edge_collection_name
@@ -434,7 +458,13 @@ impl IdentityRecord {
         depth: u16,
         _source: Option<DataSource>,
     ) -> Result<Vec<IdentityWithSource>, Error> {
-        let db = pool.db().await?;
+        // let db = pool.db().await?;
+        let conn = pool
+            .get()
+            .await
+            .map_err(|err| Error::PoolError(err.to_string()))?;
+        let db = conn.database();
+
         let aql_str = r"
         WITH @@collection_name FOR d IN @@collection_name
           FILTER d._id == @id
@@ -495,7 +525,13 @@ impl IdentityRecord {
         &self,
         pool: &ConnectionPool,
     ) -> Result<Option<IdentityRecord>, Error> {
-        let db = pool.db().await?;
+        // let db = pool.db().await?;
+        let conn = pool
+            .get()
+            .await
+            .map_err(|err| Error::PoolError(err.to_string()))?;
+        let db = conn.database();
+
         let aql_str = r"
           WITH @@collection_name
             FOR d IN @@collection_name
@@ -530,7 +566,13 @@ impl IdentityRecord {
         source: Option<DataSource>,
     ) -> Result<Vec<ProofRecord>, Error> {
         // Using graph speed up FILTER
-        let db = pool.db().await?;
+        // let db = pool.db().await?;
+        let conn = pool
+            .get()
+            .await
+            .map_err(|err| Error::PoolError(err.to_string()))?;
+        let db = conn.database();
+
         let aql: AqlQuery;
         match source {
             None => {
@@ -587,7 +629,13 @@ impl IdentityRecord {
             return Ok(vec![]);
         }
 
-        let db = pool.db().await?;
+        // let db = pool.db().await?;
+        let conn = pool
+            .get()
+            .await
+            .map_err(|err| Error::PoolError(err.to_string()))?;
+        let db = conn.database();
+
         let aql_str = r"WITH @@edge_collection_name
             FOR d in @@edge_collection_name
             FILTER d._from == @id
@@ -615,8 +663,9 @@ mod tests {
     use super::{Identity, IdentityRecord};
     use crate::{
         error::Error,
+        graph::arangopool::new_connection_pool,
+        graph::new_db_connection,
         graph::{edge::Proof, Edge, Vertex},
-        graph::{new_connection_pool, new_db_connection},
         upstream::Platform,
         util::naive_now,
     };
@@ -746,7 +795,7 @@ mod tests {
         // let created = Identity::create_dummy(&db).await?;
         // println!("display_name={}", created.display_name);
         // let raw_db = new_raw_db_connection().await?;
-        let pool = new_connection_pool().await;
+        let pool = new_connection_pool().await?;
         let found = Identity::find_by_display_name(&pool, String::from("some created.display"))
             .await?
             .expect("Record not found");
@@ -756,7 +805,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_find_by_platforms_identity() -> Result<(), Error> {
-        let pool = new_connection_pool().await;
+        let pool = new_connection_pool().await?;
         let identities = Identity::find_by_platforms_identity(
             &pool,
             &vec![Platform::Ethereum, Platform::Twitter],
@@ -771,7 +820,7 @@ mod tests {
     #[tokio::test]
     async fn test_neighbors() -> Result<(), Error> {
         let db = new_db_connection().await?;
-        let pool = new_connection_pool().await;
+        let pool = new_connection_pool().await?;
         // ID2 <--Proof1-- ID1 --Proof2--> ID3
         let id1 = Identity::create_dummy(&db).await?;
         let id2 = Identity::create_dummy(&db).await?;
@@ -794,7 +843,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_neighbors_with_traversal() -> Result<(), Error> {
-        let pool = new_connection_pool().await;
+        let pool = new_connection_pool().await?;
         let found = Identity::find_by_display_name(&pool, String::from("Kc37j5zNLG5RLxbWGOz"))
             .await?
             .expect("Record not found");
@@ -821,7 +870,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_identities() -> Result<(), Error> {
-        let pool = new_connection_pool().await;
+        let pool = new_connection_pool().await?;
         let ids = vec![
             String::from("2NOea6D9n8T8fQf464L"),
             String::from("lJTcEp2"),

@@ -1,14 +1,16 @@
-use aragog::DatabaseConnection;
 use async_graphql::{Context, Object};
 use uuid::Uuid;
 
+use crate::controller::graphql::show_pool_status;
 use crate::error::{Error, Result};
 use crate::graph::edge::proof::ProofRecord;
 use crate::graph::edge::Proof;
 use crate::graph::vertex::{FromToLoadFn, IdentityRecord};
+use crate::graph::ConnectionPool;
 use crate::graph::Edge;
 use crate::upstream::DataFetcher;
 use dataloader::non_cached::Loader;
+use deadpool::managed::Object;
 
 #[Object]
 impl ProofRecord {
@@ -77,12 +79,21 @@ impl ProofQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "UUID of this proof")] uuid: Option<String>,
     ) -> Result<Option<ProofRecord>> {
-        let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        // let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
+        show_pool_status(pool.status());
+
+        let conn = pool
+            .get()
+            .await
+            .map_err(|err| Error::PoolError(err.to_string()))?;
+        let db = Object::take(conn);
+
         if uuid.is_none() {
             return Ok(None);
         }
         let uuid = Uuid::parse_str(&uuid.unwrap())?;
-        let found = Proof::find_by_uuid(db, &uuid).await?;
+        let found = Proof::find_by_uuid(&db, &uuid).await?;
 
         Ok(found)
     }

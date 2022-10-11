@@ -1,6 +1,6 @@
 use aragog::{
     query::{Comparison, Filter, QueryResult},
-    DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
+    DatabaseAccess, DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
 use arangors_lite::AqlQuery;
 use chrono::{Duration, NaiveDateTime};
@@ -122,7 +122,13 @@ impl Hold {
         chain: &Chain,
         address: &str,
     ) -> Result<Option<HoldRecord>, Error> {
-        let db = pool.db().await?;
+        // let db = pool.db().await?;
+        let conn = pool
+            .get()
+            .await
+            .map_err(|err| Error::PoolError(err.to_string()))?;
+        let db = conn.database();
+
         let aql_str = r"FOR c IN @@collection_name
             FILTER c.address == @address AND c.chain == @chain
             FOR vertex, edge IN 1..1 INBOUND c GRAPH @graph_name
