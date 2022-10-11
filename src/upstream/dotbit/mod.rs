@@ -178,12 +178,12 @@ pub struct ReverseResponse {
 }
 
 async fn fetch_connections_by_platform_identity(
-    _platform: &Platform,
+    platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
-    if _platform == &Platform::Dotbit {
+    if platform == &Platform::Dotbit {
         return fetch_connections_by_account_info(_platform, identity).await;
-    } else if _platform == &Platform::Ethereum {
+    } else if platform == &Platform::Ethereum {
         return fetch_reverse_record_by_addrs(_platform, identity).await;
     } else {
         Ok(vec![])
@@ -191,7 +191,7 @@ async fn fetch_connections_by_platform_identity(
 }
 
 async fn fetch_connections_by_account_info(
-    platform: &Platform,
+    _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
     let request_acc = AccInfoRequestParams {
@@ -270,7 +270,7 @@ async fn fetch_connections_by_account_info(
 }
 
 async fn fetch_reverse_record_by_addrs(
-    platform: &Platform,
+    _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
     let req_key_info: RequestKeyInfo = RequestKeyInfo {
