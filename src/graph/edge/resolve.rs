@@ -35,6 +35,12 @@ pub enum DomainNameSystem {
     #[graphql(name = "ENS")]
     ENS,
 
+    /// https://www.did.id/
+    #[strum(serialize = "dotbit")]
+    #[serde(rename = "dotbit")]
+    #[graphql(name = "dotbit")]
+    DotBit,
+
     #[default]
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
@@ -133,7 +139,7 @@ impl From<DatabaseRecord<EdgeRecord<Resolve>>> for ResolveRecord {
 }
 
 #[async_trait::async_trait]
-impl Edge<Contract, Identity, ResolveRecord> for Resolve {
+impl<T: Record + std::marker::Sync> Edge<T, Identity, ResolveRecord> for Resolve {
     fn uuid(&self) -> Option<Uuid> {
         Some(self.uuid)
     }
@@ -141,7 +147,7 @@ impl Edge<Contract, Identity, ResolveRecord> for Resolve {
     async fn connect(
         &self,
         db: &DatabaseConnection,
-        from: &DatabaseRecord<Contract>,
+        from: &DatabaseRecord<T>,
         to: &DatabaseRecord<Identity>,
     ) -> Result<ResolveRecord, Error> {
         let found = Self::find_by_name_system(db, &self.name, &self.system).await?;

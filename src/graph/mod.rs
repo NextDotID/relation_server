@@ -17,7 +17,7 @@ use serde::Deserialize;
 pub use vertex::Vertex;
 
 use self::{
-    edge::{Hold, HoldRecord, Proof},
+    edge::{Hold, HoldRecord, Proof, Resolve},
     vertex::{Contract, ContractRecord, Identity, IdentityRecord},
 };
 

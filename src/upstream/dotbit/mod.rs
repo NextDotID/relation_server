@@ -2,9 +2,12 @@
 mod tests;
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::edge::hold::Hold;
-use crate::graph::{create_identity_to_contract_record, create_identity_to_identity_hold_record};
-use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
+use crate::graph::create_identity_to_identity_hold_record;
+use crate::graph::edge::Edge;
+use crate::graph::edge::Resolve;
+use crate::graph::edge::{hold::Hold, resolve::DomainNameSystem};
+use crate::graph::vertex::Vertex;
+use crate::graph::{new_db_connection, vertex::Identity};
 use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use async_trait::async_trait;
@@ -180,8 +183,10 @@ async fn fetch_connections_by_platform_identity(
 ) -> Result<TargetProcessedList, Error> {
     if _platform == &Platform::Dotbit {
         return fetch_connections_by_account_info(_platform, identity).await;
-    } else {
+    } else if _platform == &Platform::Ethereum {
         return fetch_reverse_record_by_addrs(_platform, identity).await;
+    } else {
+        Ok(vec![])
     }
 }
 
@@ -299,46 +304,56 @@ async fn fetch_reverse_record_by_addrs(
         error!("fail to fetch the result from .bit, resp {:?}", resp);
         return Err(Error::NoResult);
     }
-    println!("resp {:?}", resp);
-    // let result_data = resp.result.data.unwrap();
 
-    // // add to db
-    // let db = new_db_connection().await?;
+    let result_data = resp.result.data.unwrap();
+    let db = new_db_connection().await?;
+    let eth_identity: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Ethereum,
+        identity: identity.to_string(),
+        created_at: None,
+        display_name: None,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+    };
 
-    // let from: Identity = Identity {
-    //     uuid: Some(Uuid::new_v4()),
-    //     platform: Platform::Ethereum,
-    //     identity: identity.to_string(),
-    //     created_at: None,
-    //     display_name: None,
-    //     added_at: naive_now(),
-    //     avatar_url: None,
-    //     profile_url: None,
-    //     updated_at: naive_now(),
-    // };
+    let dotbit_identity: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Dotbit,
+        identity: result_data.account.clone(),
+        created_at: None,
+        display_name: Some(result_data.account.clone()),
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+    };
 
-    // let to: Identity = Identity {
-    //     uuid: Some(Uuid::new_v4()),
-    //     platform: Platform::Dotbit,
-    //     identity: result_data.account.clone(),
-    //     created_at: None,
-    //     display_name: Some(result_data.account),
-    //     added_at: naive_now(),
-    //     avatar_url: None,
-    //     profile_url: None,
-    //     updated_at: naive_now(),
-    // };
+    let hold: Hold = Hold {
+        uuid: Uuid::new_v4(),
+        source: DataSource::Dotbit,
+        transaction: None,
+        id: "".to_string(),
+        created_at: None,
+        updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
+    };
 
-    // let hold: Hold2 = Hold2 {
-    //     uuid: Uuid::new_v4(),
-    //     source: DataSource::Dotbit,
-    //     transaction: None,
-    //     id: "".to_string(),
-    //     created_at: None,
-    //     updated_at: naive_now(),
-    //     fetcher: DataFetcher::RelationService,
-    // };
+    let eth_record = eth_identity.create_or_update(&db).await?;
+    let dotbit_record = dotbit_identity.create_or_update(&db).await?;
+    hold.connect(&db, &eth_record, &dotbit_record).await?;
 
-    // create_identity_to_identity_hold_record(&db, &from, &to, &hold).await?;
+    let resolve: Resolve = Resolve {
+        uuid: Uuid::new_v4(),
+        source: DataSource::Dotbit,
+        system: DomainNameSystem::DotBit,
+        name: result_data.account.clone(),
+        fetcher: DataFetcher::RelationService,
+        updated_at: naive_now(),
+    };
+    resolve.connect(&db, &dotbit_record, &eth_record).await?;
+
     return Ok(vec![]);
 }
