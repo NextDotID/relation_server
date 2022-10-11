@@ -181,12 +181,10 @@ async fn fetch_connections_by_platform_identity(
     platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
-    if platform == &Platform::Dotbit {
-        return fetch_connections_by_account_info(platform, identity).await;
-    } else if platform == &Platform::Ethereum {
-        return fetch_reverse_record_by_addrs(platform, identity).await;
-    } else {
-        Ok(vec![])
+    match *platform {
+        Platform::Dotbit => fetch_connections_by_account_info(platform, identity).await,
+        Platform::Ethereum => fetch_reverse_record_by_addrs(platform, identity).await,
+        _ => Ok(vec![]),
     }
 }
 
