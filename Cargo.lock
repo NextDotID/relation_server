@@ -45,7 +45,7 @@ dependencies = [
 [[package]]
 name = "aragog"
 version = "0.17.0"
-source = "git+https://github.com/nextdotid/aragog.git?branch=master#7bc1144b7dba9b5a9d73bafd737302b9986fe225"
+source = "git+https://github.com/nextdotid/aragog.git?branch=master#0756dab4bc93c18b7168f394b095307bf9408c31"
 dependencies = [
  "aragog-macros",
  "arangors_lite",
@@ -63,7 +63,7 @@ dependencies = [
 [[package]]
 name = "aragog-macros"
 version = "0.8.0"
-source = "git+https://github.com/nextdotid/aragog.git?branch=master#7bc1144b7dba9b5a9d73bafd737302b9986fe225"
+source = "git+https://github.com/nextdotid/aragog.git?branch=master#0756dab4bc93c18b7168f394b095307bf9408c31"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
