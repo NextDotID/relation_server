@@ -3,15 +3,12 @@ name: Build container
 on:
   push:
     branches:
-    - master
+    - main
     - develop
-    # DEBUG
-    - feature/build-image
 
 jobs:
   build-image:
-    # DEBUG
-    if: (github.ref_name == 'master' || github.ref_name == 'develop' || github.ref_name == 'feature/build-image') && github.repository == 'nextdotid/relation_server'
+    if: (github.ref_name == 'main' || github.ref_name == 'develop') && github.repository == 'nextdotid/relation_server'
     runs-on: ubuntu-latest
     env:
       REGISTRY: ghcr.io

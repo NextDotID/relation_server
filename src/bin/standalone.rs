@@ -39,15 +39,15 @@ async fn main() -> Result<()> {
         .allow_methods(vec!["GET", "POST"])
         .allow_headers(vec!["Accept", "Content-Type", "Length"]);
 
-    // TODO: Not sure reuse of this connection instance will cause data race.
-    // let db = DatabaseConnection::builder()
-    //     .with_credentials(&C.db.host, &C.db.db, &C.db.username, &C.db.password)
-    //     .with_auth_mode(AuthMode::Basic)
-    //     .with_operation_options(OperationOptions::default())
-    //     .with_schema_path(&C.db.schema_path)
-    //     .apply_schema() // Only apply database migration here.
-    //     .build()
-    //     .await?;
+    // Performing DB migration
+    let _db = aragog::DatabaseConnection::builder()
+        .with_credentials(&C.db.host, &C.db.db, &C.db.username, &C.db.password)
+        .with_auth_mode(aragog::AuthMode::Basic)
+        .with_operation_options(aragog::OperationOptions::default())
+        .with_schema_path(&C.db.schema_path)
+        .apply_schema() // Only apply database migration here.
+        .build()
+        .await?;
 
     // Runtime::Tokio1
     let pool = new_connection_pool().await?;
