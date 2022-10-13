@@ -5,11 +5,9 @@
 set dotenv-load
 set export
 
-arch := `uname -m`
-
 # Start peripherals of this server
 peri:
-	docker-compose up -d arangodb_{{arch}}
+	docker-compose up -d arangodb
 
 # Development environment preparation.
 prepare: peri
