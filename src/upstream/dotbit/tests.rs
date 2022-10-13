@@ -23,21 +23,36 @@ async fn test_smoke_dotbit_by_dotbit_identity() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_smoke_dotbit_reverse_record() -> Result<(), Error> {
-    
     //0x9176acd39a3a9ae99dcb3922757f8af4f94cdf3c => justing.bit
+    //0x4271B15dCa69f8C1c942c64028dBd3B84c5D03B0 => test0920.bit
     let target = Target::Identity(
         Platform::Ethereum,
-        "0x3a6cab3323833f53754db4202f5741756c436ede".into(),
+        "0x4271B15dCa69f8C1c942c64028dBd3B84c5D03B0".into(),
+    );
+    assert_eq!(DotBit::fetch(&target).await.is_err(), true);
+
+    let target2 = Target::Identity(
+        Platform::Ethereum,
+        "0X9176ACD39A3A9AE99DCB3922757F8AF4F94CDF3C".into(),
+    );
+    DotBit::fetch(&target2).await?;
+    let db = new_db_connection().await?;
+
+    assert_eq!(
+        Identity::find_by_platform_identity(&db, &target2.platform()?, &target2.identity()?,)
+            .await?
+            .is_none(),
+        true
     );
 
-    DotBit::fetch(&target).await?;
+    Identity::find_by_platform_identity(
+        &db,
+        &target2.platform()?,
+        &target2.identity()?.to_ascii_lowercase(),
+    )
+    .await?
+    .expect("Record not found");
 
-    let db = new_db_connection().await?;
-   
-    Identity::find_by_platform_identity(&db, &target.platform()?, &target.identity()?)
-            .await?
-            .expect("Record not found");
-    
     Identity::find_by_platform_identity(&db, &Platform::Dotbit, "justing.bit")
         .await?
         .expect("Record not found");

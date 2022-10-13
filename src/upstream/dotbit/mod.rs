@@ -200,7 +200,7 @@ async fn fetch_connections_by_account_info(
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
-        identity: account_info.owner_key.clone(),
+        identity: account_info.owner_key.to_lowercase().clone(),
         created_at: Some(created_at_naive),
         display_name: None,
         added_at: naive_now(),
@@ -268,13 +268,16 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
         warn!("fail to fetch the result from .bit, resp {:?}", resp);
         return Err(Error::NoResult);
     }
+    if resp.result.data.is_none() || resp.result.data.as_ref().unwrap().account.len() == 0 {
+        return Err(Error::NoResult);
+    }
 
     let result_data = resp.result.data.unwrap();
     let db = new_db_connection().await?;
     let eth_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
-        identity: identity.to_string(),
+        identity: identity.to_string().to_lowercase(),
         created_at: None,
         display_name: None,
         added_at: naive_now(),
@@ -358,7 +361,7 @@ async fn fetch_account_list_by_addrs(
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
-        identity: identity.to_string().clone(),
+        identity: identity.to_string().to_lowercase().clone(),
         created_at: None,
         display_name: None,
         added_at: naive_now(),
@@ -403,7 +406,7 @@ fn get_req_params_by_platform(_platform: &Platform, identity: &str) -> RequestTy
     let req_key_info: RequestKeyInfo = RequestKeyInfo {
         coin_type: "60".to_string(),
         chain_id: "1".to_string(),
-        key: identity.to_string(),
+        key: identity.to_string().to_lowercase(),
     };
     return RequestTypeKeyInfoParams {
         req_type: "blockchain".to_string(),
