@@ -149,6 +149,8 @@ pub struct AccountListResponse {
     pub result: AccountListResult,
 }
 
+const UNKNOWN_OWNER: &str = "0x0000000000000000000000000000000000000000";
+
 async fn fetch_connections_by_platform_identity(
     platform: &Platform,
     identity: &str,
@@ -192,6 +194,14 @@ async fn fetch_connections_by_account_info(
     let info = resp.result.data.unwrap();
     let account_info = info.account_info.unwrap();
     let out_point = info.out_point.unwrap();
+
+    // tricky way to remove the unexpected case...
+    // will be removed after confirmied with .bit team how to define its a .bit NFT on Ethereum
+    // https://talk.did.id/t/convert-your-bit-to-nft-on-ethereum-now/481
+    if account_info.owner_key == UNKNOWN_OWNER {
+        warn!(".bit profile owner is zero address");
+        return Err(Error::NoResult);
+    }
 
     // add to db
     let db = new_db_connection().await?;
