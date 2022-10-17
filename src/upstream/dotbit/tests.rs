@@ -23,8 +23,8 @@ async fn test_smoke_dotbit_by_dotbit_identity() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_smoke_dotbit_reverse_record() -> Result<(), Error> {
-    //0x9176acd39a3a9ae99dcb3922757f8af4f94cdf3c => justing.bit
-    //0x4271B15dCa69f8C1c942c64028dBd3B84c5D03B0 => test0920.bit
+    //0x9176acd39a3a9ae99dcb3922757f8af4f94cdf3c holds justing.bit, resolve => "justing.bit"
+    //0x4271B15dCa69f8C1c942c64028dBd3B84c5D03B0 holds test0920.bit, resolve => ""
     let target = Target::Identity(
         Platform::Ethereum,
         "0x4271B15dCa69f8C1c942c64028dBd3B84c5D03B0".into(),
@@ -39,12 +39,11 @@ async fn test_smoke_dotbit_reverse_record() -> Result<(), Error> {
     let db = new_db_connection().await?;
 
     assert_eq!(
-        Identity::find_by_platform_identity(&db, &target2.platform()?, &target2.identity()?,)
+        Identity::find_by_platform_identity(&db, &target2.platform()?, &target2.identity()?)
             .await?
             .is_none(),
         true
     );
-
     Identity::find_by_platform_identity(
         &db,
         &target2.platform()?,
