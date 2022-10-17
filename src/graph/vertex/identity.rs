@@ -2,16 +2,19 @@ use crate::{
     error::Error,
     graph::ConnectionPool,
     graph::{
-        edge::{Hold, HoldRecord, Proof, ProofRecord},
+        edge::{
+            EdgeType, Hold, HoldRecord, JsonValueRecord, Proof, ProofRecord, Resolve, ResolveRecord,
+        },
         vertex::vec_string_to_vec_datasource,
         vertex::Vertex,
+        Edge,
     },
     upstream::{DataSource, Platform},
     util::naive_now,
 };
 use aragog::{
     query::{Comparison, Filter},
-    DatabaseAccess, DatabaseConnection, DatabaseRecord, Record,
+    DatabaseAccess, DatabaseConnection, DatabaseRecord, EdgeRecord, Record,
 };
 use arangors_lite::AqlQuery;
 use array_tool::vec::Uniq;
@@ -22,8 +25,10 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, json, value::Value};
 use std::collections::HashMap;
-use tracing::debug;
+use tracing::{debug, info};
 use uuid::Uuid;
+
+use super::Neighbor;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Record)]
 #[collection_name = "Identities"]
@@ -539,9 +544,7 @@ impl IdentityRecord {
         &self,
         pool: &ConnectionPool,
         depth: u16,
-        _source: Option<DataSource>,
     ) -> Result<Vec<IdentityWithSource>, Error> {
-        // let db = pool.db().await?;
         let conn = pool
             .get()
             .await
@@ -554,12 +557,11 @@ impl IdentityRecord {
           LIMIT 1
           FOR vertex, edge, path
             IN 1..@depth
-            ANY d GRAPH @graph_name
+            ANY d Proofs, Holds
             RETURN path";
 
         let aql = AqlQuery::new(aql_str)
             .bind_var("@collection_name", Identity::COLLECTION_NAME)
-            .bind_var("graph_name", "identities_proofs_graph")
             .bind_var("id", self.id().as_str())
             .bind_var("depth", depth)
             .batch_size(1)
@@ -569,16 +571,30 @@ impl IdentityRecord {
         let mut identity_map: HashMap<String, IdentityRecord> = HashMap::new();
         let mut sources_map: HashMap<String, Vec<String>> = HashMap::new();
         for p in resp {
-            let path: Path = from_value(p)?;
+            // let path: Vec<Value> = from_value(p)?;
+            // debug!("Path Value: {:?}", p);
+            let vertices: Vec<Value> = from_value(p["vertices"].to_owned())?;
+            let edges: Vec<EdgeRecord<Value>> = from_value(p["edges"].to_owned())?;
+            let mut identities: Vec<IdentityRecord> = Vec::new();
+            for v in vertices {
+                if let Ok(i) = from_value(v) {
+                    identities.push(i);
+                }
+            }
 
-            let last = path.vertices.last().unwrap().to_owned();
-            let last_edge = path.edges.last().unwrap().to_owned();
+            let last = identities.last().unwrap().to_owned();
+            let last_edge = edges.last().unwrap().to_owned();
             let key = last.id().to_string();
+            let last_e_data = serde_json::to_value(last_edge.data)?;
+            let source = last_e_data["source"]
+                .as_str()
+                .unwrap_or(&DataSource::Unknown.to_string())
+                .to_string();
             identity_map.entry(key.clone()).or_insert(last);
             sources_map
                 .entry(key.clone())
                 .or_insert_with(|| Vec::new())
-                .push(last_edge.source.to_string());
+                .push(source);
         }
 
         let mut identity_sources: Vec<IdentityWithSource> = Vec::new();
@@ -603,7 +619,7 @@ impl IdentityRecord {
         Ok(identity_sources)
     }
 
-    // Return lens owned by wallet address.
+    /// Return lens owned by wallet address.
     pub async fn lens_owned_by(
         &self,
         pool: &ConnectionPool,
@@ -646,8 +662,7 @@ impl IdentityRecord {
         &self,
         pool: &ConnectionPool,
         depth: u16,
-        source: Option<DataSource>,
-    ) -> Result<Vec<ProofRecord>, Error> {
+    ) -> Result<Vec<JsonValueRecord>, Error> {
         // Using graph speed up FILTER
         // let db = pool.db().await?;
         let conn = pool
@@ -656,57 +671,65 @@ impl IdentityRecord {
             .map_err(|err| Error::PoolError(err.to_string()))?;
         let db = conn.database();
 
-        let aql: AqlQuery;
-        match source {
-            None => {
-                let aql_str = r"
+        let aql_str = r"
                 WITH @@collection_name FOR d IN @@collection_name
                   FILTER d._id == @id
                   LIMIT 1
                   FOR vertex, edge, path
                     IN 1..@depth
-                    ANY d GRAPH @graph_name
+                    ANY d Proofs, Holds
                     RETURN DISTINCT edge";
 
-                aql = AqlQuery::new(aql_str)
-                    .bind_var("@collection_name", Identity::COLLECTION_NAME)
-                    .bind_var("graph_name", "identities_proofs_graph")
-                    .bind_var("id", self.id().as_str())
-                    .bind_var("depth", depth)
-                    .batch_size(1)
-                    .count(false);
-            }
-            Some(source) => {
-                let aql_str = r"
-                WITH @@collection_name FOR d IN @@collection_name
-                  FILTER d._id == @id
-                  LIMIT 1
-                  FOR vertex, edge, path
-                    IN 1..@depth
-                    ANY d GRAPH @graph_name
-                    FILTER path.edges[*].`source` ALL == @source
-                    RETURN edge";
+        let aql = AqlQuery::new(aql_str)
+            .bind_var("@collection_name", Identity::COLLECTION_NAME)
+            .bind_var("id", self.id().as_str())
+            .bind_var("depth", depth)
+            .batch_size(1)
+            .count(false);
 
-                aql = AqlQuery::new(aql_str)
-                    .bind_var("@collection_name", Identity::COLLECTION_NAME)
-                    .bind_var("graph_name", "identities_proofs_graph")
-                    .bind_var("id", self.id().as_str())
-                    .bind_var("depth", depth)
-                    .bind_var("source", source.to_string().as_str())
-                    .batch_size(1)
-                    .count(false);
-            }
-        }
         let resp: Vec<Value> = db.aql_query(aql).await?;
-        let mut paths: Vec<ProofRecord> = Vec::new();
+        let mut edges: Vec<JsonValueRecord> = Vec::new();
         for p in resp {
-            let p: ProofRecord = from_value(p)?;
-            paths.push(p)
+            let _id = p["_id"].as_str().unwrap_or("").to_string();
+            let _from = p["_from"].as_str().unwrap_or("").to_string();
+            let _to = p["_to"].as_str().unwrap_or("").to_string();
+
+            if _id.contains("Proofs") {
+                if _from.contains("Identities") && _to.contains("Identities") {
+                    edges.push(JsonValueRecord {
+                        record_type: String::from("ProofRecord"),
+                        record: p.to_owned(),
+                    })
+                }
+            } else if _id.contains("Hold") {
+                if _from.contains("Identities") && _to.contains("Identities") {
+                    edges.push(JsonValueRecord {
+                        record_type: String::from("HoldRecord"),
+                        record: p.to_owned(),
+                    })
+                }
+            }
+
+            /*
+                if let Ok(i) = from_value::<DatabaseRecord<EdgeRecord<Proof>>>(p.to_owned()) {
+                    edges.push(JsonValueRecord {
+                        record_type: String::from("ProofRecord"),
+                        record: p.to_owned(),
+                    })
+                } else if let Ok(i) = from_value::<DatabaseRecord<EdgeRecord<Hold>>>(p.to_owned()) {
+                    if i.to_collection_name().eq(Identity::COLLECTION_NAME) {
+                        edges.push(JsonValueRecord {
+                            record_type: String::from("HoldRecord"),
+                            record: p.to_owned(),
+                        })
+                    }
+                }
+            */
         }
-        Ok(paths)
+        Ok(edges)
     }
 
-    /// Returns all Contracts owned by this identity. Empty list if `self.platform != Ethereum`.
+    // Returns all Contracts owned by this identity. Empty list if `self.platform != Ethereum`.
     pub async fn nfts(&self, pool: &ConnectionPool) -> Result<Vec<HoldRecord>, Error> {
         if self.0.record.platform != Platform::Ethereum {
             return Ok(vec![]);
@@ -737,7 +760,7 @@ impl IdentityRecord {
 #[cfg(test)]
 mod tests {
 
-    use crate::graph::vertex::identity::get_identities;
+    use crate::graph::vertex::{identity::get_identities, IdentityWithSource, Neighbor};
     use aragog::DatabaseConnection;
     use fake::{Dummy, Fake, Faker};
     use tokio::join;
@@ -916,7 +939,7 @@ mod tests {
         proof1_raw.connect(&db, &id1, &id2).await?;
         proof2_raw.connect(&db, &id1, &id3).await?;
         proof3_raw.connect(&db, &id2, &id4).await?;
-        let neighbors = id1.neighbors(&pool, 2, None).await?;
+        let neighbors: Vec<IdentityWithSource> = id1.neighbors(&pool, 2).await?;
         assert_eq!(3, neighbors.len());
         // assert!(neighbors
         //     .iter()
@@ -924,20 +947,17 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_neighbors_with_traversal() -> Result<(), Error> {
-        let pool = new_connection_pool().await?;
-        let found = Identity::find_by_display_name(&pool, String::from("Kc37j5zNLG5RLxbWGOz"))
-            .await?
-            .expect("Record not found");
-        println!("{:#?}", found);
-        let neighbors = found
-            .neighbors_with_traversal(&pool, 3, None)
-            .await
-            .unwrap();
-        println!("{:#?}", neighbors);
-        Ok(())
-    }
+    // #[tokio::test]
+    // async fn test_neighbors_with_traversal() -> Result<(), Error> {
+    //     let pool = new_connection_pool().await?;
+    //     let found = Identity::find_by_display_name(&pool, String::from("Kc37j5zNLG5RLxbWGOz"))
+    //         .await?
+    //         .expect("Record not found");
+    //     println!("{:#?}", found);
+    //     let neighbors = found.neighbors_with_traversal(&pool, 3).await.unwrap();
+    //     println!("{:#?}", neighbors);
+    //     Ok(())
+    // }
 
     #[tokio::test]
     async fn test_string_to_platfrom() -> Result<(), Error> {
