@@ -13,6 +13,8 @@ use crate::{
     util::naive_now,
 };
 
+use super::EdgeType;
+
 pub const COLLECTION_NAME: &str = "Proofs";
 
 /// Edge to connect two `Identity`s.
@@ -119,7 +121,7 @@ impl Edge<Identity, Identity, ProofRecord> for Proof {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, Record)]
 pub struct ProofRecord(DatabaseRecord<EdgeRecord<Proof>>);
 
 impl std::ops::Deref for ProofRecord {
@@ -133,6 +135,17 @@ impl std::ops::Deref for ProofRecord {
 impl From<DatabaseRecord<EdgeRecord<Proof>>> for ProofRecord {
     fn from(record: DatabaseRecord<EdgeRecord<Proof>>) -> Self {
         ProofRecord(record)
+    }
+}
+
+#[async_trait::async_trait]
+impl EdgeType<ProofRecord> for ProofRecord {
+    fn record_type(&self) -> String {
+        String::from("Proof")
+    }
+
+    fn record(&self) -> &ProofRecord {
+        &self
     }
 }
 

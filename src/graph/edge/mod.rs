@@ -3,7 +3,7 @@ pub mod proof;
 pub mod resolve;
 // mod pubkey_derivation;
 
-pub use hold::{Hold, HoldRecord};
+pub use hold::{Hold, HoldRecord, JsonValueRecord};
 pub use proof::{Proof, ProofRecord};
 pub use resolve::{Resolve, ResolveRecord};
 
@@ -38,4 +38,14 @@ where
         db: &DatabaseConnection,
         uuid: &Uuid,
     ) -> Result<Option<RecordType>, Error>;
+}
+
+#[async_trait]
+pub trait EdgeType<RecordType>
+where
+    Self: Sized + Record,
+{
+    fn record_type(&self) -> String;
+
+    fn record(&self) -> &RecordType;
 }

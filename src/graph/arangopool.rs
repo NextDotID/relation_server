@@ -82,7 +82,7 @@ pub type ConnectionPool = Pool<ArangoConnectionManager>;
 //     pub async fn connection(&self) -> Result<DatabaseConnection, Error> {
 //         let pool_status = &self.pool.status();
 //         debug!(
-//             "==newtry Connection pool status: max_size={}, size={}, available={}",
+//             "Connection pool status: max_size={}, size={}, available={}",
 //             pool_status.max_size, pool_status.size, pool_status.available
 //         );
 //         let conn = self
@@ -100,7 +100,7 @@ impl Manager for ArangoConnectionManager {
     type Error = Error;
     /// Create a new instance of the connection
     async fn create(&self) -> Result<Self::Type, Self::Error> {
-        debug!("==newtry Create a new instance of the arangodb connection");
+        debug!("Create a new instance of the arangodb connection");
         let connection = DatabaseConnection::builder()
             .with_credentials(&C.db.host, &C.db.db, &C.db.username, &C.db.password)
             .with_auth_mode(AuthMode::Basic)
@@ -118,11 +118,11 @@ impl Manager for ArangoConnectionManager {
             Ok(_) => match conn.database().aql_str::<i8>(r"RETURN 1").await {
                 Ok(result) => match result {
                     _ if result[0] == 1 => {
-                        debug!("==newtry Recycle exist connection");
+                        debug!("Recycle exist connection");
                         Ok(()) // recycle
                     }
                     _ => {
-                        error!("==newtry Can not to recycle connection: arangodb response invalid");
+                        error!("Can not to recycle connection: arangodb response invalid");
                         Err(RecycleError::Message(
                             "Can not to recycle connection: arangodb response invalid".to_string(),
                         ))
@@ -130,12 +130,12 @@ impl Manager for ArangoConnectionManager {
                 },
 
                 Err(err) => {
-                    error!("==newtry Can not to recycle connection: arangodb ping unsuccessful)");
+                    error!("Can not to recycle connection: arangodb ping unsuccessful)");
                     Err(RecycleError::Message(err.to_string()))
                 }
             },
             Err(err) => {
-                error!("==newtry Can not to recycle connection: arangodb unreachable");
+                error!("Can not to recycle connection: arangodb unreachable");
                 Err(RecycleError::Message(err.to_string()))
             }
         }

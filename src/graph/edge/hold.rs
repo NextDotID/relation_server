@@ -5,19 +5,20 @@ use aragog::{
 use arangors_lite::AqlQuery;
 use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::{
     error::Error,
     graph::{
-        vertex::{contract::Chain, Contract, Identity},
+        vertex::{contract::Chain, Contract, Identity, IdentityRecord},
         ConnectionPool,
     },
     upstream::{DataFetcher, DataSource},
     util::naive_now,
 };
 
-use super::Edge;
+use super::{Edge, EdgeType};
 
 /// HODL™
 #[derive(Clone, Deserialize, Serialize, Record, Debug)]
@@ -47,8 +48,20 @@ pub struct Hold {
     pub fetcher: DataFetcher,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Record)]
 pub struct HoldRecord(DatabaseRecord<EdgeRecord<Hold>>);
+
+#[derive(Clone, Deserialize, Serialize)]
+pub struct JsonValueRecord {
+    pub record_type: String,
+    pub record: Value,
+}
+
+impl JsonValueRecord {
+    pub fn id(&self) -> String {
+        self.record["_id"].as_str().unwrap_or("").to_string()
+    }
+}
 
 impl std::ops::Deref for HoldRecord {
     type Target = DatabaseRecord<EdgeRecord<Hold>>;
@@ -158,6 +171,17 @@ impl Hold {
             .checked_add_signed(outdated_in)
             .unwrap()
             .lt(&naive_now())
+    }
+}
+
+#[async_trait::async_trait]
+impl EdgeType<HoldRecord> for HoldRecord {
+    fn record_type(&self) -> String {
+        String::from("Hold")
+    }
+
+    fn record(&self) -> &HoldRecord {
+        &self
     }
 }
 
