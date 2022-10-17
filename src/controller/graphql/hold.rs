@@ -1,8 +1,7 @@
 use crate::{
-    controller::graphql::show_pool_status,
     error::{Error, Result},
     graph::{
-        edge::{Edge, Hold, HoldRecord},
+        edge::{Hold, HoldRecord},
         vertex::{
             contract::{Chain, ContractCategory, ContractLoadFn, ContractRecord},
             IdentityLoadFn, IdentityRecord,
@@ -15,7 +14,7 @@ use async_graphql::{Context, Object};
 // use dataloader::cached::Loader;
 use dataloader::non_cached::Loader;
 use strum::IntoEnumIterator;
-use tracing::warn;
+use tracing::debug;
 use uuid::Uuid;
 
 #[Object]
@@ -152,7 +151,7 @@ impl HoldQuery {
         address: Option<String>,
     ) -> Result<Option<HoldRecord>> {
         let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
-        show_pool_status(pool.status());
+        debug!("Connection pool status: {:?}", pool.status());
         let contract_address = address
             .or(category.default_contract_address())
             .ok_or(Error::GraphQLError("Contract address is required.".into()))?;
