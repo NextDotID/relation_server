@@ -297,6 +297,15 @@ pub struct FromToRecord {
     pub to_v: IdentityRecord,
 }
 
+#[derive(Clone, Deserialize, Serialize, Default, Debug)]
+pub struct JsonFromToRecord {
+    /// ProofRecord _id
+    pub id: String,
+    /// Two vertices of proof
+    pub from_v: Value,
+    pub to_v: Value,
+}
+
 impl std::ops::Deref for IdentityRecord {
     type Target = DatabaseRecord<Identity>;
 
@@ -317,11 +326,85 @@ impl From<DatabaseRecord<Identity>> for IdentityRecord {
     }
 }
 
+pub struct JsonFromToLoadFn {
+    pub pool: ConnectionPool,
+}
+
+#[async_trait]
+impl BatchFn<String, Option<(Value, Value)>> for JsonFromToLoadFn {
+    async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<(Value, Value)>> {
+        debug!("Loading edges[id] for: {:?}", ids);
+        let records = json_from_to_record(&self.pool, ids.to_vec()).await;
+        match records {
+            Ok(records) => records,
+            // HOLD ON: Not sure if `Err` need to return
+            Err(_) => ids.iter().map(|k| (k.to_owned(), None)).collect(),
+        }
+    }
+}
+
+async fn json_from_to_record(
+    pool: &ConnectionPool,
+    ids: Vec<String>,
+) -> Result<HashMap<String, Option<(Value, Value)>>, Error> {
+    // let db = pool.db().await?;
+    let conn = pool
+        .get()
+        .await
+        .map_err(|err| Error::PoolError(err.to_string()))?;
+    let db = conn.database();
+
+    let proof_ids: Vec<Value> = ids.iter().map(|field| json!(field.to_string())).collect();
+    let aql_str = r###"
+        LET a = (FOR d IN @@proof_edge
+            FILTER d._id IN @multi_ids
+                FOR from_v IN @@collection_name FILTER from_v._id == d._from
+                FOR to_v IN @@collection_name FILTER to_v._id == d._to
+            RETURN {"id": d._id, "from_v": from_v, "to_v": to_v}
+        )
+        LET b = (FOR d IN @@hold_edge
+            FILTER d._id IN @multi_ids
+                FOR from_v IN @@collection_name FILTER from_v._id == d._from
+                FOR to_v IN @@collection_name FILTER to_v._id == d._to
+            RETURN {"id": d._id, "from_v": from_v, "to_v": to_v}
+        )
+        LET c = PUSH(a, b)
+        RETURN c[**]"###;
+
+    let aql = AqlQuery::new(aql_str)
+        .bind_var("@proof_edge", Proof::COLLECTION_NAME)
+        .bind_var("@hold_edge", Hold::COLLECTION_NAME)
+        .bind_var("@collection_name", Identity::COLLECTION_NAME)
+        .bind_var("multi_ids", proof_ids.clone())
+        .batch_size(1)
+        .count(false);
+
+    let edges = db.aql_query::<Vec<JsonFromToRecord>>(aql).await;
+    match edges {
+        Ok(contents) => {
+            let id_tuple_map = contents
+                .into_iter()
+                .flatten()
+                .map(|content| (content.id.clone(), Some((content.from_v, content.to_v))))
+                .collect();
+            let dataloader_map = ids.into_iter().fold(
+                id_tuple_map,
+                |mut map: HashMap<String, Option<(Value, Value)>>, id| {
+                    map.entry(id).or_insert(None);
+                    map
+                },
+            );
+            Ok(dataloader_map)
+        }
+        Err(e) => Err(Error::ArangoLiteDBError(e)),
+    }
+}
+
 pub struct FromToLoadFn {
     pub pool: ConnectionPool,
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl BatchFn<String, Option<(IdentityRecord, IdentityRecord)>> for FromToLoadFn {
     async fn load(
         &mut self,
@@ -341,7 +424,7 @@ pub struct IdentityLoadFn {
     pub pool: ConnectionPool,
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 impl BatchFn<String, Option<IdentityRecord>> for IdentityLoadFn {
     async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<IdentityRecord>> {
         debug!("Loading Identity for: {:?}", ids);

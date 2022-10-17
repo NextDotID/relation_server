@@ -1,8 +1,10 @@
 use crate::controller::graphql::show_pool_status;
 use crate::controller::vec_string_to_vec_platform;
 use crate::error::{Error, Result};
-use crate::graph::edge::{HoldRecord, ProofRecord};
-use crate::graph::vertex::{Identity, IdentityRecord, IdentityWithSource, Vertex};
+use crate::graph::edge::{HoldRecord, JsonValueRecord, ProofRecord};
+use crate::graph::vertex::{
+    Identity, IdentityRecord, IdentityWithSource, JsonFromToLoadFn, Neighbor, Vertex,
+};
 use crate::graph::ConnectionPool;
 use crate::upstream::{fetch_all, DataSource, Platform, Target};
 use async_graphql::{Context, Object};
@@ -37,6 +39,39 @@ impl IdentityWithSource {
 
     async fn identity(&self) -> IdentityRecord {
         self.identity.clone()
+    }
+}
+
+#[Object]
+impl JsonValueRecord {
+    async fn record_type(&self) -> String {
+        self.record_type.clone()
+    }
+    async fn record(&self) -> serde_json::Value {
+        self.record.clone()
+    }
+
+    async fn from(&self, ctx: &Context<'_>) -> Result<serde_json::Value> {
+        let loader: &Loader<
+            String,
+            Option<(serde_json::Value, serde_json::Value)>,
+            JsonFromToLoadFn,
+        > = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        match loader.load(self.id().to_string()).await {
+            Some(tuple) => Ok(tuple.0),
+            None => Err(Error::GraphQLError("record<From> no found.".to_string())),
+        }
+    }
+    async fn to(&self, ctx: &Context<'_>) -> Result<serde_json::Value> {
+        let loader: &Loader<
+            String,
+            Option<(serde_json::Value, serde_json::Value)>,
+            JsonFromToLoadFn,
+        > = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        match loader.load(self.id().to_string()).await {
+            Some(tuple) => Ok(tuple.1),
+            None => Err(Error::GraphQLError("record<To> no found.".to_string())),
+        }
     }
 }
 

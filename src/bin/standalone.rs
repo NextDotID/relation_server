@@ -13,6 +13,7 @@ use relation_server::{
     graph::vertex::contract::ContractLoadFn,
     graph::vertex::FromToLoadFn,
     graph::vertex::IdentityLoadFn,
+    graph::vertex::JsonFromToLoadFn,
 };
 // use aragog::{AuthMode, DatabaseConnection, OperationOptions};
 use std::{convert::Infallible, net::SocketAddr};
@@ -60,6 +61,9 @@ async fn main() -> Result<()> {
     let from_to_loader_fn = FromToLoadFn {
         pool: pool.to_owned(),
     };
+    let json_loader_fn = JsonFromToLoadFn {
+        pool: pool.to_owned(),
+    };
     // HOLD ON: Specify the batch size number
     let contract_loader = Loader::new(contract_loader_fn)
         .with_max_batch_size(100)
@@ -70,12 +74,15 @@ async fn main() -> Result<()> {
     let from_to_loader = Loader::new(from_to_loader_fn)
         .with_max_batch_size(100)
         .with_yield_count(10);
-
+    let json_loader = Loader::new(json_loader_fn)
+        .with_max_batch_size(100)
+        .with_yield_count(10);
     let schema = Schema::build(Query::default(), EmptyMutation, EmptySubscription)
         .data(pool)
         .data(contract_loader)
         .data(identity_loader)
         .data(from_to_loader)
+        .data(json_loader)
         .finish();
 
     let graphql_post = async_graphql_warp::graphql(schema)
