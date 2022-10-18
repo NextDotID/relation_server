@@ -21,8 +21,9 @@ use std::{
 use crate::{
     error::Error,
     upstream::{
-        aggregation::Aggregation, ens_reverse::ENSReverseLookup, keybase::Keybase, knn3::Knn3,
-        proof_client::ProofClient, rss3::Rss3, sybil_list::SybilList, the_graph::TheGraph,
+        aggregation::Aggregation, dotbit::DotBit, ens_reverse::ENSReverseLookup, keybase::Keybase,
+        knn3::Knn3, proof_client::ProofClient, rss3::Rss3, sybil_list::SybilList,
+        the_graph::TheGraph,
     },
     util::hashset_append,
 };
@@ -99,6 +100,7 @@ pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
         Knn3::fetch(target),
         TheGraph::fetch(target),
         ENSReverseLookup::fetch(target),
+        DotBit::fetch(target),
     ])
     .await
     .into_iter()
