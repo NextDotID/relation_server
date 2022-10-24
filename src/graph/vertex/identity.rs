@@ -3,7 +3,9 @@ use crate::{
     graph::ConnectionPool,
     graph::{
         edge::{Hold, HoldRecord, Proof, ProofRecord},
+        vertex::contract::Chain,
         vertex::vec_string_to_vec_datasource,
+        vertex::Contract,
         vertex::Vertex,
     },
     upstream::{DataSource, Platform},
@@ -18,12 +20,15 @@ use array_tool::vec::Uniq;
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
 use dataloader::BatchFn;
+use deadpool::managed::Object;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, json, value::Value};
 use std::collections::HashMap;
 use tracing::debug;
 use uuid::Uuid;
+
+use super::contract::ContractCategory;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Record)]
 #[collection_name = "Identities"]
@@ -59,9 +64,9 @@ pub struct Identity {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Path {
+pub struct Path<T> {
     pub vertices: Vec<IdentityRecord>,
-    pub edges: Vec<ProofRecord>,
+    pub edges: Vec<T>,
 }
 
 impl Default for Identity {
@@ -463,20 +468,47 @@ impl IdentityRecord {
             .get()
             .await
             .map_err(|err| Error::PoolError(err.to_string()))?;
-        let db = conn.database();
+        let db_conn = Object::take(conn);
+        let db = db_conn.database();
 
-        let aql_str = r"
+        let mut contract_ids: Vec<Value> = Vec::new();
+        // FIXME: Temporarily filter between different identity connections
+        match Contract::find_by_chain_address(
+            &db_conn,
+            &Chain::Ethereum,
+            "0x60eb332bd4a0e2a9eeb3212cfdd6ef03ce4cb3b5",
+        )
+        .await?
+        {
+            Some(dotbit_contract) => contract_ids.push(json!(dotbit_contract.id().clone())),
+            None => (),
+        };
+        match Contract::find_by_chain_address(
+            &db_conn,
+            &Chain::Ethereum,
+            ContractCategory::ENS
+                .default_contract_address()
+                .unwrap()
+                .as_str(),
+        )
+        .await?
+        {
+            Some(ens_contract) => contract_ids.push(json!(ens_contract.id().clone())),
+            None => (),
+        };
+
+        let aql_str = r###"
         WITH @@collection_name FOR d IN @@collection_name
-          FILTER d._id == @id
-          LIMIT 1
-          FOR vertex, edge, path
-            IN 1..@depth
-            ANY d GRAPH @graph_name
-            RETURN path";
-
+            FILTER d._id == @id
+            LIMIT 1
+            FOR vertex, edge, path
+                IN 1..@depth ANY d Proofs, Holds
+                FILTER path.edges[*]._to None IN @contract_ids
+                RETURN {"vertices": path.vertices[* FILTER CONTAINS(CURRENT._id, "Identities")], "edges": path.edges}
+        "###;
         let aql = AqlQuery::new(aql_str)
             .bind_var("@collection_name", Identity::COLLECTION_NAME)
-            .bind_var("graph_name", "identities_proofs_graph")
+            .bind_var("contract_ids", contract_ids)
             .bind_var("id", self.id().as_str())
             .bind_var("depth", depth)
             .batch_size(1)
@@ -486,16 +518,17 @@ impl IdentityRecord {
         let mut identity_map: HashMap<String, IdentityRecord> = HashMap::new();
         let mut sources_map: HashMap<String, Vec<String>> = HashMap::new();
         for p in resp {
-            let path: Path = from_value(p)?;
+            let path: Path<ProofRecord> = from_value(p)?;
 
             let last = path.vertices.last().unwrap().to_owned();
-            let last_edge = path.edges.last().unwrap().to_owned();
             let key = last.id().to_string();
             identity_map.entry(key.clone()).or_insert(last);
-            sources_map
-                .entry(key.clone())
-                .or_insert_with(|| Vec::new())
-                .push(last_edge.source.to_string());
+            for e in &path.edges {
+                sources_map
+                    .entry(key.clone())
+                    .or_insert_with(|| Vec::new())
+                    .push(e.source.to_string());
+            }
         }
 
         let mut identity_sources: Vec<IdentityWithSource> = Vec::new();
@@ -646,7 +679,13 @@ impl IdentityRecord {
             .batch_size(1)
             .count(false);
 
-        let result = db.aql_query::<HoldRecord>(aql).await?;
+        let result = db
+            .aql_query::<HoldRecord>(aql)
+            .await?
+            .into_iter()
+            .filter(|x| x.id_to().contains("Contracts"))
+            .collect();
+
         Ok(result)
     }
 }
