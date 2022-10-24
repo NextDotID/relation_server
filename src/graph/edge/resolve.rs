@@ -360,4 +360,13 @@ mod tests {
         print!("result: {:?}", a);
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_find_by_dotbit_name() -> Result<(), Error> {
+        let pool = new_connection_pool().await?;
+        let name = "thefuzezhong.bit";
+        let a = Resolve::find_by_dotbit_name(&pool, &name).await?;
+        print!("result: {:?}", a);
+        Ok(())
+    }
 }
