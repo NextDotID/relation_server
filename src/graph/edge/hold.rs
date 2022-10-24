@@ -47,7 +47,7 @@ pub struct Hold {
     pub fetcher: DataFetcher,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct HoldRecord(DatabaseRecord<EdgeRecord<Hold>>);
 
 impl std::ops::Deref for HoldRecord {

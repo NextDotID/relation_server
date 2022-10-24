@@ -1,7 +1,3 @@
-use async_graphql::{Context, Object};
-use uuid::Uuid;
-
-use crate::controller::graphql::show_pool_status;
 use crate::error::{Error, Result};
 use crate::graph::edge::proof::ProofRecord;
 use crate::graph::edge::Proof;
@@ -9,8 +5,11 @@ use crate::graph::vertex::{FromToLoadFn, IdentityRecord};
 use crate::graph::ConnectionPool;
 use crate::graph::Edge;
 use crate::upstream::DataFetcher;
+use async_graphql::{Context, Object};
 use dataloader::non_cached::Loader;
 use deadpool::managed::Object;
+use tracing::debug;
+use uuid::Uuid;
 
 #[Object]
 impl ProofRecord {
@@ -81,7 +80,7 @@ impl ProofQuery {
     ) -> Result<Option<ProofRecord>> {
         // let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
-        show_pool_status(pool.status());
+        debug!("Connection pool status: {:?}", pool.status());
 
         let conn = pool
             .get()
