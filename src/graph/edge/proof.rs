@@ -136,6 +136,37 @@ impl From<DatabaseRecord<EdgeRecord<Proof>>> for ProofRecord {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct IdentityFromToRecord {
+    /// The Document unique and indexed `_key`
+    #[serde(rename = "_key")]
+    key: String,
+    /// The Document unique and indexed `_id`
+    #[serde(rename = "_id")]
+    id: String,
+    /// The Document revision `_rev`
+    #[serde(rename = "_rev")]
+    rev: String,
+    /// The `_from` field of `ArangoDB` edge documents
+    #[serde(rename(serialize = "_from", deserialize = "_from"))]
+    from: String,
+    /// The `to` field of `ArangoDB` edge documents
+    #[serde(rename(serialize = "_to", deserialize = "_to"))]
+    to: String,
+
+    pub uuid: Uuid,
+    pub source: DataSource,
+    pub created_at: Option<NaiveDateTime>,
+    pub updated_at: NaiveDateTime,
+    pub fetcher: DataFetcher,
+}
+
+impl IdentityFromToRecord {
+    pub fn id(&self) -> &String {
+        &self.id
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{graph::new_db_connection, util::naive_now};

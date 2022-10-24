@@ -1,6 +1,6 @@
 use crate::controller::vec_string_to_vec_platform;
 use crate::error::{Error, Result};
-use crate::graph::edge::{HoldRecord, ProofRecord};
+use crate::graph::edge::{HoldRecord, IdentityFromToRecord};
 use crate::graph::vertex::{Identity, IdentityRecord, IdentityWithSource, Vertex};
 use crate::graph::ConnectionPool;
 use crate::upstream::{fetch_all, DataSource, Platform, Target};
@@ -142,10 +142,10 @@ impl IdentityRecord {
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
-    ) -> Result<Vec<ProofRecord>> {
+    ) -> Result<Vec<IdentityFromToRecord>> {
         let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
         debug!("Connection pool status: {:?}", pool.status());
-        self.neighbors_with_traversal(pool, depth.unwrap_or(1), None)
+        self.neighbors_with_traversal(pool, depth.unwrap_or(1))
             .await
     }
 

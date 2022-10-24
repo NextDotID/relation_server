@@ -2,7 +2,7 @@ use crate::{
     error::Error,
     graph::ConnectionPool,
     graph::{
-        edge::{Hold, HoldRecord, Proof, ProofRecord},
+        edge::{Hold, HoldRecord, IdentityFromToRecord, Proof, ProofRecord},
         vertex::contract::Chain,
         vertex::vec_string_to_vec_datasource,
         vertex::Contract,
@@ -332,7 +332,7 @@ impl BatchFn<String, Option<(IdentityRecord, IdentityRecord)>> for FromToLoadFn 
         &mut self,
         ids: &[String],
     ) -> HashMap<String, Option<(IdentityRecord, IdentityRecord)>> {
-        debug!("Loading proof for: {:?}", ids);
+        debug!("Loading edge_id for: {:?}", ids);
         let records = get_from_to_record(&self.pool, ids.to_vec()).await;
         match records {
             Ok(records) => records,
@@ -420,26 +420,50 @@ async fn get_from_to_record(
         .map_err(|err| Error::PoolError(err.to_string()))?;
     let db = conn.database();
 
-    let proof_ids: Vec<Value> = ids.iter().map(|field| json!(field.to_string())).collect();
-    let aql_str = r###"WITH @@edge_collection_name
-    FOR d IN @@edge_collection_name
-        FILTER d._id IN @proof_ids
-            FOR from_v IN @@collection_name FILTER from_v._id == d._from
-            FOR to_v IN @@collection_name FILTER to_v._id == d._to
-        RETURN {"id": d._id, "from_v": from_v, "to_v": to_v}"###;
+    let multi_ids: Vec<Value> = ids.iter().map(|field| json!(field.to_string())).collect();
+    // let aql_str = r###"WITH @@edge_collection_name
+    // FOR d IN @@edge_collection_name
+    //     FILTER d._id IN @multi_ids
+    //         FOR from_v IN @@collection_name FILTER from_v._id == d._from
+    //         FOR to_v IN @@collection_name FILTER to_v._id == d._to
+    //     RETURN {"id": d._id, "from_v": from_v, "to_v": to_v}"###;
+    // let aql = AqlQuery::new(aql_str)
+    //     .bind_var("@edge_collection_name", Proof::COLLECTION_NAME)
+    //     .bind_var("@collection_name", Identity::COLLECTION_NAME)
+    //     .bind_var("multi_ids", multi_ids.clone())
+    //     .batch_size(1)
+    //     .count(false);
+
+    let aql_str = r###"
+        LET a = (FOR d IN @@proof_edge
+            FILTER d._id IN @multi_ids
+                FOR from_v IN @@collection_name FILTER from_v._id == d._from
+                FOR to_v IN @@collection_name FILTER to_v._id == d._to
+            RETURN {"id": d._id, "from_v": from_v, "to_v": to_v}
+        )
+        LET b = (FOR d IN @@hold_edge
+            FILTER d._id IN @multi_ids
+                FOR from_v IN @@collection_name FILTER from_v._id == d._from
+                FOR to_v IN @@collection_name FILTER to_v._id == d._to
+            RETURN {"id": d._id, "from_v": from_v, "to_v": to_v}
+        )
+        LET c = PUSH(a, b)
+        RETURN c[**]"###;
 
     let aql = AqlQuery::new(aql_str)
-        .bind_var("@edge_collection_name", Proof::COLLECTION_NAME)
+        .bind_var("@proof_edge", Proof::COLLECTION_NAME)
+        .bind_var("@hold_edge", Hold::COLLECTION_NAME)
         .bind_var("@collection_name", Identity::COLLECTION_NAME)
-        .bind_var("proof_ids", proof_ids.clone())
+        .bind_var("multi_ids", multi_ids.clone())
         .batch_size(1)
         .count(false);
 
-    let edges = db.aql_query::<FromToRecord>(aql).await;
+    let edges = db.aql_query::<Vec<FromToRecord>>(aql).await;
     match edges {
         Ok(contents) => {
             let id_tuple_map = contents
                 .into_iter()
+                .flatten()
                 .map(|content| (content.id.clone(), Some((content.from_v, content.to_v))))
                 .collect();
             let dataloader_map = ids.into_iter().fold(
@@ -596,62 +620,68 @@ impl IdentityRecord {
         &self,
         pool: &ConnectionPool,
         depth: u16,
-        source: Option<DataSource>,
-    ) -> Result<Vec<ProofRecord>, Error> {
+    ) -> Result<Vec<IdentityFromToRecord>, Error> {
         // Using graph speed up FILTER
         // let db = pool.db().await?;
         let conn = pool
             .get()
             .await
             .map_err(|err| Error::PoolError(err.to_string()))?;
-        let db = conn.database();
+        let db_conn = Object::take(conn);
+        let db = db_conn.database();
 
-        let aql: AqlQuery;
-        match source {
-            None => {
-                let aql_str = r"
-                WITH @@collection_name FOR d IN @@collection_name
-                  FILTER d._id == @id
-                  LIMIT 1
-                  FOR vertex, edge, path
-                    IN 1..@depth
-                    ANY d GRAPH @graph_name
-                    RETURN DISTINCT edge";
+        // IdentityFromToRecord
 
-                aql = AqlQuery::new(aql_str)
-                    .bind_var("@collection_name", Identity::COLLECTION_NAME)
-                    .bind_var("graph_name", "identities_proofs_graph")
-                    .bind_var("id", self.id().as_str())
-                    .bind_var("depth", depth)
-                    .batch_size(1)
-                    .count(false);
-            }
-            Some(source) => {
-                let aql_str = r"
-                WITH @@collection_name FOR d IN @@collection_name
-                  FILTER d._id == @id
-                  LIMIT 1
-                  FOR vertex, edge, path
-                    IN 1..@depth
-                    ANY d GRAPH @graph_name
-                    FILTER path.edges[*].`source` ALL == @source
-                    RETURN edge";
+        let mut contract_ids: Vec<Value> = Vec::new();
+        // FIXME: Temporarily filter between different identity connections
+        match Contract::find_by_chain_address(
+            &db_conn,
+            &Chain::Ethereum,
+            "0x60eb332bd4a0e2a9eeb3212cfdd6ef03ce4cb3b5",
+        )
+        .await?
+        {
+            Some(dotbit_contract) => contract_ids.push(json!(dotbit_contract.id().clone())),
+            None => (),
+        };
+        match Contract::find_by_chain_address(
+            &db_conn,
+            &Chain::Ethereum,
+            ContractCategory::ENS
+                .default_contract_address()
+                .unwrap()
+                .as_str(),
+        )
+        .await?
+        {
+            Some(ens_contract) => contract_ids.push(json!(ens_contract.id().clone())),
+            None => (),
+        };
 
-                aql = AqlQuery::new(aql_str)
-                    .bind_var("@collection_name", Identity::COLLECTION_NAME)
-                    .bind_var("graph_name", "identities_proofs_graph")
-                    .bind_var("id", self.id().as_str())
-                    .bind_var("depth", depth)
-                    .bind_var("source", source.to_string().as_str())
-                    .batch_size(1)
-                    .count(false);
-            }
-        }
+        let aql_str = r###"
+        WITH @@collection_name FOR d IN @@collection_name
+            FILTER d._id == @id
+            LIMIT 1
+            FOR vertex, edge, path
+                IN 1..@depth ANY d Proofs, Holds
+                FILTER path.edges[*]._to None IN @contract_ids
+                FILTER CONTAINS(edge._from, "Identities") AND CONTAINS(edge._to, "Identities")
+                RETURN DISTINCT edge
+        "###;
+        let aql = AqlQuery::new(aql_str)
+            .bind_var("@collection_name", Identity::COLLECTION_NAME)
+            .bind_var("id", self.id().as_str())
+            .bind_var("contract_ids", contract_ids.clone())
+            .bind_var("depth", depth)
+            .batch_size(1)
+            .count(false);
+
         let resp: Vec<Value> = db.aql_query(aql).await?;
-        let mut paths: Vec<ProofRecord> = Vec::new();
+        let mut paths: Vec<IdentityFromToRecord> = Vec::new();
         for p in resp {
-            let p: ProofRecord = from_value(p)?;
-            paths.push(p)
+            let pp: IdentityFromToRecord = from_value(p)?;
+            // tracing::info!("IdentityFromToRecord from_{} to_{}", pp.from, pp.to);
+            paths.push(pp)
         }
         Ok(paths)
     }
@@ -704,7 +734,7 @@ mod tests {
         error::Error,
         graph::arangopool::new_connection_pool,
         graph::new_db_connection,
-        graph::{edge::Proof, Edge, Vertex},
+        graph::{edge::IdentityFromToRecord, edge::Proof, Edge, Vertex},
         upstream::Platform,
         util::naive_now,
     };
@@ -887,10 +917,8 @@ mod tests {
             .await?
             .expect("Record not found");
         println!("{:#?}", found);
-        let neighbors = found
-            .neighbors_with_traversal(&pool, 3, None)
-            .await
-            .unwrap();
+        let neighbors: Vec<IdentityFromToRecord> =
+            found.neighbors_with_traversal(&pool, 3).await.unwrap();
         println!("{:#?}", neighbors);
         Ok(())
     }
