@@ -52,6 +52,7 @@ impl EnsResolve {
         self.updated_at.timestamp()
     }
 
+    /// `resolved`: Find an Ethereum wallet using ENS name.
     async fn resolved(&self) -> Result<ContractRecord> {
         match self.resolved.clone() {
             None => Err(Error::GraphQLError("ENS resolved no found.".to_string())),
@@ -59,6 +60,7 @@ impl EnsResolve {
         }
     }
 
+    /// `owner`: Return ENS name owned by wallet address.
     async fn owner(&self) -> Result<IdentityRecord> {
         match self.owner.clone() {
             None => Err(Error::GraphQLError("ENS owner no found.".to_string())),
@@ -100,16 +102,18 @@ impl DotbitResolve {
         self.updated_at.timestamp()
     }
 
+    /// `resolved`: Find an Ethereum wallet using `.bit alias`.
     async fn resolved(&self) -> Result<IdentityRecord> {
         match self.resolved.clone() {
-            None => Err(Error::GraphQLError("ENS resolved no found.".to_string())),
+            None => Err(Error::GraphQLError(".bit resolved no found.".to_string())),
             Some(resolved) => Ok(resolved),
         }
     }
 
+    /// `owner`: Return `.bit alias` owned/managed by wallet address.
     async fn owner(&self) -> Result<IdentityRecord> {
         match self.owner.clone() {
-            None => Err(Error::GraphQLError("ENS owner no found.".to_string())),
+            None => Err(Error::GraphQLError(".bit owner no found.".to_string())),
             Some(owner) => Ok(owner),
         }
     }
