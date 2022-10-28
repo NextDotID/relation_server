@@ -421,18 +421,6 @@ async fn get_from_to_record(
     let db = conn.database();
 
     let multi_ids: Vec<Value> = ids.iter().map(|field| json!(field.to_string())).collect();
-    // let aql_str = r###"WITH @@edge_collection_name
-    // FOR d IN @@edge_collection_name
-    //     FILTER d._id IN @multi_ids
-    //         FOR from_v IN @@collection_name FILTER from_v._id == d._from
-    //         FOR to_v IN @@collection_name FILTER to_v._id == d._to
-    //     RETURN {"id": d._id, "from_v": from_v, "to_v": to_v}"###;
-    // let aql = AqlQuery::new(aql_str)
-    //     .bind_var("@edge_collection_name", Proof::COLLECTION_NAME)
-    //     .bind_var("@collection_name", Identity::COLLECTION_NAME)
-    //     .bind_var("multi_ids", multi_ids.clone())
-    //     .batch_size(1)
-    //     .count(false);
 
     let aql_str = r###"
         LET a = (FOR d IN @@proof_edge
@@ -629,8 +617,6 @@ impl IdentityRecord {
             .map_err(|err| Error::PoolError(err.to_string()))?;
         let db_conn = Object::take(conn);
         let db = db_conn.database();
-
-        // IdentityFromToRecord
 
         let mut contract_ids: Vec<Value> = Vec::new();
         // FIXME: Temporarily filter between different identity connections

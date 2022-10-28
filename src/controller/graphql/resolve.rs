@@ -3,7 +3,7 @@ use crate::{
     graph::{
         edge::{
             resolve::{DomainNameSystem, DotbitResolve, EnsResolve},
-            Resolve, ResolveRecord,
+            Resolve,
         },
         vertex::{
             contract::{Chain, ContractCategory, ContractRecord},
@@ -13,27 +13,10 @@ use crate::{
     },
     upstream::{fetch_all, DataFetcher, DataSource, Platform, Target},
 };
-use async_graphql::*;
 use async_graphql::{Context, Object};
 use strum::IntoEnumIterator;
 use tracing::debug;
 use uuid::Uuid;
-
-// #[derive(SimpleObject)]
-// #[graphql(concrete(name = "IdentityRecord", params(IdentityRecord)))]
-// #[graphql(concrete(name = "ContractRecord", params(ContractRecord)))]
-
-#[async_trait::async_trait]
-pub trait ResolveE<RecordType> {
-    async fn uuid(&self) -> Uuid;
-    async fn source(&self) -> DataSource;
-    async fn system(&self) -> DomainNameSystem;
-    async fn name(&self) -> String;
-    async fn fetcher(&self) -> DataFetcher;
-    async fn updated_at(&self) -> i64;
-    async fn owner(&self) -> Result<IdentityRecord>;
-    async fn resolved(&self) -> Result<RecordType>;
-}
 
 #[Object]
 impl EnsResolve {
@@ -129,40 +112,6 @@ impl DotbitResolve {
             None => Err(Error::GraphQLError("ENS owner no found.".to_string())),
             Some(owner) => Ok(owner),
         }
-    }
-}
-
-#[Object]
-impl ResolveRecord {
-    /// UUID of this record.
-    async fn uuid(&self) -> Uuid {
-        self.uuid
-    }
-
-    /// Data source (upstream) which provides this info.
-    async fn source(&self) -> DataSource {
-        self.source
-    }
-
-    /// Domain Name system
-    async fn system(&self) -> DomainNameSystem {
-        self.system
-    }
-
-    /// Name of domain (e.g., `vitalik.eth`, `dotbit.bit`)
-    async fn name(&self) -> String {
-        self.name.clone()
-    }
-
-    /// Who collects this data.
-    /// It works as a "data cleansing" or "proxy" between `source`s and us.
-    async fn fetcher(&self) -> DataFetcher {
-        self.fetcher
-    }
-
-    /// When this connection is fetched by us RelationService.
-    async fn updated_at(&self) -> i64 {
-        self.updated_at.timestamp()
     }
 }
 

@@ -73,27 +73,6 @@ impl ArangoConnection {
 
 pub type ConnectionPool = Pool<ArangoConnectionManager>;
 
-// pub struct ArangoConnectionPool {
-//     // pub pool: Pool<ArangoConnection, Error>,
-//     pub pool: Pool<ArangoConnectionManager>,
-// }
-
-// impl ArangoConnectionPool {
-//     pub async fn connection(&self) -> Result<DatabaseConnection, Error> {
-//         let pool_status = &self.pool.status();
-//         debug!(
-//             "Connection pool status: max_size={}, size={}, available={}",
-//             pool_status.max_size, pool_status.size, pool_status.available
-//         );
-//         let conn = self
-//             .pool
-//             .get()
-//             .await
-//             .map_err(|err| Error::PoolError(err.to_string()))?;
-//         Ok(Object::take(conn))
-//     }
-// }
-
 #[async_trait::async_trait]
 impl Manager for ArangoConnectionManager {
     type Type = DatabaseConnection;
