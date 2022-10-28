@@ -162,7 +162,7 @@ pub struct IdentityFromToRecord {
 }
 
 impl IdentityFromToRecord {
-    pub fn id(&self) -> &String {
+    pub fn id(&self) -> &str {
         &self.id
     }
 }
