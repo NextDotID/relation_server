@@ -3,7 +3,7 @@
 # Editing it will have no effect.
 # 
 ---
-version: 1660206807852
+version: 1666604073796
 collections:
   - name: Identities
     is_edge_collection: false
@@ -21,6 +21,16 @@ indexes:
     fields:
       - platform
       - identity
+    settings:
+      type: persistent
+      unique: true
+      sparse: true
+      deduplicate: false
+  - name: AddressChainUniqueness
+    collection: Contracts
+    fields:
+      - address
+      - chain
     settings:
       type: persistent
       unique: true

@@ -1,14 +1,13 @@
-use crate::controller::graphql::show_pool_status;
 use crate::controller::vec_string_to_vec_platform;
 use crate::error::{Error, Result};
-use crate::graph::edge::{HoldRecord, ProofRecord};
+use crate::graph::edge::{HoldRecord, IdentityFromToRecord};
 use crate::graph::vertex::{Identity, IdentityRecord, IdentityWithSource, Vertex};
 use crate::graph::ConnectionPool;
 use crate::upstream::{fetch_all, DataSource, Platform, Target};
 use async_graphql::{Context, Object};
 use deadpool::managed::Object;
 use strum::IntoEnumIterator;
-use tracing::info;
+use tracing::{debug, info};
 
 /// Status for a record in RelationService DB
 #[derive(Default, Copy, Clone, PartialEq, Eq, async_graphql::Enum)]
@@ -128,7 +127,7 @@ impl IdentityRecord {
         #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
     ) -> Result<Vec<IdentityWithSource>> {
         let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
-        show_pool_status(pool.status());
+        debug!("Connection pool status: {:?}", pool.status());
 
         self.neighbors(
             pool,
@@ -143,10 +142,10 @@ impl IdentityRecord {
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
-    ) -> Result<Vec<ProofRecord>> {
+    ) -> Result<Vec<IdentityFromToRecord>> {
         let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
-        show_pool_status(pool.status());
-        self.neighbors_with_traversal(pool, depth.unwrap_or(1), None)
+        debug!("Connection pool status: {:?}", pool.status());
+        self.neighbors_with_traversal(pool, depth.unwrap_or(1))
             .await
     }
 
@@ -156,7 +155,7 @@ impl IdentityRecord {
             return Ok(None);
         } else {
             let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
-            show_pool_status(pool.status());
+            debug!("Connection pool status: {:?}", pool.status());
             self.lens_owned_by(pool).await
         }
     }
@@ -165,7 +164,7 @@ impl IdentityRecord {
     /// For now, there's only `platform: ethereum` identity has NFTs.
     async fn nft(&self, ctx: &Context<'_>) -> Result<Vec<HoldRecord>> {
         let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
-        show_pool_status(pool.status());
+        debug!("Connection pool status: {:?}", pool.status());
         self.nfts(pool).await
     }
 }
@@ -194,7 +193,7 @@ impl IdentityQuery {
     ) -> Result<Option<IdentityRecord>> {
         // let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
-        show_pool_status(pool.status());
+        debug!("Connection pool status: {:?}", pool.status());
 
         let conn = pool
             .get()
@@ -230,7 +229,7 @@ impl IdentityQuery {
         #[graphql(desc = "Identity on target Platform")] identity: String,
     ) -> Result<Vec<IdentityRecord>> {
         let pool: &ConnectionPool = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        show_pool_status(pool.status());
+        debug!("Connection pool status: {:?}", pool.status());
 
         let platform_list = vec_string_to_vec_platform(platforms)?;
         let record: Vec<IdentityRecord> =
