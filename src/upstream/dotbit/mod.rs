@@ -253,7 +253,10 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
     _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
-    fetch_account_list_by_addrs(_platform, identity).await?;
+    // account_list api result doesn't provide any proofs(tx, recordID...)
+    // remove the function first
+    // fetch_account_list_by_addrs(_platform, identity).await?;
+
     // das_reverseRecord
     let request_params = get_req_params_by_platform(_platform, identity);
     let params = ReverseRecordRequest {
