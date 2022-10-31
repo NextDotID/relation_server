@@ -1,8 +1,9 @@
 use crate::{
     error::Error,
-    graph::vertex::{Contract, ContractRecord, Identity, IdentityRecord},
+    graph::edge::Hold,
+    graph::vertex::{Identity, IdentityRecord},
     graph::{ConnectionPool, Edge},
-    upstream::{DataFetcher, DataSource},
+    upstream::{DataFetcher, DataSource, Platform},
     util::naive_now,
 };
 use aragog::{
@@ -113,29 +114,32 @@ impl Resolve {
     pub async fn find_by_ens_name(
         pool: &ConnectionPool,
         name: &str,
-    ) -> Result<Option<EnsResolve>, Error> {
+    ) -> Result<Option<ResolveEdge>, Error> {
         let conn = pool
             .get()
             .await
             .map_err(|err| Error::PoolError(err.to_string()))?;
         let db = conn.database();
 
-        let aql = r###"FOR d IN @@edge_collection_name
-            FILTER d.system == @system AND d.name == @name
-            LET f = FIRST(FOR c IN @@contracts FILTER c._id == d._from RETURN c)
-            LET t = FIRST(FOR c IN @@identities FILTER c._id == d._to RETURN c)
-            RETURN {"record": d, "resolved": f, "owner": t}"###;
+        let aql = r###"
+            FOR r IN @@resolves
+                FILTER r.system == @system AND r.name == @name
+                LET resolved = FIRST(FOR c IN @@identities FILTER c._id == r._to RETURN c)
+            FOR h IN @@holds
+                FILTER h.id == @name
+                LET owner = FIRST(FOR c IN @@identities FILTER c._id == h._from RETURN c)
+            RETURN {"record": r, "resolved": resolved, "owner": owner}"###;
 
         let aql = AqlQuery::new(aql)
-            .bind_var("@edge_collection_name", Resolve::COLLECTION_NAME)
-            .bind_var("@contracts", Contract::COLLECTION_NAME)
+            .bind_var("@resolves", Resolve::COLLECTION_NAME)
+            .bind_var("@holds", Hold::COLLECTION_NAME)
             .bind_var("@identities", Identity::COLLECTION_NAME)
             .bind_var("system", DomainNameSystem::ENS.to_string())
             .bind_var("name", name.clone())
             .batch_size(1)
             .count(false);
 
-        let result: Vec<EnsResolve> = db.aql_query(aql).await?;
+        let result: Vec<ResolveEdge> = db.aql_query(aql).await?;
         if result.len() == 0 {
             Ok(None)
         } else {
@@ -146,28 +150,39 @@ impl Resolve {
     pub async fn find_by_dotbit_name(
         pool: &ConnectionPool,
         name: &str,
-    ) -> Result<Option<DotbitResolve>, Error> {
+    ) -> Result<Option<ResolveEdge>, Error> {
         let conn = pool
             .get()
             .await
             .map_err(|err| Error::PoolError(err.to_string()))?;
         let db = conn.database();
 
-        let aql = r###"FOR d IN @@edge_collection_name
-            FILTER d.system == @system AND d.name == @name
-            LET f = FIRST(FOR c IN @@identities FILTER c._id == d._from RETURN c)
-            LET t = FIRST(FOR c IN @@identities FILTER c._id == d._to RETURN c)
-            RETURN {"record": d, "resolved": f, "owner": t}"###;
+        let aql = r###"
+        FOR r IN @@resolves
+            FILTER r.system == @system AND r.name == @name
+            LET resolved = FIRST(FOR c IN @@identities FILTER c._id == r._to RETURN c)
+        LET owner = FIRST(FOR i IN @@identities
+            FILTER i.platform == @platform AND i.identity == @identity
+            LIMIT 1
+            FOR vertex, edge, path
+                IN 1..1 ANY i @@holds
+                FILTER NOT CONTAINS(path.edges[*]._to, "Contracts")
+                RETURN DISTINCT vertex
+            )
+        RETURN {"record": r, "resolved": resolved, "owner": owner}"###;
 
         let aql = AqlQuery::new(aql)
-            .bind_var("@edge_collection_name", Resolve::COLLECTION_NAME)
+            .bind_var("@resolves", Resolve::COLLECTION_NAME)
+            .bind_var("@holds", Hold::COLLECTION_NAME)
             .bind_var("@identities", Identity::COLLECTION_NAME)
             .bind_var("system", DomainNameSystem::DotBit.to_string())
             .bind_var("name", name.clone())
+            .bind_var("platform", Platform::Dotbit.to_string())
+            .bind_var("identity", name.clone())
             .batch_size(1)
             .count(false);
 
-        let result: Vec<DotbitResolve> = db.aql_query(aql).await?;
+        let result: Vec<ResolveEdge> = db.aql_query(aql).await?;
         if result.len() == 0 {
             Ok(None)
         } else {
@@ -185,95 +200,31 @@ impl Resolve {
 }
 
 #[derive(Clone, Serialize, Deserialize, Default, Debug)]
-pub struct ResolveEdge<T> {
+pub struct ResolveEdge {
     pub record: ResolveRecord,
-    pub resolved: Option<T>,
+    pub resolved: Option<IdentityRecord>,
     pub owner: Option<IdentityRecord>,
 }
 
-impl std::ops::Deref for ResolveEdge<ContractRecord> {
+impl std::ops::Deref for ResolveEdge {
     type Target = ResolveRecord;
 
     fn deref(&self) -> &Self::Target {
         &self.record
     }
 }
-impl std::ops::DerefMut for ResolveEdge<ContractRecord> {
+impl std::ops::DerefMut for ResolveEdge {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.record
     }
 }
-impl From<ResolveRecord> for ResolveEdge<ContractRecord> {
+impl From<ResolveRecord> for ResolveEdge {
     fn from(record: ResolveRecord) -> Self {
         ResolveEdge {
             record,
             resolved: None,
             owner: None,
         }
-    }
-}
-
-impl std::ops::Deref for ResolveEdge<IdentityRecord> {
-    type Target = ResolveRecord;
-
-    fn deref(&self) -> &Self::Target {
-        &self.record
-    }
-}
-impl std::ops::DerefMut for ResolveEdge<IdentityRecord> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.record
-    }
-}
-impl From<ResolveRecord> for ResolveEdge<IdentityRecord> {
-    fn from(record: ResolveRecord) -> Self {
-        ResolveEdge {
-            record,
-            resolved: None,
-            owner: None,
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, Default, Debug)]
-pub struct EnsResolve(ResolveEdge<ContractRecord>);
-
-#[derive(Clone, Serialize, Deserialize, Default, Debug)]
-pub struct DotbitResolve(ResolveEdge<IdentityRecord>);
-
-impl std::ops::Deref for EnsResolve {
-    type Target = ResolveEdge<ContractRecord>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl std::ops::DerefMut for EnsResolve {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-impl From<ResolveEdge<ContractRecord>> for EnsResolve {
-    fn from(record: ResolveEdge<ContractRecord>) -> Self {
-        EnsResolve(record)
-    }
-}
-
-impl std::ops::Deref for DotbitResolve {
-    type Target = ResolveEdge<IdentityRecord>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl std::ops::DerefMut for DotbitResolve {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-impl From<ResolveEdge<IdentityRecord>> for DotbitResolve {
-    fn from(record: ResolveEdge<IdentityRecord>) -> Self {
-        DotbitResolve(record)
     }
 }
 
