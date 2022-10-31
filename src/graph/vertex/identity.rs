@@ -3,9 +3,7 @@ use crate::{
     graph::ConnectionPool,
     graph::{
         edge::{Hold, HoldRecord, IdentityFromToRecord, Proof, ProofRecord},
-        vertex::contract::Chain,
         vertex::vec_string_to_vec_datasource,
-        vertex::Contract,
         vertex::Vertex,
     },
     upstream::{DataSource, Platform},
@@ -20,15 +18,12 @@ use array_tool::vec::Uniq;
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
 use dataloader::BatchFn;
-use deadpool::managed::Object;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, json, value::Value};
 use std::collections::HashMap;
 use tracing::debug;
 use uuid::Uuid;
-
-use super::contract::ContractCategory;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Record)]
 #[collection_name = "Identities"]
@@ -480,47 +475,18 @@ impl IdentityRecord {
             .get()
             .await
             .map_err(|err| Error::PoolError(err.to_string()))?;
-        let db_conn = Object::take(conn);
-        let db = db_conn.database();
-
-        let mut contract_ids: Vec<Value> = Vec::new();
-        // FIXME: Temporarily filter between different identity connections
-        match Contract::find_by_chain_address(
-            &db_conn,
-            &Chain::Ethereum,
-            "0x60eb332bd4a0e2a9eeb3212cfdd6ef03ce4cb3b5",
-        )
-        .await?
-        {
-            Some(dotbit_contract) => contract_ids.push(json!(dotbit_contract.id().clone())),
-            None => (),
-        };
-        match Contract::find_by_chain_address(
-            &db_conn,
-            &Chain::Ethereum,
-            ContractCategory::ENS
-                .default_contract_address()
-                .unwrap()
-                .as_str(),
-        )
-        .await?
-        {
-            Some(ens_contract) => contract_ids.push(json!(ens_contract.id().clone())),
-            None => (),
-        };
-
+        let db = conn.database();
         let aql_str = r###"
         WITH @@collection_name FOR d IN @@collection_name
             FILTER d._id == @id
             LIMIT 1
             FOR vertex, edge, path
                 IN 1..@depth ANY d Proofs, Holds
-                FILTER path.edges[*]._to None IN @contract_ids
+                FILTER NOT CONTAINS(path.edges[*]._to, "Contracts")
                 RETURN {"vertices": path.vertices[* FILTER CONTAINS(CURRENT._id, "Identities")], "edges": path.edges}
         "###;
         let aql = AqlQuery::new(aql_str)
             .bind_var("@collection_name", Identity::COLLECTION_NAME)
-            .bind_var("contract_ids", contract_ids)
             .bind_var("id", self.id().as_str())
             .bind_var("depth", depth)
             .batch_size(1)
@@ -615,49 +581,20 @@ impl IdentityRecord {
             .get()
             .await
             .map_err(|err| Error::PoolError(err.to_string()))?;
-        let db_conn = Object::take(conn);
-        let db = db_conn.database();
-
-        let mut contract_ids: Vec<Value> = Vec::new();
-        // FIXME: Temporarily filter between different identity connections
-        match Contract::find_by_chain_address(
-            &db_conn,
-            &Chain::Ethereum,
-            "0x60eb332bd4a0e2a9eeb3212cfdd6ef03ce4cb3b5",
-        )
-        .await?
-        {
-            Some(dotbit_contract) => contract_ids.push(json!(dotbit_contract.id().clone())),
-            None => (),
-        };
-        match Contract::find_by_chain_address(
-            &db_conn,
-            &Chain::Ethereum,
-            ContractCategory::ENS
-                .default_contract_address()
-                .unwrap()
-                .as_str(),
-        )
-        .await?
-        {
-            Some(ens_contract) => contract_ids.push(json!(ens_contract.id().clone())),
-            None => (),
-        };
-
+        let db = conn.database();
         let aql_str = r###"
         WITH @@collection_name FOR d IN @@collection_name
             FILTER d._id == @id
             LIMIT 1
             FOR vertex, edge, path
                 IN 1..@depth ANY d Proofs, Holds
-                FILTER path.edges[*]._to None IN @contract_ids
+                FILTER NOT CONTAINS(path.edges[*]._to, "Contracts")
                 FILTER CONTAINS(edge._from, "Identities") AND CONTAINS(edge._to, "Identities")
                 RETURN DISTINCT edge
         "###;
         let aql = AqlQuery::new(aql_str)
             .bind_var("@collection_name", Identity::COLLECTION_NAME)
             .bind_var("id", self.id().as_str())
-            .bind_var("contract_ids", contract_ids.clone())
             .bind_var("depth", depth)
             .batch_size(1)
             .count(false);
