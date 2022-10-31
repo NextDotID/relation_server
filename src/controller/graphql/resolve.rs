@@ -95,41 +95,43 @@ impl ResolveQuery {
         let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
         debug!("Connection pool status: {:?}", pool.status());
 
-        if domain_system == DomainNameSystem::ENS {
-            let target = Target::NFT(
-                Chain::Ethereum,
-                ContractCategory::ENS,
-                ContractCategory::ENS.default_contract_address().unwrap(),
-                name.clone(),
-            );
-            match Resolve::find_by_ens_name(&pool, &name).await? {
-                None => {
-                    fetch_all(target).await?;
-                    Resolve::find_by_ens_name(&pool, &name).await
-                }
-                Some(resolve) => {
-                    if resolve.is_outdated() {
-                        tokio::spawn(fetch_all(target));
+        match domain_system {
+            DomainNameSystem::ENS => {
+                let target = Target::NFT(
+                    Chain::Ethereum,
+                    ContractCategory::ENS,
+                    ContractCategory::ENS.default_contract_address().unwrap(),
+                    name.clone(),
+                );
+                match Resolve::find_by_ens_name(&pool, &name).await? {
+                    None => {
+                        fetch_all(target).await?;
+                        Resolve::find_by_ens_name(&pool, &name).await
                     }
-                    Ok(Some(resolve))
+                    Some(resolve) => {
+                        if resolve.is_outdated() {
+                            tokio::spawn(fetch_all(target));
+                        }
+                        Ok(Some(resolve))
+                    }
                 }
             }
-        } else if domain_system == DomainNameSystem::DotBit {
-            let target = Target::Identity(Platform::Dotbit, name.clone());
-            match Resolve::find_by_dotbit_name(&pool, &name).await? {
-                None => {
-                    fetch_all(target).await?;
-                    Resolve::find_by_dotbit_name(&pool, &name).await
-                }
-                Some(resolve) => {
-                    if resolve.is_outdated() {
-                        tokio::spawn(fetch_all(target));
+            DomainNameSystem::DotBit => {
+                let target = Target::Identity(Platform::Dotbit, name.clone());
+                match Resolve::find_by_dotbit_name(&pool, &name).await? {
+                    None => {
+                        fetch_all(target).await?;
+                        Resolve::find_by_dotbit_name(&pool, &name).await
                     }
-                    Ok(Some(resolve))
+                    Some(resolve) => {
+                        if resolve.is_outdated() {
+                            tokio::spawn(fetch_all(target));
+                        }
+                        Ok(Some(resolve))
+                    }
                 }
             }
-        } else {
-            Ok(None)
+            _ => Ok(None),
         }
     }
 }
