@@ -482,8 +482,9 @@ impl IdentityRecord {
             LIMIT 1
             FOR vertex, edge, path
                 IN 1..@depth ANY d Proofs, Holds
+                PRUNE IS_SAME_COLLECTION('Contracts' , vertex)
                 FILTER NOT CONTAINS(path.edges[*]._to, "Contracts")
-                RETURN {"vertices": path.vertices[* FILTER CONTAINS(CURRENT._id, "Identities")], "edges": path.edges}
+                RETURN path
         "###;
         let aql = AqlQuery::new(aql_str)
             .bind_var("@collection_name", Identity::COLLECTION_NAME)
@@ -588,8 +589,8 @@ impl IdentityRecord {
             LIMIT 1
             FOR vertex, edge, path
                 IN 1..@depth ANY d Proofs, Holds
+                PRUNE IS_SAME_COLLECTION('Contracts' , vertex)
                 FILTER NOT CONTAINS(path.edges[*]._to, "Contracts")
-                FILTER CONTAINS(edge._from, "Identities") AND CONTAINS(edge._to, "Identities")
                 RETURN DISTINCT edge
         "###;
         let aql = AqlQuery::new(aql_str)
