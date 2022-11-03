@@ -167,7 +167,10 @@ impl IdentityRecord {
     async fn nft(
         &self,
         ctx: &Context<'_>,
-        #[graphql(desc = "Category array to query")] category: Option<Vec<ContractCategory>>,
+        #[graphql(
+            desc = "Filter condition for ContractCategory. If not provided or empty array, all category NFTs will be returned."
+        )]
+        category: Option<Vec<ContractCategory>>,
     ) -> Result<Vec<HoldRecord>> {
         let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
         debug!("Connection pool status: {:?}", pool.status());
