@@ -25,6 +25,8 @@ use std::collections::HashMap;
 use tracing::debug;
 use uuid::Uuid;
 
+use super::contract::ContractCategory;
+
 #[derive(Debug, Clone, Deserialize, Serialize, Record)]
 #[collection_name = "Identities"]
 pub struct Identity {
@@ -611,7 +613,11 @@ impl IdentityRecord {
     }
 
     /// Returns all Contracts owned by this identity. Empty list if `self.platform != Ethereum`.
-    pub async fn nfts(&self, pool: &ConnectionPool) -> Result<Vec<HoldRecord>, Error> {
+    pub async fn nfts(
+        &self,
+        pool: &ConnectionPool,
+        category: Option<Vec<ContractCategory>>,
+    ) -> Result<Vec<HoldRecord>, Error> {
         if self.0.record.platform != Platform::Ethereum {
             return Ok(vec![]);
         }
@@ -623,15 +629,25 @@ impl IdentityRecord {
             .map_err(|err| Error::PoolError(err.to_string()))?;
         let db = conn.database();
 
-        let aql_str = r"WITH @@edge_collection_name
+        let aql: AqlQuery;
+        if category.is_none() {
+            let aql_str = r"WITH @@edge_collection_name
             FOR d in @@edge_collection_name
             FILTER d._from == @id
             RETURN d";
-        let aql = AqlQuery::new(aql_str)
-            .bind_var("@edge_collection_name", Hold::COLLECTION_NAME)
-            .bind_var("id", self.id().as_str())
-            .batch_size(1)
-            .count(false);
+            aql = AqlQuery::new(aql_str)
+                .bind_var("@edge_collection_name", Hold::COLLECTION_NAME)
+                .bind_var("id", self.id().as_str())
+                .batch_size(1)
+                .count(false);
+        } else {
+            let aql_str = r"TODO";
+            aql = AqlQuery::new(aql_str)
+                .bind_var("@edge_collection_name", Hold::COLLECTION_NAME)
+                .bind_var("id", self.id().as_str())
+                .batch_size(1)
+                .count(false);
+        }
 
         let result = db
             .aql_query::<HoldRecord>(aql)
