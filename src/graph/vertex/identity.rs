@@ -615,7 +615,7 @@ impl IdentityRecord {
     pub async fn nfts(
         &self,
         pool: &ConnectionPool,
-        category: Vec<ContractCategory>,
+        category: Option<Vec<ContractCategory>>,
     ) -> Result<Vec<HoldRecord>, Error> {
         if self.0.record.platform != Platform::Ethereum {
             return Ok(vec![]);
@@ -623,7 +623,7 @@ impl IdentityRecord {
 
         let aql_str;
         let mut bind_vars: HashMap<&str, Value> = HashMap::new();
-        if category.len() == 0 {
+        if category.is_none() {
             aql_str = r"WITH @@edge_collection_name
                 FOR d in @@edge_collection_name
                 FILTER d._from == @id
@@ -639,6 +639,7 @@ impl IdentityRecord {
                 RETURN DISTINCT edge";
 
             let category_array: Vec<Value> = category
+                .unwrap()
                 .into_iter()
                 .map(|field| json!(field.to_string()))
                 .collect();
