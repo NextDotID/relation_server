@@ -21,7 +21,7 @@ use chrono::{Duration, NaiveDateTime};
 use dataloader::BatchFn;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use serde_json::{from_value, json, value::Value};
+use serde_json::{from_value, json, to_value, value::Value};
 use std::collections::HashMap;
 use tracing::debug;
 use uuid::Uuid;
@@ -641,7 +641,7 @@ impl IdentityRecord {
             let category_array: Vec<Value> = category
                 .unwrap()
                 .into_iter()
-                .map(|field| json!(field.to_string()))
+                .map(|field| to_value(field).unwrap())
                 .collect();
             bind_vars.insert("@identities", json!(Identity::COLLECTION_NAME));
             bind_vars.insert("@holds", json!(Hold::COLLECTION_NAME));
@@ -674,7 +674,7 @@ impl IdentityRecord {
 #[cfg(test)]
 mod tests {
 
-    use crate::graph::vertex::identity::get_identities;
+    use crate::graph::vertex::{contract::ContractCategory, identity::get_identities};
     use aragog::DatabaseConnection;
     use fake::{Dummy, Fake, Faker};
     use tokio::join;
@@ -876,13 +876,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_string_to_platfrom() -> Result<(), Error> {
-        let platforms = vec![
-            String::from("github"),
-            String::from("twitter"),
-            // String::from("aaa"),
-        ];
-        let platform_list = crate::controller::vec_string_to_vec_platform(platforms)?;
-        println!("{:?}", platform_list);
+        // let platforms = vec![
+        //     String::from("github"),
+        //     String::from("twitter"),
+        //     // String::from("aaa"),
+        // ];
+        // let platform_list = crate::controller::vec_string_to_vec_platform(platforms)?;
+        // println!("{:?}", platform_list);
+        let platform = ContractCategory::ERC1155;
+        print!("platform = {}", platform.to_string());
         Ok(())
     }
 
