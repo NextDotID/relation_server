@@ -623,7 +623,7 @@ impl IdentityRecord {
 
         let aql_str;
         let mut bind_vars: HashMap<&str, Value> = HashMap::new();
-        if category.is_none() || category.as_ref().unwrap().len() == &0 {
+        if category.is_none() || category.as_ref().unwrap().len() == 0 {
             aql_str = r"WITH @@edge_collection_name
                 FOR d in @@edge_collection_name
                 FILTER d._from == @id
