@@ -1,6 +1,7 @@
-use crate::controller::vec_string_to_vec_platform;
+use crate::controller::{vec_string_to_vec_category, vec_string_to_vec_platform};
 use crate::error::{Error, Result};
 use crate::graph::edge::{HoldRecord, IdentityFromToRecord};
+use crate::graph::vertex::contract::ContractCategory;
 use crate::graph::vertex::{Identity, IdentityRecord, IdentityWithSource, Vertex};
 use crate::graph::ConnectionPool;
 use crate::upstream::{fetch_all, DataSource, Platform, Target};
@@ -162,10 +163,18 @@ impl IdentityRecord {
 
     /// NFTs owned by this identity.
     /// For now, there's only `platform: ethereum` identity has NFTs.
-    async fn nft(&self, ctx: &Context<'_>) -> Result<Vec<HoldRecord>> {
+    /// If `category` is provided, only NFTs of that category will be returned.
+    async fn nft(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(
+            desc = "Filter condition for ContractCategory. If not provided or empty array, all category NFTs will be returned."
+        )]
+        category: Option<Vec<ContractCategory>>,
+    ) -> Result<Vec<HoldRecord>> {
         let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
         debug!("Connection pool status: {:?}", pool.status());
-        self.nfts(pool).await
+        self.nfts(pool, category).await
     }
 }
 

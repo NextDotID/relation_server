@@ -3,6 +3,7 @@ use crate::{
     graph::ConnectionPool,
     graph::{
         edge::{Hold, HoldRecord, IdentityFromToRecord, Proof, ProofRecord},
+        vertex::contract::ContractCategory,
         vertex::vec_string_to_vec_datasource,
         vertex::Vertex,
     },
@@ -482,8 +483,9 @@ impl IdentityRecord {
             LIMIT 1
             FOR vertex, edge, path
                 IN 1..@depth ANY d Proofs, Holds
+                PRUNE IS_SAME_COLLECTION('Contracts' , vertex)
                 FILTER NOT CONTAINS(path.edges[*]._to, "Contracts")
-                RETURN {"vertices": path.vertices[* FILTER CONTAINS(CURRENT._id, "Identities")], "edges": path.edges}
+                RETURN path
         "###;
         let aql = AqlQuery::new(aql_str)
             .bind_var("@collection_name", Identity::COLLECTION_NAME)
@@ -588,8 +590,8 @@ impl IdentityRecord {
             LIMIT 1
             FOR vertex, edge, path
                 IN 1..@depth ANY d Proofs, Holds
+                PRUNE IS_SAME_COLLECTION('Contracts' , vertex)
                 FILTER NOT CONTAINS(path.edges[*]._to, "Contracts")
-                FILTER CONTAINS(edge._from, "Identities") AND CONTAINS(edge._to, "Identities")
                 RETURN DISTINCT edge
         "###;
         let aql = AqlQuery::new(aql_str)
@@ -610,25 +612,51 @@ impl IdentityRecord {
     }
 
     /// Returns all Contracts owned by this identity. Empty list if `self.platform != Ethereum`.
-    pub async fn nfts(&self, pool: &ConnectionPool) -> Result<Vec<HoldRecord>, Error> {
+    pub async fn nfts(
+        &self,
+        pool: &ConnectionPool,
+        category: Option<Vec<ContractCategory>>,
+    ) -> Result<Vec<HoldRecord>, Error> {
         if self.0.record.platform != Platform::Ethereum {
             return Ok(vec![]);
         }
 
-        // let db = pool.db().await?;
+        let aql_str;
+        let mut bind_vars: HashMap<&str, Value> = HashMap::new();
+        if category.is_none() || &(category).as_ref().unwrap().len() == &0 {
+            aql_str = r"WITH @@edge_collection_name
+                FOR d in @@edge_collection_name
+                FILTER d._from == @id
+                RETURN d";
+            bind_vars.insert("@edge_collection_name", json!(Hold::COLLECTION_NAME));
+            bind_vars.insert("id", json!(self.id().as_str()));
+        } else {
+            aql_str = r"WITH @@identities FOR d IN @@identities
+            FILTER d._id == @id LIMIT 1
+            FOR vertex, edge
+                IN 1..1 ANY d @@holds
+                FILTER vertex.category IN @category
+                RETURN DISTINCT edge";
+
+            let category_array: Vec<Value> = category
+                .unwrap()
+                .into_iter()
+                .map(|field| json!(field.to_string()))
+                .collect();
+            bind_vars.insert("@identities", json!(Identity::COLLECTION_NAME));
+            bind_vars.insert("@holds", json!(Hold::COLLECTION_NAME));
+            bind_vars.insert("id", json!(self.id().as_str()));
+            bind_vars.insert("category", category_array.into());
+        }
+        tracing::info!("aql = {},  {:?}", aql_str, bind_vars);
         let conn = pool
             .get()
             .await
             .map_err(|err| Error::PoolError(err.to_string()))?;
         let db = conn.database();
 
-        let aql_str = r"WITH @@edge_collection_name
-            FOR d in @@edge_collection_name
-            FILTER d._from == @id
-            RETURN d";
         let aql = AqlQuery::new(aql_str)
-            .bind_var("@edge_collection_name", Hold::COLLECTION_NAME)
-            .bind_var("id", self.id().as_str())
+            .bind_vars(bind_vars)
             .batch_size(1)
             .count(false);
 
