@@ -105,7 +105,7 @@ impl ResolveQuery {
                 );
                 match Resolve::find_by_ens_name(&pool, &name).await? {
                     None => {
-                        fetch_all(target).await?;
+                        fetch_all(target).await;
                         Resolve::find_by_ens_name(&pool, &name).await
                     }
                     Some(resolve) => {
@@ -120,7 +120,7 @@ impl ResolveQuery {
                 let target = Target::Identity(Platform::Dotbit, name.clone());
                 match Resolve::find_by_dotbit_name(&pool, &name).await? {
                     None => {
-                        fetch_all(target).await?;
+                        fetch_all(target).await;
                         Resolve::find_by_dotbit_name(&pool, &name).await
                     }
                     Some(resolve) => {

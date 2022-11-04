@@ -215,7 +215,7 @@ impl IdentityQuery {
         // FIXME: Still kinda dirty. Should be in an background queue/worker-like shape.
         match Identity::find_by_platform_identity(&db, &platform, &identity).await? {
             None => {
-                let _ = fetch_all(target).await; // TODO: print error message here (but not break the return value)
+                fetch_all(target).await; // TODO: print error message here (but not break the return value)
                 Ok(Identity::find_by_platform_identity(&db, &platform, &identity).await?)
             }
             Some(found) => {
@@ -246,7 +246,7 @@ impl IdentityQuery {
         if record.len() == 0 {
             for platform in &platform_list {
                 let target = Target::Identity(platform.clone(), identity.clone());
-                fetch_all(target).await?;
+                fetch_all(target).await;
             }
             Identity::find_by_platforms_identity(&pool, &platform_list, identity.as_str()).await
         } else {
