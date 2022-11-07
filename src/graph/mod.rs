@@ -3,7 +3,6 @@ pub mod edge;
 mod tests;
 pub mod vertex;
 use std::collections::HashMap;
-use tracing::debug;
 
 use crate::{config::C, error::Error};
 use aragog::{AuthMode, DatabaseConnection, OperationOptions};
@@ -17,7 +16,7 @@ use serde::Deserialize;
 pub use vertex::Vertex;
 
 use self::{
-    edge::{Hold, HoldRecord, Proof, Resolve},
+    edge::{Hold, HoldRecord, Proof},
     vertex::{Contract, ContractRecord, Identity, IdentityRecord},
 };
 

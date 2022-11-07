@@ -21,13 +21,14 @@ use std::{
 use crate::{
     error::Error,
     upstream::{
-        aggregation::Aggregation, ens_reverse::ENSReverseLookup, keybase::Keybase, knn3::Knn3,
-        proof_client::ProofClient, rss3::Rss3, sybil_list::SybilList, the_graph::TheGraph,
+        aggregation::Aggregation, dotbit::DotBit, ens_reverse::ENSReverseLookup, keybase::Keybase,
+        knn3::Knn3, proof_client::ProofClient, rss3::Rss3, sybil_list::SybilList,
+        the_graph::TheGraph,
     },
     util::hashset_append,
 };
 use async_trait::async_trait;
-use futures::future::join_all;
+use futures::{future::join_all, StreamExt};
 use tracing::{info, warn};
 
 pub(crate) use types::{DataFetcher, DataSource, Platform, Target, TargetProcessedList};
@@ -49,6 +50,7 @@ pub trait Fetcher {
 
 /// Find all available (platform, identity) in all `Upstream`s.
 pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
+    const CONCURRENT: usize = 5;
     if FETCHING.lock().unwrap().contains(&initial_target) {
         info!("{} is fetching. Skipped.", initial_target);
         return Ok(());
@@ -65,7 +67,11 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
             .filter(|target| !processed.contains(target))
             .map(|target| fetch_one(target))
             .collect();
-        let mut result: Vec<Target> = join_all(futures)
+        // Limit concurrent tasks to 5.
+        let futures_stream = futures::stream::iter(futures).buffer_unordered(CONCURRENT);
+
+        let mut result: Vec<Target> = futures_stream
+            .collect::<Vec<Result<Vec<Target>, Error>>>()
             .await
             .into_iter()
             .flat_map(|handle_result| match handle_result {
@@ -99,6 +105,7 @@ pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
         Knn3::fetch(target),
         TheGraph::fetch(target),
         ENSReverseLookup::fetch(target),
+        DotBit::fetch(target),
     ])
     .await
     .into_iter()

@@ -1,25 +1,24 @@
+mod contract;
 mod hold;
 mod identity;
 mod proof;
-use self::{hold::HoldQuery, identity::IdentityQuery, proof::ProofQuery};
+mod resolve;
+use self::{hold::HoldQuery, identity::IdentityQuery, proof::ProofQuery, resolve::ResolveQuery};
 use async_graphql::{MergedObject, Object};
-use tracing::debug;
-
 const API_VERSION: &str = "0.1";
 
 /// Base struct of GraphQL query request.
 #[derive(MergedObject, Default)]
-pub struct Query(GeneralQuery, IdentityQuery, ProofQuery, HoldQuery);
+pub struct Query(
+    GeneralQuery,
+    IdentityQuery,
+    ResolveQuery,
+    ProofQuery,
+    HoldQuery,
+);
 
 #[derive(Default)]
 pub struct GeneralQuery;
-
-pub fn show_pool_status(status: deadpool::Status) {
-    debug!(
-        "Connection pool status: max_size={}, size={}, available={}",
-        status.max_size, status.size, status.available
-    );
-}
 
 #[Object]
 impl GeneralQuery {

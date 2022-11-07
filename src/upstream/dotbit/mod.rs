@@ -149,6 +149,8 @@ pub struct AccountListResponse {
     pub result: AccountListResult,
 }
 
+const UNKNOWN_OWNER: &str = "0x0000000000000000000000000000000000000000";
+
 async fn fetch_connections_by_platform_identity(
     platform: &Platform,
     identity: &str,
@@ -193,6 +195,14 @@ async fn fetch_connections_by_account_info(
     let account_info = info.account_info.unwrap();
     let out_point = info.out_point.unwrap();
 
+    // tricky way to remove the unexpected case...
+    // will be removed after confirmied with .bit team how to define its a .bit NFT on Ethereum
+    // https://talk.did.id/t/convert-your-bit-to-nft-on-ethereum-now/481
+    if account_info.owner_key == UNKNOWN_OWNER {
+        warn!(".bit profile owner is zero address");
+        return Err(Error::NoResult);
+    }
+
     // add to db
     let db = new_db_connection().await?;
     let created_at_naive = timestamp_to_naive(account_info.create_at_unix, 0);
@@ -200,7 +210,7 @@ async fn fetch_connections_by_account_info(
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
-        identity: account_info.owner_key.clone(),
+        identity: account_info.owner_key.to_lowercase().clone(),
         created_at: Some(created_at_naive),
         display_name: None,
         added_at: naive_now(),
@@ -243,7 +253,10 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
     _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
-    fetch_account_list_by_addrs(_platform, identity).await?;
+    // account_list api result doesn't provide any proofs(tx, recordID...)
+    // remove the function first
+    // fetch_account_list_by_addrs(_platform, identity).await?;
+
     // das_reverseRecord
     let request_params = get_req_params_by_platform(_platform, identity);
     let params = ReverseRecordRequest {
@@ -268,13 +281,16 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
         warn!("fail to fetch the result from .bit, resp {:?}", resp);
         return Err(Error::NoResult);
     }
+    if resp.result.data.is_none() || resp.result.data.as_ref().unwrap().account.len() == 0 {
+        return Err(Error::NoResult);
+    }
 
     let result_data = resp.result.data.unwrap();
     let db = new_db_connection().await?;
     let eth_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
-        identity: identity.to_string(),
+        identity: identity.to_string().to_lowercase(),
         created_at: None,
         display_name: None,
         added_at: naive_now(),
@@ -358,7 +374,7 @@ async fn fetch_account_list_by_addrs(
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
-        identity: identity.to_string().clone(),
+        identity: identity.to_string().to_lowercase().clone(),
         created_at: None,
         display_name: None,
         added_at: naive_now(),
@@ -403,7 +419,7 @@ fn get_req_params_by_platform(_platform: &Platform, identity: &str) -> RequestTy
     let req_key_info: RequestKeyInfo = RequestKeyInfo {
         coin_type: "60".to_string(),
         chain_id: "1".to_string(),
-        key: identity.to_string(),
+        key: identity.to_string().to_lowercase(),
     };
     return RequestTypeKeyInfoParams {
         req_type: "blockchain".to_string(),

@@ -1,6 +1,7 @@
 pub mod graphql;
 pub mod healthz;
 
+use crate::graph::vertex::contract::ContractCategory;
 use crate::upstream::Platform;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -81,6 +82,14 @@ pub fn query_parse(req: Request) -> HashMap<String, String> {
 
 pub fn vec_string_to_vec_platform(vec_string: Vec<String>) -> Result<Vec<Platform>, Error> {
     let platforms_result: Result<Vec<Platform>, _> = vec_string
+        .into_iter()
+        .map(|p_string| p_string.parse())
+        .collect();
+    Ok(platforms_result?)
+}
+
+pub fn vec_string_to_vec_category(vec_string: Vec<String>) -> Result<Vec<ContractCategory>, Error> {
+    let platforms_result: Result<Vec<ContractCategory>, _> = vec_string
         .into_iter()
         .map(|p_string| p_string.parse())
         .collect();
