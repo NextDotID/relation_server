@@ -1,4 +1,4 @@
-use crate::controller::{vec_string_to_vec_category, vec_string_to_vec_platform};
+use crate::controller::vec_string_to_vec_platform;
 use crate::error::{Error, Result};
 use crate::graph::edge::{HoldRecord, IdentityFromToRecord};
 use crate::graph::vertex::contract::ContractCategory;
@@ -246,7 +246,7 @@ impl IdentityQuery {
         if record.len() == 0 {
             for platform in &platform_list {
                 let target = Target::Identity(platform.clone(), identity.clone());
-                fetch_all(target).await?;
+                let _ = fetch_all(target).await;
             }
             Identity::find_by_platforms_identity(&pool, &platform_list, identity.as_str()).await
         } else {

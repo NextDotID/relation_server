@@ -53,11 +53,8 @@ impl ResolveEdge {
     }
 
     /// `resolved`: Find an Ethereum wallet using ENS name or .bit alias.
-    async fn resolved(&self) -> Result<IdentityRecord> {
-        match self.resolved.clone() {
-            None => Err(Error::GraphQLError("resolved no found.".to_string())),
-            Some(resolved) => Ok(resolved),
-        }
+    async fn resolved(&self) -> Option<IdentityRecord> {
+        self.resolved.clone()
     }
 
     /// `owner`: Return ENS name or .bit owned by wallet address.
@@ -105,7 +102,7 @@ impl ResolveQuery {
                 );
                 match Resolve::find_by_ens_name(&pool, &name).await? {
                     None => {
-                        fetch_all(target).await?;
+                        let _ = fetch_all(target).await;
                         Resolve::find_by_ens_name(&pool, &name).await
                     }
                     Some(resolve) => {
@@ -120,7 +117,7 @@ impl ResolveQuery {
                 let target = Target::Identity(Platform::Dotbit, name.clone());
                 match Resolve::find_by_dotbit_name(&pool, &name).await? {
                     None => {
-                        fetch_all(target).await?;
+                        let _ = fetch_all(target).await;
                         Resolve::find_by_dotbit_name(&pool, &name).await
                     }
                     Some(resolve) => {

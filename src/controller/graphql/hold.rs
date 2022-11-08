@@ -167,7 +167,7 @@ impl HoldQuery {
             }
 
             None => {
-                fetch_all(target).await?;
+                let _ = fetch_all(target).await;
                 Hold::find_by_id_chain_address_merge(pool, &id, &chain, &contract_address).await
             }
         }

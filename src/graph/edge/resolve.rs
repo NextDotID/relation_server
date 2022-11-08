@@ -1,6 +1,6 @@
 use crate::{
     error::Error,
-    graph::edge::Hold,
+    graph::edge::{Hold, HoldRecord},
     graph::vertex::{Identity, IdentityRecord},
     graph::{ConnectionPool, Edge},
     upstream::{DataFetcher, DataSource, Platform},
@@ -127,7 +127,7 @@ impl Resolve {
             .map_err(|err| Error::PoolError(err.to_string()))?;
         let db = conn.database();
 
-        let aql = r###"
+        let aql_str = r###"
             FOR r IN @@resolves
                 FILTER r.system == @system AND r.name == @name
                 LET resolved = FIRST(FOR c IN @@identities FILTER c._id == r._to RETURN c)
@@ -136,7 +136,7 @@ impl Resolve {
                 LET owner = FIRST(FOR c IN @@identities FILTER c._id == h._from RETURN c)
             RETURN {"record": r, "resolved": resolved, "owner": owner}"###;
 
-        let aql = AqlQuery::new(aql)
+        let aql = AqlQuery::new(aql_str)
             .bind_var("@resolves", Resolve::COLLECTION_NAME)
             .bind_var("@holds", Hold::COLLECTION_NAME)
             .bind_var("@identities", Identity::COLLECTION_NAME)
@@ -147,7 +147,35 @@ impl Resolve {
 
         let result: Vec<ResolveEdge> = db.aql_query(aql).await?;
         if result.len() == 0 {
-            Ok(None)
+            let aql_str = r###"
+            FOR h IN @@holds FILTER h.id == @name
+                LET owner = FIRST(FOR c IN @@identities FILTER c._id == h._from RETURN c)
+            RETURN {"record": h, "owner": owner}"###;
+
+            let aql = AqlQuery::new(aql_str)
+                .bind_var("@holds", Hold::COLLECTION_NAME)
+                .bind_var("@identities", Identity::COLLECTION_NAME)
+                .bind_var("name", name.clone())
+                .batch_size(1)
+                .count(false);
+
+            let res: Vec<HoldEdge> = db.aql_query(aql).await?;
+            if res.len() > 0 {
+                let r = res.first().unwrap().to_owned();
+                let mut resolve_edge = ResolveEdge::from(Resolve {
+                    uuid: r.record.uuid,
+                    source: r.record.source,
+                    system: DomainNameSystem::ENS,
+                    name: r.record.id.clone(),
+                    fetcher: r.record.fetcher,
+                    updated_at: r.record.updated_at,
+                });
+                resolve_edge.owner = res.first().unwrap().to_owned().owner;
+                resolve_edge.resolved = None;
+                Ok(Some(resolve_edge))
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(Some(result.first().unwrap().to_owned().into()))
         }
@@ -190,7 +218,47 @@ impl Resolve {
 
         let result: Vec<ResolveEdge> = db.aql_query(aql).await?;
         if result.len() == 0 {
-            Ok(None)
+            let aql_str = r###"
+            FOR i IN @@identities
+            FILTER i.platform == @platform AND i.identity == @identity
+            LIMIT 1
+            FOR vertex, edge, path
+                IN 1..1 ANY i @@holds
+                FILTER path.edges[*].source ALL == @platform
+                RETURN {"record": edge, "owner": i}"###;
+
+            let aql = AqlQuery::new(aql_str)
+                .bind_var("@holds", Hold::COLLECTION_NAME)
+                .bind_var("@identities", Identity::COLLECTION_NAME)
+                .bind_var("platform", Platform::Dotbit.to_string())
+                .bind_var("identity", name.clone())
+                .batch_size(1)
+                .count(false);
+
+            let res: Vec<HoldEdge> = db.aql_query(aql).await?;
+            if res.len() > 0 {
+                let record = res.first().unwrap().to_owned().record;
+                let mut resolve_edge = ResolveEdge::from(Resolve {
+                    uuid: record.uuid,
+                    source: record.source,
+                    system: DomainNameSystem::DotBit,
+                    name: res
+                        .first()
+                        .unwrap()
+                        .to_owned()
+                        .owner
+                        .unwrap()
+                        .identity
+                        .clone(),
+                    fetcher: record.fetcher,
+                    updated_at: record.updated_at,
+                });
+                resolve_edge.owner = res.first().unwrap().to_owned().owner;
+                resolve_edge.resolved = None;
+                Ok(Some(resolve_edge))
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(Some(result.first().unwrap().to_owned().into()))
         }
@@ -207,13 +275,19 @@ impl Resolve {
 
 #[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct ResolveEdge {
-    pub record: ResolveRecord,
+    pub record: Resolve,
     pub resolved: Option<IdentityRecord>,
     pub owner: Option<IdentityRecord>,
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct HoldEdge {
+    pub record: HoldRecord,
+    pub owner: Option<IdentityRecord>,
+}
+
 impl std::ops::Deref for ResolveEdge {
-    type Target = ResolveRecord;
+    type Target = Resolve;
 
     fn deref(&self) -> &Self::Target {
         &self.record
@@ -224,8 +298,8 @@ impl std::ops::DerefMut for ResolveEdge {
         &mut self.record
     }
 }
-impl From<ResolveRecord> for ResolveEdge {
-    fn from(record: ResolveRecord) -> Self {
+impl From<Resolve> for ResolveEdge {
+    fn from(record: Resolve) -> Self {
         ResolveEdge {
             record,
             resolved: None,
