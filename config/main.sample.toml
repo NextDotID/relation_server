@@ -37,4 +37,4 @@ url = "https://ens.fafrd.workers.dev/ens/"
 url = "https://indexer-basic.did.id"
 
 [upstream.lens_api]
-url = "https://api.thegraph.com/subgraphs/name/anudit/lens-protocol"
+url = "https://api.lens.dev/playground"

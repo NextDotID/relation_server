@@ -44,6 +44,12 @@ pub enum DomainNameSystem {
     #[graphql(name = "dotbit")]
     DotBit,
 
+    /// https://api.lens.dev/playground
+    #[strum(serialize = "lens")]
+    #[serde(rename = "lens")]
+    #[graphql(name = "lens")]
+    Lens,
+
     #[default]
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]

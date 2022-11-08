@@ -7,7 +7,7 @@ use crate::{
     config::C,
     error::Error,
     graph::{
-        create_identity_to_contract_record,
+        create_identity_to_contract_record, create_identity_to_identity_hold_record,
         edge::{hold::Hold, resolve::DomainNameSystem, Resolve},
         new_db_connection,
         vertex::{
@@ -17,50 +17,90 @@ use crate::{
         Edge, Vertex,
     },
     upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList},
-    util::{naive_now, parse_timestamp},
+    util::naive_now,
 };
 use aragog::DatabaseConnection;
 use async_trait::async_trait;
-use gql_client::Client;
+use cynic::{http::SurfExt, QueryBuilder};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 use uuid::Uuid;
 
-#[derive(Serialize, Debug)]
-struct QueryVars {
-    target: String,
+// #[derive(Serialize, Debug)]
+// struct QueryVars {
+//     target: String,
+// }
+
+// #[derive(Deserialize, Debug)]
+// struct ProfileQueryResponse {
+//     profiles: Vec<Profile>,
+// }
+
+// #[derive(Deserialize, Debug)]
+// #[allow(non_snake_case)]
+// #[allow(dead_code)]
+// struct Profile {
+//     id: String,
+//     name: String,
+//     bio: String,
+//     //imageURI: String,
+//     ownerBy: String,
+//     isDefault: bool,
+// }
+
+#[cynic::schema_for_derives(file = "schema.graphql", module = "schema")]
+mod queries {
+    use super::schema;
+
+    #[derive(cynic::FragmentArguments, Debug)]
+    pub struct ProfileQueryArguments {
+        pub request: SingleProfileQueryRequest,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(graphql_type = "Query", argument_struct = "ProfileQueryArguments")]
+    pub struct ProfileQuery {
+        #[arguments(request = SingleProfileQueryRequest { handle: args.request.handle.clone() })]
+        pub profile: Option<Profile>,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    pub struct Profile {
+        pub bio: Option<String>,
+        pub handle: String,
+        pub id: String,
+        pub is_default: bool,
+        pub is_followed_by_me: bool,
+        pub name: Option<String>,
+        pub metadata: Option<String>,
+        pub owned_by: String,
+    }
+
+    #[derive(cynic::InputObject, Debug)]
+    pub struct SingleProfileQueryRequest {
+        pub handle: Option<String>,
+    }
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    pub struct EthereumAddress(pub String);
+    cynic::impl_scalar!(String, schema::EthereumAddress);
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    pub struct Handle(pub String);
+    cynic::impl_scalar!(String, schema::Handle);
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    pub struct ProfileId(pub String);
+    cynic::impl_scalar!(String, schema::ProfileId);
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    pub struct Url(pub String);
+    cynic::impl_scalar!(String, schema::Url);
 }
 
-#[derive(Deserialize, Debug)]
-struct SimpleResponse {
-    ping: String,
+mod schema {
+    cynic::use_schema!("schema.graphql");
 }
-
-#[derive(Deserialize, Debug)]
-struct ProfileQueryResponse {
-    profiles: Vec<Profile>,
-}
-
-#[derive(Deserialize, Debug)]
-#[allow(non_snake_case)]
-#[allow(dead_code)]
-struct Profile {
-    id: String,
-    handle: String,
-    owner: String,
-    imageURI: String,
-    createdOn: String,
-}
-
-const QUERY_LENS_PROFILE: &str = r#"
-        query ProfileQuerrry($target: String!) {
-            profiles(where: { handle: $target}) {
-                id
-                handle    
-                owner
-            }
-        }
-    "#;
 
 pub struct Lens {}
 
@@ -76,8 +116,6 @@ impl Fetcher for Lens {
             Platform::Lens => fetch_by_lens_profile(target).await,
             _ => Ok(vec![]),
         }
-
-        //perform_fetch(target).await
     }
 
     fn can_fetch(target: &Target) -> bool {
@@ -190,117 +228,87 @@ impl Fetcher for Lens {
 // }
 
 async fn fetch_by_lens_profile(target: &Target) -> Result<TargetProcessedList, Error> {
-    let query: String;
-    let target_var: String;
-    // match target {
-    //     Target::Identity(_platform_, identity) => {
-    //         query = QUERY_BY_WALLET.to_string();
-    //         target_var = identity.clone();
-    //     }
-    //     Target::NFT(_chain, _category, _contract_addr, ens_name) => {
-    //         query = QUERY_BY_ENS.to_string();
-    //         target_var = ens_name.clone();
-    //     }
-    // }
+    use queries::*;
 
-    // let mut header = HashMap::new();
-    // header.insert("Content-Type", "application/json");
-    // header.insert("Accept", "application/json");
-    // header.insert("Origin", "https://api.lens.dev");
-
-    let client = Client::new(&C.upstream.lens_api.url);
-    println!("url: {}", &C.upstream.lens_api.url);
-    query = QUERY_LENS_PROFILE.to_string();
-    //query = QUERY_DEMO.to_string();
-    target_var = target.identity()?;
-    println!("query {}", query);
-    println!("target_var {}", target_var);
-    let vars = QueryVars { target: target_var };
-    //println!("var {:?}", vars);
-
-    let resp = client
-        .query_with_vars::<ProfileQueryResponse, QueryVars>(&query, vars)
+    let operation = ProfileQuery::build(ProfileQueryArguments {
+        request: SingleProfileQueryRequest {
+            handle: Some(target.identity()?),
+        },
+    });
+    let response = surf::post(C.upstream.lens_api.url.clone())
+        .run_graphql(operation)
         .await;
-    println!("{:?}", resp);
+    if response.is_err() {
+        warn!(
+            "Lens target {} | Failed to fetch: {}",
+            target,
+            response.unwrap_err(),
+        );
+        return Ok(vec![]);
+    }
 
-    // if resp.is_err() {
-    //     warn!(
-    //         "Lens Protocol API {} | Failed to fetch: {}",
-    //         target,
-    //         resp.unwrap_err(),
-    //     );
-    //     return Ok(vec![]);
-    // }
+    let data: Option<Profile> = response.unwrap().data.unwrap().profile;
+    if data.is_none() {
+        info!("Lens profile {} | No result", target);
+        return Ok(vec![]);
+    }
+    let profile: Profile = data.unwrap();
+    let db = new_db_connection().await?;
 
-    // let res = resp.unwrap().unwrap();
-    // println!("res {:?}", res);
+    let from: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Ethereum,
+        identity: profile.owned_by.clone().to_lowercase(),
+        created_at: None,
+        display_name: None,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+    };
 
-    //let db = new_db_connection().await?;
-    let mut next_targets: TargetProcessedList = vec![];
+    let to: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Lens,
+        identity: target.identity()?,
+        created_at: None,
+        display_name: profile.name,
+        added_at: naive_now(),
+        avatar_url: profile.metadata,
+        profile_url: Some("https://lenster.xyz/u/".to_owned() + &target.identity()?),
+        updated_at: naive_now(),
+    };
 
-    // for domain in res.domains.into_iter() {
-    //     // Create own record
-    //     let contract_record = create_or_update_own(&db, &domain).await?;
+    let hold: Hold = Hold {
+        uuid: Uuid::new_v4(),
+        source: DataSource::Lens,
+        transaction: None,
+        id: profile.id,
+        created_at: None,
+        updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
+    };
+    let from_record = from.create_or_update(&db).await?;
+    let to_record = to.create_or_update(&db).await?;
+    hold.connect(&db, &from_record, &to_record).await?;
+    //create_identity_to_identity_hold_record(&db, &from, &to, &hold).await;
 
-    //     // Deal with resolve target.
-    //     let resolved_address = domain.resolvedAddress.map(|r| r.id);
-    //     match resolved_address.clone() {
-    //         Some(address) => {
-    //             // Create resolve record
-    //             debug!("TheGraph {} | Resolved address: {}", target, address);
-    //             let resolve_target = Identity {
-    //                 uuid: Some(Uuid::new_v4()),
-    //                 platform: Platform::Ethereum,
-    //                 identity: address.clone(),
-    //                 created_at: None,
-    //                 display_name: None,
-    //                 added_at: naive_now(),
-    //                 avatar_url: None,
-    //                 profile_url: None,
-    //                 updated_at: naive_now(),
-    //             }
-    //             .create_or_update(&db)
-    //             .await?;
-    //             let resolve = Resolve {
-    //                 uuid: Uuid::new_v4(),
-    //                 source: DataSource::TheGraph,
-    //                 system: DomainNameSystem::ENS,
-    //                 name: domain.name.clone(),
-    //                 fetcher: DataFetcher::RelationService,
-    //                 updated_at: naive_now(),
-    //             };
+    if profile.is_default {
+        let resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Lens,
+            system: DomainNameSystem::Lens,
+            name: target.identity()?,
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+        resolve.connect(&db, &to_record, &from_record).await?;
+    }
 
-    //             resolve
-    //                 .connect(&db, &contract_record, &resolve_target)
-    //                 .await?;
-    //         }
-    //         None => {
-    //             // Resolve record not existed anymore. Maybe deleted by user.
-    //             // TODO: Should find existed connection and delete it.
-    //         }
-    //     }
-
-    // Append up_next
-    // match target {
-    //     Target::Identity(_, _) => next_targets.push(Target::NFT(
-    //         Chain::Ethereum,
-    //         ContractCategory::ENS,
-    //         ContractCategory::ENS.default_contract_address().unwrap(),
-    //         domain.name.clone(),
-    //     )),
-    //     Target::NFT(_, _, _, _) => {
-    //         let owner_address = domain.owner.id.clone();
-    //         next_targets.push(Target::Identity(Platform::Ethereum, owner_address.clone()));
-    //         if resolved_address.is_some() && resolved_address != Some(owner_address) {
-    //             next_targets.push(Target::Identity(
-    //                 Platform::Ethereum,
-    //                 resolved_address.unwrap(),
-    //             ));
-    //         }
-    //     }
-    // }
-    //}
-    Ok(next_targets)
+    Ok(vec![Target::Identity(
+        Platform::Ethereum,
+        profile.owned_by.to_lowercase(),
+    )])
 }
 
 // async fn create_or_update_own(
