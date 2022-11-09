@@ -113,12 +113,27 @@ impl ResolveQuery {
                     }
                 }
             }
-            DomainNameSystem::DotBit => {
-                let target = Target::Identity(Platform::Dotbit, name.clone());
-                match Resolve::find_by_dotbit_name(&pool, &name).await? {
+            DomainNameSystem::DotBit | DomainNameSystem::Lens => {
+                let platform;
+                if domain_system == DomainNameSystem::DotBit {
+                    platform = Platform::Dotbit;
+                } else {
+                    platform = Platform::Lens;
+                }
+
+                let target = Target::Identity(platform, name.clone());
+                match Resolve::find_by_domain_platform_name(&pool, &name, &domain_system, &platform)
+                    .await?
+                {
                     None => {
                         let _ = fetch_all(target).await;
-                        Resolve::find_by_dotbit_name(&pool, &name).await
+                        Resolve::find_by_domain_platform_name(
+                            &pool,
+                            &name,
+                            &domain_system,
+                            &platform,
+                        )
+                        .await
                     }
                     Some(resolve) => {
                         if resolve.is_outdated() {
