@@ -21,7 +21,7 @@ use uuid::Uuid;
 
 use self::queries::Profile;
 
-#[cynic::schema_for_derives(file = "schema.graphql", module = "schema")]
+#[cynic::schema_for_derives(file = "src/upstream/lens/schema.graphql", module = "schema")]
 mod queries {
     use super::schema;
 
@@ -98,7 +98,7 @@ mod queries {
 }
 
 mod schema {
-    cynic::use_schema!("schema.graphql");
+    cynic::use_schema!("src/upstream/lens/schema.graphql");
 }
 
 pub struct Lens {}

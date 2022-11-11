@@ -79,6 +79,7 @@ pub struct MetaData {
     pub handle: Option<String>,
 }
 
+const PAGE_LIMIT: i64 = 500;
 pub struct Rss3 {}
 
 #[async_trait]
@@ -150,8 +151,7 @@ async fn fetch_nfts_by_account(
             .collect();
 
         next_targets.extend(targets);
-        println!("next_targets {:?}", next_targets);
-        if body.cursor.is_none() {
+        if body.cursor.is_none() || body.total < PAGE_LIMIT {
             break;
         } else {
             cursor = body.cursor.unwrap();
