@@ -182,7 +182,7 @@ async fn fetch_connections_by_platform_identity(
             updated_at: naive_now(),
             fetcher: DataFetcher::RelationService,
         };
-        pf.connect(&db, &from_record, &to_record).await?;
+        pf.two_way_binding(&db, &from_record, &to_record).await?;
     }
     Ok(next_targets)
 }
