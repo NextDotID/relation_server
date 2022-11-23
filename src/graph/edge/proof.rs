@@ -72,6 +72,7 @@ impl Proof {
             Ok(Some(result.first().unwrap().clone().into()))
         }
     }
+
     pub fn is_outdated(&self) -> bool {
         let outdated_in = Duration::days(1);
         self.updated_at
@@ -87,6 +88,7 @@ impl Edge<Identity, Identity, ProofRecord> for Proof {
         Some(self.uuid)
     }
 
+    /// Find an edge by UUID.
     async fn find_by_uuid(
         db: &DatabaseConnection,
         uuid: &Uuid,
@@ -103,6 +105,7 @@ impl Edge<Identity, Identity, ProofRecord> for Proof {
         }
     }
 
+    /// Connect 2 vertex.
     async fn connect(
         &self,
         db: &DatabaseConnection,
@@ -116,6 +119,32 @@ impl Edge<Identity, Identity, ProofRecord> for Proof {
                 .await?
                 .into()),
         }
+    }
+
+    /// Two-way binding: Strongly connected two vertex.
+    async fn two_way_binding(
+        &self,
+        db: &DatabaseConnection,
+        from: &DatabaseRecord<Identity>,
+        to: &DatabaseRecord<Identity>,
+    ) -> Result<(ProofRecord, ProofRecord), Error> {
+        let forward =
+            match Self::find_by_from_to(db, from, to, &self.source, &self.record_id).await? {
+                Some(edge) => edge,
+                None => DatabaseRecord::link(from, to, db, self.clone())
+                    .await?
+                    .into(),
+            };
+
+        let reverse =
+            match Self::find_by_from_to(db, to, from, &self.source, &self.record_id).await? {
+                Some(edge) => edge,
+                None => DatabaseRecord::link(to, from, db, self.clone())
+                    .await?
+                    .into(),
+            };
+
+        Ok((forward, reverse))
     }
 }
 
@@ -149,10 +178,10 @@ pub struct IdentityFromToRecord {
     rev: String,
     /// The `_from` field of `ArangoDB` edge documents
     #[serde(rename(serialize = "_from", deserialize = "_from"))]
-    from: String,
+    pub from: String,
     /// The `to` field of `ArangoDB` edge documents
     #[serde(rename(serialize = "_to", deserialize = "_to"))]
-    to: String,
+    pub to: String,
 
     pub uuid: Uuid,
     pub source: DataSource,

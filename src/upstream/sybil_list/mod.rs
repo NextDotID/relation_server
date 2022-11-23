@@ -86,7 +86,7 @@ async fn save_item(
     let to_record = to.create_or_update(db).await.ok()?;
 
     let create_ms_time: u32 = (item.twitter.timestamp % 1000).try_into().unwrap();
-    let proof: Proof = Proof {
+    let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
         source: DataSource::SybilList,
         record_id: Some(item.twitter.tweet_id),
@@ -98,7 +98,9 @@ async fn save_item(
         fetcher: DataFetcher::RelationService,
     };
 
-    proof.connect(db, &from_record, &to_record).await.ok()?;
+    pf.two_way_binding(db, &from_record, &to_record)
+        .await
+        .ok()?;
     Some((Platform::Twitter, item.twitter.handle.clone()))
 }
 

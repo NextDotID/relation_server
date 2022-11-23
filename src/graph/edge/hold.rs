@@ -184,6 +184,16 @@ impl<T: Record + std::marker::Sync> Edge<Identity, T, HoldRecord> for Hold {
         }
     }
 
+    /// notice this function is deprecated
+    async fn two_way_binding(
+        &self,
+        _db: &DatabaseConnection,
+        _from: &DatabaseRecord<Identity>,
+        _to: &DatabaseRecord<T>,
+    ) -> Result<(HoldRecord, HoldRecord), Error> {
+        todo!()
+    }
+
     /// Find an edge by UUID.
     async fn find_by_uuid(
         db: &DatabaseConnection,
