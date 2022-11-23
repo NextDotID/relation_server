@@ -33,6 +33,14 @@ where
         to: &DatabaseRecord<To>,
     ) -> Result<RecordType, Error>;
 
+    /// Connect 2 vertex by strongly connected way. Two-way binding
+    async fn two_way_binding(
+        &self,
+        db: &DatabaseConnection,
+        from: &DatabaseRecord<From>,
+        to: &DatabaseRecord<To>,
+    ) -> Result<(RecordType, RecordType), Error>;
+
     /// Find an edge by UUID.
     async fn find_by_uuid(
         db: &DatabaseConnection,
