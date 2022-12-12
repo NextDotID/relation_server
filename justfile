@@ -33,3 +33,7 @@ test: peri
 clean:
 	cargo clean
 	docker-compose down -v
+
+# Get latest schema file. install first: npm install -g get-graphql-schema
+get-schema:
+    get-graphql-schema https://api.lens.dev/playground > src/upstream/lens/schema.graphql

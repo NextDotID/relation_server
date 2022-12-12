@@ -59,6 +59,11 @@ array_tool = "1.0.3"
 
 gql_client = "1.0.4"
 
+# cynic GraphQL library
+cynic = { version = "1.0.0", features = ["surf"]}
+surf = "2.0.0"
+reqwest = { version = "^0.11", features = ["json", "blocking"] }
+
 [dev_dependencies]
 fake = { version = "2.4", features = ["uuid", "chrono"] }
 rand = "0.8"

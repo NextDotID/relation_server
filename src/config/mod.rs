@@ -40,6 +40,7 @@ pub struct Upstream {
     pub the_graph: ConfigUpstreamTheGraph,
     pub ens_reverse: ConfigENSReverse,
     pub dotbit_service: ConfigDotbitService,
+    pub lens_api: ConfigLensAPI,
 }
 
 #[derive(Clone, Deserialize, Default)]
@@ -99,6 +100,11 @@ pub struct ConfigENSReverse {
 
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigDotbitService {
+    pub url: String,
+}
+
+#[derive(Clone, Deserialize, Default)]
+pub struct ConfigLensAPI {
     pub url: String,
 }
 

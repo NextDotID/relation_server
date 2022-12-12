@@ -4,7 +4,7 @@ use crate::{
     config::C,
     error::Error,
     graph::{
-        create_identity_to_contract_record, create_identity_to_identity_record,
+        create_identity_to_contract_record,
         edge::{hold::Hold, proof::Proof},
         new_db_connection,
         vertex::{contract::Chain, contract::ContractCategory, Contract, Identity},
@@ -21,15 +21,19 @@ use std::str::FromStr;
 use tracing::{error, info};
 use uuid::Uuid;
 
-use super::DataFetcher;
+use super::{
+    types::{platform, target},
+    DataFetcher,
+};
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Rss3Response {
     pub total: i64,
+    pub cursor: Option<String>,
     pub result: Vec<ResultItem>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct ResultItem {
     pub timestamp: String,
     #[serde(default)]
@@ -47,7 +51,7 @@ pub struct ResultItem {
     pub actions: Vec<ActionItem>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct ActionItem {
     pub tag: String,
     #[serde(rename = "type")]
@@ -63,7 +67,7 @@ pub struct ActionItem {
     pub related_urls: Vec<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct MetaData {
     pub id: Option<String>,
     pub name: Option<String>,
@@ -75,6 +79,7 @@ pub struct MetaData {
     pub handle: Option<String>,
 }
 
+const PAGE_LIMIT: i64 = 500;
 pub struct Rss3 {}
 
 #[async_trait]
@@ -99,45 +104,59 @@ async fn fetch_nfts_by_account(
     _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
+    let mut cursor = String::from("");
     let client = make_client();
-    let uri: http::Uri = format!(
-        "{}/{}?tag=collectible&tag=social&include_poap=true&refresh=true",
-        C.upstream.rss3_service.url, identity
-    )
-    .parse()
-    .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+    let mut next_targets = Vec::new();
 
-    let mut resp = client.get(uri).await?;
+    loop {
+        let uri: http::Uri;
+        if cursor.len() == 0 {
+            uri = format!(
+                "{}/{}?tag=collectible&include_poap=true&refresh=true",
+                C.upstream.rss3_service.url, identity
+            )
+            .parse()
+            .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+        } else {
+            uri = format!(
+                "{}/{}?tag=collectible&include_poap=true&refresh=true&cursor={}",
+                C.upstream.rss3_service.url, identity, cursor
+            )
+            .parse()
+            .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+        }
 
-    if !resp.status().is_success() {
-        error!("Rss3 fetch error, statusCode: {}", resp.status());
-        return Err(Error::General(
-            format!("Rss3 Result Get Error"),
-            resp.status(),
-        ));
+        let mut resp = client.get(uri).await?;
+        if !resp.status().is_success() {
+            error!("Rss3 fetch error, statusCode: {}", resp.status());
+            break;
+        }
+        let body: Rss3Response = parse_body(&mut resp).await?;
+        if body.total == 0 {
+            info!("Rss3 Response result is empty");
+            break;
+        }
+
+        let futures: Vec<_> = body
+            .result
+            .into_iter()
+            .filter(|p| p.owner == identity.to_lowercase())
+            .map(save_item)
+            .collect();
+
+        let targets: TargetProcessedList = join_all(futures)
+            .await
+            .into_iter()
+            .flat_map(|result| result.unwrap_or_default())
+            .collect();
+
+        next_targets.extend(targets);
+        if body.cursor.is_none() || body.total < PAGE_LIMIT {
+            break;
+        } else {
+            cursor = body.cursor.unwrap();
+        }
     }
-
-    let body: Rss3Response = parse_body(&mut resp).await?;
-    if body.total == 0 {
-        info!("Rss3 Response is empty");
-        return Err(Error::General(
-            "Rss3 Response is empty".to_string(),
-            resp.status(),
-        ));
-    }
-
-    let futures: Vec<_> = body
-        .result
-        .into_iter()
-        .filter(|p| p.owner == identity.to_lowercase())
-        .map(save_item)
-        .collect();
-
-    let next_targets: TargetProcessedList = join_all(futures)
-        .await
-        .into_iter()
-        .flat_map(|result| result.unwrap_or_default())
-        .collect();
 
     Ok(next_targets)
 }
@@ -164,50 +183,14 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         return Ok(vec![]);
     }
 
-    let found = p.actions.iter().find(|a| {
-        (p.tag == "social" && a.tag_type == "create")
-            || (p.tag == "collectible" && a.tag == "collectible")
-    });
+    let found = p
+        .actions
+        .iter()
+        .find(|a| (p.tag == "collectible" && a.tag == "collectible"));
     if found.is_none() {
         return Ok(vec![]);
     }
     let real_action = found.unwrap();
-
-    if p.tag == "social" {
-        if p.platform.is_none() {
-            return Ok(vec![]);
-        }
-        let social_platform =
-            Platform::from_str(p.platform.unwrap().as_str()).unwrap_or(Platform::Unknown);
-        if social_platform != Platform::Lens {
-            return Ok(vec![]);
-        }
-        let handle = real_action.metadata.handle.as_ref().unwrap().to_string();
-        let to_identity: Identity = Identity {
-            uuid: Some(Uuid::new_v4()),
-            platform: social_platform,
-            identity: handle.clone(),
-            created_at: Some(created_at_naive),
-            display_name: Some(handle.clone()),
-            added_at: naive_now(),
-            avatar_url: None,
-            profile_url: Some("https://lenster.xyz/u/".to_owned() + &handle),
-            updated_at: naive_now(),
-        };
-
-        let pf: Proof = Proof {
-            uuid: Uuid::new_v4(),
-            source: DataSource::Rss3,
-            record_id: Some(p.hash),
-            created_at: Some(created_at_naive),
-            updated_at: naive_now(),
-            fetcher: DataFetcher::RelationService,
-        };
-
-        create_identity_to_identity_record(&db, &from, &to_identity, &pf).await?;
-
-        return Ok(vec![Target::Identity(Platform::Lens, handle.clone())]);
-    }
 
     if real_action.metadata.symbol.is_none()
         || real_action.metadata.symbol.as_ref().unwrap() == &String::from("ENS")

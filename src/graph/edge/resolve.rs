@@ -44,6 +44,12 @@ pub enum DomainNameSystem {
     #[graphql(name = "dotbit")]
     DotBit,
 
+    /// https://api.lens.dev/playground
+    #[strum(serialize = "lens")]
+    #[serde(rename = "lens")]
+    #[graphql(name = "lens")]
+    Lens,
+
     #[default]
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
@@ -175,9 +181,11 @@ impl Resolve {
         }
     }
 
-    pub async fn find_by_dotbit_name(
+    pub async fn find_by_domain_platform_name(
         pool: &ConnectionPool,
         name: &str,
+        domain_system: &DomainNameSystem,
+        platform: &Platform,
     ) -> Result<Option<ResolveEdge>, Error> {
         let conn = pool
             .get()
@@ -203,9 +211,9 @@ impl Resolve {
             .bind_var("@resolves", Resolve::COLLECTION_NAME)
             .bind_var("@holds", Hold::COLLECTION_NAME)
             .bind_var("@identities", Identity::COLLECTION_NAME)
-            .bind_var("system", DomainNameSystem::DotBit.to_string())
+            .bind_var("system", domain_system.to_string())
             .bind_var("name", name.clone())
-            .bind_var("platform", Platform::Dotbit.to_string())
+            .bind_var("platform", platform.to_string())
             .bind_var("identity", name.clone())
             .batch_size(1)
             .count(false);
@@ -224,7 +232,7 @@ impl Resolve {
             let aql = AqlQuery::new(aql_str)
                 .bind_var("@holds", Hold::COLLECTION_NAME)
                 .bind_var("@identities", Identity::COLLECTION_NAME)
-                .bind_var("platform", Platform::Dotbit.to_string())
+                .bind_var("platform", platform.to_string())
                 .bind_var("identity", name.clone())
                 .batch_size(1)
                 .count(false);
@@ -376,7 +384,10 @@ impl<T: Record + std::marker::Sync> Edge<T, Identity, ResolveRecord> for Resolve
 mod tests {
     use crate::error::Error;
     use crate::graph::arangopool::new_connection_pool;
+    use crate::graph::edge::resolve::DomainNameSystem;
     use crate::graph::edge::Resolve;
+    use crate::upstream::Platform;
+
     #[tokio::test]
     async fn test_find_by_ens_name() -> Result<(), Error> {
         let pool = new_connection_pool().await?;
@@ -390,7 +401,13 @@ mod tests {
     async fn test_find_by_dotbit_name() -> Result<(), Error> {
         let pool = new_connection_pool().await?;
         let name = "thefuzezhong.bit";
-        let a = Resolve::find_by_dotbit_name(&pool, &name).await?;
+        let a = Resolve::find_by_domain_platform_name(
+            &pool,
+            &name,
+            &DomainNameSystem::DotBit,
+            &Platform::Dotbit,
+        )
+        .await?;
         print!("result: {:?}", a);
         Ok(())
     }

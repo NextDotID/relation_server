@@ -35,3 +35,6 @@ url = "https://ens.fafrd.workers.dev/ens/"
 
 [upstream.dotbit_service]
 url = "https://indexer-basic.did.id"
+
+[upstream.lens_api]
+url = "https://api.lens.dev/playground"

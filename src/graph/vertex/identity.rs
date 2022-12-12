@@ -533,8 +533,8 @@ impl IdentityRecord {
         Ok(identity_sources)
     }
 
-    // Return lens owned by wallet address.
-    pub async fn lens_owned_by(
+    // Return domain name owned by wallet address.
+    pub async fn domain_owned_by(
         &self,
         pool: &ConnectionPool,
     ) -> Result<Option<IdentityRecord>, Error> {
@@ -546,19 +546,19 @@ impl IdentityRecord {
         let db = conn.database();
 
         let aql_str = r"
-          WITH @@collection_name
-            FOR d IN @@collection_name
+        FOR d IN @@identities
             FILTER d._id == @id AND d.platform == @platform
             LIMIT 1
-            FOR vertex
-                IN 1..1 ANY d GRAPH @graph_name
+            FOR vertex, edge, path
+                IN 1..1 ANY d @@holds
+                FILTER path.edges[*].source ALL == @platform
                 RETURN DISTINCT vertex";
 
         let aql = AqlQuery::new(aql_str)
-            .bind_var("@collection_name", Identity::COLLECTION_NAME)
-            .bind_var("graph_name", "identities_proofs_graph")
+            .bind_var("@identities", Identity::COLLECTION_NAME)
+            .bind_var("@holds", Hold::COLLECTION_NAME)
             .bind_var("id", self.id().as_str())
-            .bind_var("platform", "lens")
+            .bind_var("platform", self.platform.to_string())
             .batch_size(1)
             .count(false);
 
@@ -648,7 +648,6 @@ impl IdentityRecord {
             bind_vars.insert("id", json!(self.id().as_str()));
             bind_vars.insert("category", category_array.into());
         }
-        tracing::info!("aql = {},  {:?}", aql_str, bind_vars);
         let conn = pool
             .get()
             .await

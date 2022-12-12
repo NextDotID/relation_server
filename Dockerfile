@@ -17,7 +17,7 @@ COPY --from=builder /app/target/release/standalone /app/server
 RUN chmod a+x server && \
     mkdir config && \
     apt-get update && \
-    apt-get install -y openssl ca-certificates && \
+    apt-get install -y openssl ca-certificates curl && \
     rm -rf /var/lib/apt
 
 VOLUME ["/app/config"]
