@@ -186,6 +186,12 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
     let found = p
         .actions
         .iter()
+        // collectible (transfer, mint, burn) share the same UMS, but approve/revoke not.
+        // we need to record is the `hold` relation, so burn is excluded
+        .filter(|a| {
+            (a.tag_type == "transfer" && p.tag_type == "transfer")
+                || (a.tag_type == "mint" && p.tag_type == "mint")
+        })
         .find(|a| (p.tag == "collectible" && a.tag == "collectible"));
     if found.is_none() {
         return Ok(vec![]);
