@@ -73,6 +73,18 @@ pub async fn create_identity_to_identity_record(
     Ok(())
 }
 
+pub async fn create_identity_to_identity_two_way_binding(
+    db: &DatabaseConnection,
+    from: &Identity,
+    to: &Identity,
+    proof: &Proof,
+) -> Result<(), Error> {
+    let from_record = from.create_or_update(db).await?;
+    let to_record = to.create_or_update(db).await?;
+    proof.two_way_binding(db, &from_record, &to_record).await?;
+    Ok(())
+}
+
 pub async fn create_identity_to_identity_hold_record(
     db: &DatabaseConnection,
     from: &Identity,

@@ -363,6 +363,16 @@ impl<T: Record + std::marker::Sync> Edge<T, Identity, ResolveRecord> for Resolve
         }
     }
 
+    // notice this function is deprecated
+    async fn two_way_binding(
+        &self,
+        _db: &DatabaseConnection,
+        _from: &DatabaseRecord<T>,
+        _to: &DatabaseRecord<Identity>,
+    ) -> Result<(ResolveRecord, ResolveRecord), Error> {
+        todo!()
+    }
+
     async fn find_by_uuid(
         db: &DatabaseConnection,
         uuid: &Uuid,
