@@ -8,6 +8,7 @@ mod lens;
 mod proof_client;
 mod rss3;
 mod sybil_list;
+mod unstoppable;
 
 #[cfg(test)]
 mod tests;
