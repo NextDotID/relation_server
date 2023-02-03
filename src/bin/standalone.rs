@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
     let log_subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_env_filter(
             EnvFilter::builder()
-                .with_default_directive(LevelFilter::INFO.into())
+                .with_default_directive(LevelFilter::DEBUG.into())
                 .from_env_lossy()
                 .add_directive("hyper=info".parse().unwrap()),
         )

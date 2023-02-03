@@ -38,3 +38,6 @@ url = "https://indexer-basic.did.id"
 
 [upstream.lens_api]
 url = "https://api.lens.dev/playground"
+
+[upstream.unstoppable_api]
+url = "https://resolve.unstoppabledomains.com"

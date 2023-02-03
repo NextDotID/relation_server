@@ -41,6 +41,7 @@ pub struct Upstream {
     pub ens_reverse: ConfigENSReverse,
     pub dotbit_service: ConfigDotbitService,
     pub lens_api: ConfigLensAPI,
+    pub unstoppable_api: ConfigUnstoppableAPI,
 }
 
 #[derive(Clone, Deserialize, Default)]
@@ -105,6 +106,11 @@ pub struct ConfigDotbitService {
 
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigLensAPI {
+    pub url: String,
+}
+
+#[derive(Clone, Deserialize, Default)]
+pub struct ConfigUnstoppableAPI {
     pub url: String,
 }
 

@@ -50,6 +50,12 @@ pub enum DomainNameSystem {
     #[graphql(name = "lens")]
     Lens,
 
+    /// https://unstoppabledomains.com/
+    #[strum(serialize = "unstoppable")]
+    #[serde(rename = "unstoppable")]
+    #[graphql(name = "unstoppable")]
+    Unstoppable,
+
     #[default]
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
