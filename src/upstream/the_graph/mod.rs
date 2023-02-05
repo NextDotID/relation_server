@@ -183,33 +183,35 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
         let resolved_address = domain.resolvedAddress.map(|r| r.id);
         match resolved_address.clone() {
             Some(address) => {
-                // Create resolve record
-                debug!("TheGraph {} | Resolved address: {}", target, address);
-                let resolve_target = Identity {
-                    uuid: Some(Uuid::new_v4()),
-                    platform: Platform::Ethereum,
-                    identity: address.clone(),
-                    created_at: None,
-                    display_name: None,
-                    added_at: naive_now(),
-                    avatar_url: None,
-                    profile_url: None,
-                    updated_at: naive_now(),
-                }
-                .create_or_update(&db)
-                .await?;
-                let resolve = Resolve {
-                    uuid: Uuid::new_v4(),
-                    source: DataSource::TheGraph,
-                    system: DomainNameSystem::ENS,
-                    name: domain.name.clone(),
-                    fetcher: DataFetcher::RelationService,
-                    updated_at: naive_now(),
-                };
+                if address != "0x0000000000000000000000000000000000000000".to_string() {
+                    // Create resolve record
+                    debug!("TheGraph {} | Resolved address: {}", target, address);
+                    let resolve_target = Identity {
+                        uuid: Some(Uuid::new_v4()),
+                        platform: Platform::Ethereum,
+                        identity: address.clone(),
+                        created_at: None,
+                        display_name: None,
+                        added_at: naive_now(),
+                        avatar_url: None,
+                        profile_url: None,
+                        updated_at: naive_now(),
+                    }
+                        .create_or_update(&db)
+                        .await?;
+                    let resolve = Resolve {
+                        uuid: Uuid::new_v4(),
+                        source: DataSource::TheGraph,
+                        system: DomainNameSystem::ENS,
+                        name: domain.name.clone(),
+                        fetcher: DataFetcher::RelationService,
+                        updated_at: naive_now(),
+                    };
 
-                resolve
-                    .connect(&db, &contract_record, &resolve_target)
-                    .await?;
+                    resolve
+                        .connect(&db, &contract_record, &resolve_target)
+                        .await?;
+                }
             }
             None => {
                 // Resolve record not existed anymore. Maybe deleted by user.
