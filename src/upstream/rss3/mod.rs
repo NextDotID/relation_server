@@ -5,7 +5,7 @@ use crate::{
     error::Error,
     graph::{
         create_identity_to_contract_record,
-        edge::{hold::Hold, proof::Proof},
+        edge::hold::Hold,
         new_db_connection,
         vertex::{contract::Chain, contract::ContractCategory, Contract, Identity},
     },
@@ -16,16 +16,12 @@ use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime};
 use futures::future::join_all;
 use http::uri::InvalidUri;
-use hyper::{Body, Client, Method, Request};
 use serde::Deserialize;
 use std::str::FromStr;
 use tracing::{error, info};
 use uuid::Uuid;
 
-use super::{
-    types::{platform, target},
-    DataFetcher,
-};
+use super::DataFetcher;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Rss3Response {
