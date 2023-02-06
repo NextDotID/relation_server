@@ -112,6 +112,7 @@ pub struct ConfigLensAPI {
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigUnstoppableAPI {
     pub url: String,
+    pub token: String,
 }
 
 #[derive(Clone, Deserialize)]
