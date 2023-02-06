@@ -1,3 +1,5 @@
+mod tests;
+
 use crate::config::C;
 use crate::error::Error;
 use crate::graph::create_identity_to_identity_hold_record;
@@ -10,9 +12,9 @@ use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, Target
 use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
 use async_trait::async_trait;
 use http::uri::InvalidUri;
-use hyper::{Body, Method, Request};
-use serde::{Deserialize, Serialize};
-use tracing::{debug, error, info, warn};
+use hyper::{Body, Method};
+use serde::Deserialize;
+use tracing::{debug, error};
 use uuid::Uuid;
 
 use super::types::target;
@@ -74,7 +76,7 @@ pub struct Meta {
     pub token_id: Option<String>,
     pub namehash: Option<String>,
     pub blockchain: Option<String>,
-    #[serde(rename = "tokenId")]
+    #[serde(rename = "networkId")]
     pub network_id: i64,
     pub owner: Option<String>,
     pub resolver: Option<String>,
@@ -146,11 +148,13 @@ async fn fetch_domains_by_account(
             .parse()
             .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
         }
-
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", "Bearer tokenId")
+            .header(
+                "Authorization",
+                format!("Bearer {}", C.upstream.unstoppable_api.token),
+            )
             .body(Body::empty())
             .expect("request builder");
         // .map_err(|_err| Error::ParamError(format!("Invalid Head Error {}", _err)))?;
@@ -224,7 +228,10 @@ async fn fetch_domains_by_account(
                 let reverse_req = hyper::Request::builder()
                     .method(Method::GET)
                     .uri(reverse_uri)
-                    .header("Authorization", "Bearer tokenId")
+                    .header(
+                        "Authorization",
+                        format!("Bearer {}", C.upstream.unstoppable_api.token),
+                    )
                     .body(Body::empty())
                     .expect("request builder");
 
@@ -304,7 +311,10 @@ async fn fetch_account_by_domain(
     let req = hyper::Request::builder()
         .method(Method::GET)
         .uri(uri)
-        .header("Authorization", "Bearer tokenId")
+        .header(
+            "Authorization",
+            format!("Bearer {}", C.upstream.unstoppable_api.token),
+        )
         .body(Body::empty())
         .expect("request builder");
     let mut resp = client.request(req).await?;
@@ -382,7 +392,10 @@ async fn fetch_account_by_domain(
         let reverse_req = hyper::Request::builder()
             .method(Method::GET)
             .uri(reverse_uri)
-            .header("Authorization", "Bearer tokenId")
+            .header(
+                "Authorization",
+                format!("Bearer {}", C.upstream.unstoppable_api.token),
+            )
             .body(Body::empty())
             .expect("request builder");
 

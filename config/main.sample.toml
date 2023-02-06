@@ -41,3 +41,4 @@ url = "https://api.lens.dev/playground"
 
 [upstream.unstoppable_api]
 url = "https://resolve.unstoppabledomains.com"
+token = "130d46e0-c2d4-4bd3-b8cc-80799dee7f7a" # sample tokenId
