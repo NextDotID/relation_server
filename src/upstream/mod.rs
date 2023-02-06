@@ -25,7 +25,7 @@ use crate::{
     upstream::{
         aggregation::Aggregation, dotbit::DotBit, ens_reverse::ENSReverseLookup, keybase::Keybase,
         knn3::Knn3, lens::Lens, proof_client::ProofClient, rss3::Rss3, sybil_list::SybilList,
-        the_graph::TheGraph,
+        the_graph::TheGraph, unstoppable::Unstoppable,
     },
     util::hashset_append,
 };
@@ -108,6 +108,7 @@ pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
         TheGraph::fetch(target),
         ENSReverseLookup::fetch(target),
         DotBit::fetch(target),
+        Unstoppable::fetch(target),
         Lens::fetch(target),
     ])
     .await

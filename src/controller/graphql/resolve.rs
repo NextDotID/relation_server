@@ -113,10 +113,12 @@ impl ResolveQuery {
                     }
                 }
             }
-            DomainNameSystem::DotBit | DomainNameSystem::Lens => {
+            DomainNameSystem::DotBit | DomainNameSystem::Lens | DomainNameSystem::Unstoppable => {
                 let platform;
                 if domain_system == DomainNameSystem::DotBit {
                     platform = Platform::Dotbit;
+                } else if domain_system == DomainNameSystem::Unstoppable {
+                    platform = Platform::Unstoppable;
                 } else {
                     platform = Platform::Lens;
                 }
