@@ -114,15 +114,7 @@ impl ResolveQuery {
                 }
             }
             DomainNameSystem::DotBit | DomainNameSystem::Lens | DomainNameSystem::Unstoppable => {
-                let platform;
-                if domain_system == DomainNameSystem::DotBit {
-                    platform = Platform::Dotbit;
-                } else if domain_system == DomainNameSystem::Unstoppable {
-                    platform = Platform::Unstoppable;
-                } else {
-                    platform = Platform::Lens;
-                }
-
+                let platform = domain_system.into();
                 let target = Target::Identity(platform, name.clone());
                 match Resolve::find_by_domain_platform_name(&pool, &name, &domain_system, &platform)
                     .await?

@@ -74,10 +74,10 @@ pub enum DataSource {
     #[graphql(name = "dotbit")]
     Dotbit,
 
-    /// unstoppable
-    #[strum(serialize = "unstoppable")]
-    #[serde(rename = "unstoppable")]
-    #[graphql(name = "unstoppable")]
+    /// UnstoppableDomains
+    #[strum(serialize = "UnstoppableDomains")]
+    #[serde(rename = "UnstoppableDomains")]
+    #[graphql(name = "UnstoppableDomains")]
     Unstoppable,
 
     /// .lens

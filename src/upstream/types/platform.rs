@@ -79,10 +79,10 @@ pub enum Platform {
     #[graphql(name = "minds")]
     Minds,
 
-    /// Unstoppable
-    #[strum(serialize = "unstoppable")]
-    #[serde(rename = "unstoppable")]
-    #[graphql(name = "unstoppable")]
+    /// UnstoppableDomains
+    #[strum(serialize = "UnstoppableDomains")]
+    #[serde(rename = "UnstoppableDomains")]
+    #[graphql(name = "UnstoppableDomains")]
     Unstoppable,
 
     /// Unknown
