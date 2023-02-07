@@ -333,7 +333,7 @@ async fn fetch_account_by_domain(
         }
     };
 
-    if result.meta.registry.is_none() || result.meta.owner.is_none() {
+    if result.meta.owner.is_none() {
         return Ok(vec![]);
     }
 
