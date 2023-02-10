@@ -121,6 +121,9 @@ async fn fetch_connections_by_platform_identity(
     let mut next_targets: TargetProcessedList = vec![];
 
     for p in proofs.proofs.into_iter() {
+        if p.is_valid == false {
+            continue;
+        }
         let from: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
             platform: Platform::NextID,
