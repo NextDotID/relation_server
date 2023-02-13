@@ -154,11 +154,10 @@ impl IdentityRecord {
     async fn owned_by(&self, ctx: &Context<'_>) -> Result<Option<IdentityRecord>> {
         if vec![Platform::Lens, Platform::Dotbit, Platform::Unstoppable].contains(&self.platform) {
             return Ok(None);
-        } else {
-            let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
-            debug!("Connection pool status: {:?}", pool.status());
-            self.domain_owned_by(pool).await
         }
+        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
+        debug!("Connection pool status: {:?}", pool.status());
+        self.domain_owned_by(pool).await
     }
 
     /// NFTs owned by this identity.
