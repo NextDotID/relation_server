@@ -67,7 +67,7 @@ impl From<DomainNameSystem> for Platform {
     fn from(domain: DomainNameSystem) -> Self {
         match domain {
             DomainNameSystem::DotBit => Platform::Dotbit,
-            DomainNameSystem::Unstoppable => Platform::Unstoppable,
+            DomainNameSystem::Unstoppable => Platform::UnstoppableDomains,
             DomainNameSystem::Lens => Platform::Lens,
             _ => Platform::Unknown,
         }

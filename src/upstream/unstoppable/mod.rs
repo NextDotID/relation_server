@@ -109,7 +109,7 @@ impl Fetcher for Unstoppable {
     }
 
     fn can_fetch(target: &Target) -> bool {
-        target.in_platform_supported(vec![Platform::Unstoppable, Platform::Ethereum])
+        target.in_platform_supported(vec![Platform::UnstoppableDomains, Platform::Ethereum])
     }
 }
 
@@ -119,7 +119,7 @@ async fn fetch_connections_by_platform_identity(
 ) -> Result<TargetProcessedList, Error> {
     match *platform {
         Platform::Ethereum => fetch_domains_by_account(platform, identity).await,
-        Platform::Unstoppable => fetch_account_by_domain(platform, identity).await,
+        Platform::UnstoppableDomains => fetch_account_by_domain(platform, identity).await,
         _ => Ok(vec![]),
     }
 }
@@ -197,7 +197,7 @@ async fn fetch_domains_by_account(
         for item in result.data.into_iter() {
             let unstoppable_identity: Identity = Identity {
                 uuid: Some(Uuid::new_v4()),
-                platform: Platform::Unstoppable,
+                platform: Platform::UnstoppableDomains,
                 identity: item.attributes.meta.domain.clone(),
                 created_at: None,
                 display_name: Some(item.attributes.meta.domain.clone()),
@@ -286,7 +286,7 @@ async fn fetch_domains_by_account(
                     .await?;
             }
             next_targets.extend(vec![Target::Identity(
-                Platform::Unstoppable,
+                Platform::UnstoppableDomains,
                 item.attributes.meta.domain.clone(),
             )]);
         }
@@ -352,7 +352,7 @@ async fn fetch_account_by_domain(
 
     let unstoppable_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
-        platform: Platform::Unstoppable,
+        platform: Platform::UnstoppableDomains,
         identity: result.meta.domain.clone(),
         created_at: None,
         display_name: Some(result.meta.domain.clone()),
