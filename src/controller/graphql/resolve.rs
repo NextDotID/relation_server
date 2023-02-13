@@ -11,7 +11,7 @@ use crate::{
         },
         ConnectionPool,
     },
-    upstream::{fetch_all, DataFetcher, DataSource, Platform, Target},
+    upstream::{fetch_all, DataFetcher, DataSource, Target},
 };
 use async_graphql::{Context, Object};
 use strum::IntoEnumIterator;
