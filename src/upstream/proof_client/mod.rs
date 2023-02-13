@@ -88,7 +88,7 @@ async fn fetch_connections_by_platform_identity(
     let client = make_client();
 
     let uri: http::Uri = format!(
-        "{}/v1/proof?platform={}&identity={}",
+        "{}/v1/proof?exact=true&platform={}&identity={}",
         C.upstream.proof_service.url, platform, identity
     )
     .parse()
