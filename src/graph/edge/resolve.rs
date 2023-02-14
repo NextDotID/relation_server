@@ -54,7 +54,7 @@ pub enum DomainNameSystem {
     #[strum(serialize = "UnstoppableDomains")]
     #[serde(rename = "UnstoppableDomains")]
     #[graphql(name = "UnstoppableDomains")]
-    Unstoppable,
+    UnstoppableDomains,
 
     #[default]
     #[strum(serialize = "unknown")]
@@ -67,7 +67,7 @@ impl From<DomainNameSystem> for Platform {
     fn from(domain: DomainNameSystem) -> Self {
         match domain {
             DomainNameSystem::DotBit => Platform::Dotbit,
-            DomainNameSystem::Unstoppable => Platform::UnstoppableDomains,
+            DomainNameSystem::UnstoppableDomains => Platform::UnstoppableDomains,
             DomainNameSystem::Lens => Platform::Lens,
             _ => Platform::Unknown,
         }

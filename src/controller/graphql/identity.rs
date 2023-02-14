@@ -152,7 +152,13 @@ impl IdentityRecord {
 
     /// there's only `platform: lens` identity `ownedBy` is not null
     async fn owned_by(&self, ctx: &Context<'_>) -> Result<Option<IdentityRecord>> {
-        if vec![Platform::Lens, Platform::Dotbit, Platform::UnstoppableDomains].contains(&self.platform) {
+        if vec![
+            Platform::Lens,
+            Platform::Dotbit,
+            Platform::UnstoppableDomains,
+        ]
+        .contains(&self.platform)
+        {
             return Ok(None);
         }
         let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;

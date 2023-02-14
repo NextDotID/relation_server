@@ -78,7 +78,7 @@ pub enum DataSource {
     #[strum(serialize = "UnstoppableDomains")]
     #[serde(rename = "UnstoppableDomains")]
     #[graphql(name = "UnstoppableDomains")]
-    Unstoppable,
+    UnstoppableDomains,
 
     /// .lens
     /// https://docs.lens.xyz/docs/api-links

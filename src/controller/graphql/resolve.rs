@@ -113,7 +113,9 @@ impl ResolveQuery {
                     }
                 }
             }
-            DomainNameSystem::DotBit | DomainNameSystem::Lens | DomainNameSystem::Unstoppable => {
+            DomainNameSystem::DotBit
+            | DomainNameSystem::Lens
+            | DomainNameSystem::UnstoppableDomains => {
                 let platform = domain_system.into();
                 let target = Target::Identity(platform, name.clone());
                 match Resolve::find_by_domain_platform_name(&pool, &name, &domain_system, &platform)

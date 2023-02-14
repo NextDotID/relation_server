@@ -2,19 +2,21 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::create_identity_to_identity_hold_record;
 use crate::graph::edge::Edge;
 use crate::graph::edge::Resolve;
 use crate::graph::edge::{hold::Hold, resolve::DomainNameSystem};
+use crate::graph::vertex::IdentityRecord;
 use crate::graph::vertex::Vertex;
 use crate::graph::{new_db_connection, vertex::Identity};
 use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
-use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
+use crate::util::{make_client, naive_now, parse_body};
+use aragog::DatabaseConnection;
 use async_trait::async_trait;
+use futures::future::join_all;
 use http::uri::InvalidUri;
 use hyper::{Body, Method};
 use serde::Deserialize;
-use tracing::{debug, error};
+use tracing::error;
 use uuid::Uuid;
 
 use super::types::target;
@@ -92,9 +94,9 @@ pub struct Records {
     pub eth_address: Option<String>,
 }
 
-pub struct Unstoppable {}
+pub struct UnstoppableDomains {}
 #[async_trait]
-impl Fetcher for Unstoppable {
+impl Fetcher for UnstoppableDomains {
     async fn fetch(target: &Target) -> Result<TargetProcessedList, Error> {
         if !Self::can_fetch(target) {
             return Ok(vec![]);
@@ -154,7 +156,10 @@ async fn fetch_domain(owners: &str, page: &str) -> Result<RecordsForOwnerRespons
 
     let mut resp = client.request(req).await?;
     if !resp.status().is_success() {
-        let err_message = format!("Unstoppable fetch error, statusCode: {}", resp.status());
+        let err_message = format!(
+            "UnstoppableDomains fetch error, statusCode: {}",
+            resp.status()
+        );
         error!(err_message);
         return Err(Error::General(err_message, resp.status()));
     }
@@ -164,7 +169,7 @@ async fn fetch_domain(owners: &str, page: &str) -> Result<RecordsForOwnerRespons
         Err(_) => {
             let err: BadResponse = parse_body(&mut resp).await?;
             let err_message = format!(
-                "Unstoppable fetch error, Code: {}, Message: {}",
+                "UnstoppableDomains fetch error, Code: {}, Message: {}",
                 err.code, err.message
             );
             error!(err_message);
@@ -174,6 +179,7 @@ async fn fetch_domain(owners: &str, page: &str) -> Result<RecordsForOwnerRespons
     Ok(result)
 }
 
+/// Temporarily do not use `reverse` query
 async fn fetch_reverse(owner: &str) -> Result<ReverseResponse, Error> {
     let client = make_client();
     let reverse_uri: http::Uri = format!("{}/reverse/{}", C.upstream.unstoppable_api.url, owner)
@@ -192,7 +198,7 @@ async fn fetch_reverse(owner: &str) -> Result<ReverseResponse, Error> {
     let mut reverse_resp = client.request(reverse_req).await?;
     if !reverse_resp.status().is_success() {
         let err_message = format!(
-            "Unstoppable reverse fetch error, statusCode: {}",
+            "UnstoppableDomains reverse fetch error, statusCode: {}",
             reverse_resp.status()
         );
         error!(err_message);
@@ -203,7 +209,7 @@ async fn fetch_reverse(owner: &str) -> Result<ReverseResponse, Error> {
         Err(_) => {
             let err: BadResponse = parse_body(&mut reverse_resp).await?;
             let err_message = format!(
-                "Unstoppable reverse fetch error, Code: {}, Message: {}",
+                "UnstoppableDomains reverse fetch error, Code: {}, Message: {}",
                 err.code, err.message
             );
             error!(err_message);
@@ -215,16 +221,69 @@ async fn fetch_reverse(owner: &str) -> Result<ReverseResponse, Error> {
     Ok(result)
 }
 
+async fn save_domain(
+    db: &DatabaseConnection,
+    eth_record: &IdentityRecord,
+    item: Item,
+) -> Result<TargetProcessedList, Error> {
+    let identity: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::UnstoppableDomains,
+        identity: item.id.clone(),
+        created_at: None,
+        display_name: Some(item.attributes.meta.domain.clone()),
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+    };
+    let hold: Hold = Hold {
+        uuid: Uuid::new_v4(),
+        source: DataSource::UnstoppableDomains,
+        transaction: None,
+        id: item.attributes.meta.token_id.unwrap_or("".to_string()),
+        created_at: None,
+        updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
+    };
+    let domain_record = identity.create_or_update(&db).await?;
+    hold.connect(db, eth_record, &domain_record).await?;
+
+    let resolve: Resolve = Resolve {
+        uuid: Uuid::new_v4(),
+        source: DataSource::UnstoppableDomains,
+        system: DomainNameSystem::UnstoppableDomains,
+        name: item.id.clone(),
+        fetcher: DataFetcher::RelationService,
+        updated_at: naive_now(),
+    };
+
+    // 'regular' resolution involves mapping from a name to an address.
+    resolve.connect(db, &domain_record, eth_record).await?;
+
+    if item.attributes.meta.reverse {
+        // reverse = true
+        // 'reverse' resolution maps from an address back to a name.
+        resolve.connect(db, eth_record, &domain_record).await?;
+        return Ok(vec![Target::Identity(
+            Platform::UnstoppableDomains,
+            item.attributes.meta.domain.clone(),
+        )]);
+    }
+    Ok(vec![])
+}
+
 async fn fetch_domains_by_account(
     _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
+    let mut cnt: u32 = 0;
     let mut next = String::from("");
     let mut next_targets: Vec<Target> = Vec::new();
-    let client = make_client();
-    loop {
+    while cnt < u32::MAX {
         let result = fetch_domain(identity, &next).await?;
         let db = new_db_connection().await?;
+        cnt += result.data.len() as u32;
 
         let eth_identity: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
@@ -238,68 +297,19 @@ async fn fetch_domains_by_account(
             updated_at: naive_now(),
         };
         let eth_record = eth_identity.create_or_update(&db).await?;
-        for item in result.data.into_iter() {
-            let unstoppable_identity: Identity = Identity {
-                uuid: Some(Uuid::new_v4()),
-                platform: Platform::UnstoppableDomains,
-                identity: item.attributes.meta.domain.clone(),
-                created_at: None,
-                display_name: Some(item.attributes.meta.domain.clone()),
-                added_at: naive_now(),
-                avatar_url: None,
-                profile_url: None,
-                updated_at: naive_now(),
-            };
-            let hold: Hold = Hold {
-                uuid: Uuid::new_v4(),
-                source: DataSource::Unstoppable,
-                transaction: None,
-                id: item.attributes.meta.token_id.unwrap_or("".to_string()),
-                created_at: None,
-                updated_at: naive_now(),
-                fetcher: DataFetcher::RelationService,
-            };
-            let unstoppable_record = unstoppable_identity.create_or_update(&db).await?;
-            hold.connect(&db, &eth_record, &unstoppable_record).await?;
-            // reverse = true
-            if item.attributes.meta.reverse {
-                let reverse_result = fetch_reverse(identity).await?;
+        let futures: Vec<_> = result
+            .data
+            .into_iter()
+            .map(|item| save_domain(&db, &eth_record, item))
+            .collect();
 
-                let owner: Identity = Identity {
-                    uuid: Some(Uuid::new_v4()),
-                    platform: Platform::Ethereum,
-                    identity: reverse_result
-                        .meta
-                        .owner
-                        .unwrap_or(identity.to_string().clone())
-                        .to_lowercase(),
-                    created_at: None,
-                    display_name: None,
-                    added_at: naive_now(),
-                    avatar_url: None,
-                    profile_url: None,
-                    updated_at: naive_now(),
-                };
-                let owner_record = owner.create_or_update(&db).await?;
+        let targets: TargetProcessedList = join_all(futures)
+            .await
+            .into_iter()
+            .flat_map(|result| result.unwrap_or_default())
+            .collect();
 
-                let resolve: Resolve = Resolve {
-                    uuid: Uuid::new_v4(),
-                    source: DataSource::Unstoppable,
-                    system: DomainNameSystem::Unstoppable,
-                    name: reverse_result.meta.domain,
-                    fetcher: DataFetcher::RelationService,
-                    updated_at: naive_now(),
-                };
-                resolve
-                    .connect(&db, &unstoppable_record, &owner_record)
-                    .await?;
-            }
-            next_targets.extend(vec![Target::Identity(
-                Platform::UnstoppableDomains,
-                item.attributes.meta.domain.clone(),
-            )]);
-        }
-
+        next_targets.extend(targets);
         if result.meta.has_more {
             next = result.meta.next;
         } else {
@@ -309,12 +319,9 @@ async fn fetch_domains_by_account(
     Ok(next_targets)
 }
 
-async fn fetch_account_by_domain(
-    _platform: &Platform,
-    identity: &str,
-) -> Result<TargetProcessedList, Error> {
+async fn fetch_owner(domains: &str) -> Result<DomainResponse, Error> {
     let client = make_client();
-    let uri: http::Uri = format!("{}/domains/{}", C.upstream.unstoppable_api.url, identity)
+    let uri: http::Uri = format!("{}/domains/{}", C.upstream.unstoppable_api.url, domains)
         .parse()
         .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
     let req = hyper::Request::builder()
@@ -325,28 +332,42 @@ async fn fetch_account_by_domain(
             format!("Bearer {}", C.upstream.unstoppable_api.token),
         )
         .body(Body::empty())
-        .expect("request builder");
+        .map_err(|_err| Error::ParamError(format!("Invalid Head Error {}", _err)))?;
+
     let mut resp = client.request(req).await?;
     if !resp.status().is_success() {
-        error!("Unstoppable fetch error, statusCode: {}", resp.status());
+        let err_message = format!(
+            "UnstoppableDomains fetch error, statusCode: {}",
+            resp.status()
+        );
+        error!(err_message);
+        return Err(Error::General(err_message, resp.status()));
     }
     let result = match parse_body::<DomainResponse>(&mut resp).await {
         Ok(result) => result,
         Err(_) => {
             let err: BadResponse = parse_body(&mut resp).await?;
-            error!(
-                "Unstoppable fetch error, Code: {}, Message: {}",
+            let err_message = format!(
+                "UnstoppableDomains fetch error, Code: {}, Message: {}",
                 err.code, err.message
             );
-            return Ok(vec![]);
+            error!(err_message);
+            return Err(Error::General(err_message, resp.status()));
         }
     };
+    Ok(result)
+}
 
+async fn fetch_account_by_domain(
+    _platform: &Platform,
+    identity: &str,
+) -> Result<TargetProcessedList, Error> {
+    let db = new_db_connection().await?;
+    let result = fetch_owner(identity).await?;
     if result.meta.owner.is_none() {
         return Ok(vec![]);
     }
 
-    let db = new_db_connection().await?;
     let eth_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
@@ -359,7 +380,7 @@ async fn fetch_account_by_domain(
         updated_at: naive_now(),
     };
 
-    let unstoppable_identity: Identity = Identity {
+    let identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::UnstoppableDomains,
         identity: result.meta.domain.clone(),
@@ -373,7 +394,7 @@ async fn fetch_account_by_domain(
 
     let hold: Hold = Hold {
         uuid: Uuid::new_v4(),
-        source: DataSource::Unstoppable,
+        source: DataSource::UnstoppableDomains,
         transaction: None,
         id: result.meta.token_id.unwrap_or("".to_string()),
         created_at: None,
@@ -382,63 +403,29 @@ async fn fetch_account_by_domain(
     };
 
     let eth_record = eth_identity.create_or_update(&db).await?;
-    let unstoppable_record = unstoppable_identity.create_or_update(&db).await?;
-    hold.connect(&db, &eth_record, &unstoppable_record).await?;
-    let target = Target::Identity(
-        Platform::Ethereum,
-        result.meta.owner.clone().unwrap().to_lowercase(),
-    );
-    // reverse = true
+    let domain_record = identity.create_or_update(&db).await?;
+    hold.connect(&db, &eth_record, &domain_record).await?;
+
+    let resolve: Resolve = Resolve {
+        uuid: Uuid::new_v4(),
+        source: DataSource::UnstoppableDomains,
+        system: DomainNameSystem::UnstoppableDomains,
+        name: result.meta.domain.clone(),
+        fetcher: DataFetcher::RelationService,
+        updated_at: naive_now(),
+    };
+
+    // 'regular' resolution involves mapping from a name to an address.
+    resolve.connect(&db, &domain_record, &eth_record).await?;
+
     if result.meta.reverse {
-        let reverse_uri: http::Uri = format!(
-            "{}/reverse/{}",
-            C.upstream.unstoppable_api.url,
-            result.meta.owner.clone().unwrap().to_lowercase()
-        )
-        .parse()
-        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
-
-        let reverse_req = hyper::Request::builder()
-            .method(Method::GET)
-            .uri(reverse_uri)
-            .header(
-                "Authorization",
-                format!("Bearer {}", C.upstream.unstoppable_api.token),
-            )
-            .body(Body::empty())
-            .expect("request builder");
-
-        let mut reverse_resp = client.request(reverse_req).await?;
-        if !reverse_resp.status().is_success() {
-            error!(
-                "Unstoppable reverse fetch error, statusCode: {}",
-                reverse_resp.status()
-            );
-            return Ok(vec![target]);
-        }
-        let _reverse = match parse_body::<ReverseResponse>(&mut reverse_resp).await {
-            Ok(r) => r,
-            Err(_) => {
-                let err: BadResponse = parse_body(&mut resp).await?;
-                error!(
-                    "Unstoppable reverse fetch error, Code: {}, Message: {}",
-                    err.code, err.message
-                );
-                return Ok(vec![target]);
-            }
-        };
-        let resolve: Resolve = Resolve {
-            uuid: Uuid::new_v4(),
-            source: DataSource::Unstoppable,
-            system: DomainNameSystem::Unstoppable,
-            name: _reverse.meta.domain,
-            fetcher: DataFetcher::RelationService,
-            updated_at: naive_now(),
-        };
-        resolve
-            .connect(&db, &unstoppable_record, &eth_record)
-            .await?;
+        // reverse = true
+        // 'reverse' resolution maps from an address back to a name.
+        resolve.connect(&db, &eth_record, &domain_record).await?;
     }
 
-    Ok(vec![target])
+    Ok(vec![Target::Identity(
+        Platform::Ethereum,
+        result.meta.owner.clone().unwrap().to_lowercase(),
+    )])
 }
