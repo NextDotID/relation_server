@@ -38,3 +38,7 @@ url = "https://indexer-basic.did.id"
 
 [upstream.lens_api]
 url = "https://api.lens.dev/playground"
+
+[upstream.unstoppable_api]
+url = "https://resolve.unstoppabledomains.com"
+token = "4cb4358d-ce8b-4bf5-fill-yourstokenid"

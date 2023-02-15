@@ -50,11 +50,28 @@ pub enum DomainNameSystem {
     #[graphql(name = "lens")]
     Lens,
 
+    /// https://unstoppabledomains.com/
+    #[strum(serialize = "UnstoppableDomains")]
+    #[serde(rename = "UnstoppableDomains")]
+    #[graphql(name = "UnstoppableDomains")]
+    UnstoppableDomains,
+
     #[default]
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
     #[graphql(name = "unknown")]
     Unknown,
+}
+
+impl From<DomainNameSystem> for Platform {
+    fn from(domain: DomainNameSystem) -> Self {
+        match domain {
+            DomainNameSystem::DotBit => Platform::Dotbit,
+            DomainNameSystem::UnstoppableDomains => Platform::UnstoppableDomains,
+            DomainNameSystem::Lens => Platform::Lens,
+            _ => Platform::Unknown,
+        }
+    }
 }
 
 /// Edge to identify which `Identity(Ethereum)` a `Contract` is resolving to.
