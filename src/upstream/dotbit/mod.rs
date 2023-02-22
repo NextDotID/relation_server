@@ -2,6 +2,7 @@
 mod tests;
 use crate::config::C;
 use crate::error::Error;
+use crate::graph::create_domain_resolve_record;
 use crate::graph::create_identity_to_identity_hold_record;
 use crate::graph::edge::Edge;
 use crate::graph::edge::Resolve;
@@ -207,7 +208,7 @@ async fn fetch_connections_by_account_info(
     let db = new_db_connection().await?;
     let created_at_naive = timestamp_to_naive(account_info.create_at_unix, 0);
 
-    let from: Identity = Identity {
+    let eth_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: account_info.owner_key.to_lowercase().clone(),
@@ -219,7 +220,7 @@ async fn fetch_connections_by_account_info(
         updated_at: naive_now(),
     };
 
-    let to: Identity = Identity {
+    let dotbit_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Dotbit,
         identity: identity.to_string(),
@@ -241,7 +242,19 @@ async fn fetch_connections_by_account_info(
         fetcher: DataFetcher::RelationService,
     };
 
-    create_identity_to_identity_hold_record(&db, &from, &to, &hold).await?;
+    let resolve: Resolve = Resolve {
+        uuid: Uuid::new_v4(),
+        source: DataSource::Dotbit,
+        system: DomainNameSystem::DotBit,
+        name: identity.to_string(),
+        fetcher: DataFetcher::RelationService,
+        updated_at: naive_now(),
+    };
+
+    // hold record
+    create_identity_to_identity_hold_record(&db, &eth_identity, &dotbit_identity, &hold).await?;
+    // 'regular' resolution involves mapping from a name to an address.
+    create_domain_resolve_record(&db, &dotbit_identity, &eth_identity, &resolve).await?;
 
     return Ok(vec![Target::Identity(
         Platform::Ethereum,
@@ -321,10 +334,6 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
         fetcher: DataFetcher::RelationService,
     };
 
-    let eth_record = eth_identity.create_or_update(&db).await?;
-    let dotbit_record = dotbit_identity.create_or_update(&db).await?;
-    hold.connect(&db, &eth_record, &dotbit_record).await?;
-
     let resolve: Resolve = Resolve {
         uuid: Uuid::new_v4(),
         source: DataSource::Dotbit,
@@ -333,7 +342,13 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
         fetcher: DataFetcher::RelationService,
         updated_at: naive_now(),
     };
-    resolve.connect(&db, &dotbit_record, &eth_record).await?;
+
+    // hold record
+    create_identity_to_identity_hold_record(&db, &eth_identity, &dotbit_identity, &hold).await?;
+    // 'regular' resolution involves mapping from a name to an address.
+    create_domain_resolve_record(&db, &dotbit_identity, &eth_identity, &resolve).await?;
+    // das_reverseRecord: 'reverse' resolution maps from an address back to a name.
+    create_domain_resolve_record(&db, &eth_identity, &dotbit_identity, &resolve).await?;
 
     return Ok(vec![Target::Identity(
         Platform::Dotbit,
