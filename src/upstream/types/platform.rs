@@ -80,9 +80,9 @@ pub enum Platform {
     Minds,
 
     /// UnstoppableDomains
-    #[strum(serialize = "unstoppable_domains")]
-    #[serde(rename = "unstoppable_domains")]
-    #[graphql(name = "unstoppable_domains")]
+    #[strum(serialize = "unstoppabledomains")]
+    #[serde(rename = "unstoppabledomains")]
+    #[graphql(name = "unstoppabledomains")]
     UnstoppableDomains,
 
     /// Unknown
