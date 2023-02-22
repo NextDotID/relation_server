@@ -360,6 +360,28 @@ impl<T: Record + std::marker::Sync> Edge<T, Identity, ResolveRecord> for Resolve
         from: &DatabaseRecord<T>,
         to: &DatabaseRecord<Identity>,
     ) -> Result<ResolveRecord, Error> {
+        let filter = Filter::new(Comparison::field("_from").equals_str(from.id()))
+            .and(Comparison::field("_to").equals_str(to.id()))
+            .and(Comparison::field("system").equals_str(&self.system))
+            .and(Comparison::field("name").equals_str(&self.name));
+        let query = EdgeRecord::<Resolve>::query().filter(filter);
+        let result: QueryResult<EdgeRecord<Self>> = query.call(db).await?;
+        if result.len() == 0 {
+            Ok(DatabaseRecord::link(from, to, db, self.clone())
+                .await?
+                .into())
+        } else {
+            Ok(result.first().unwrap().clone().into())
+        }
+    }
+
+    /*
+    async fn connect(
+        &self,
+        db: &DatabaseConnection,
+        from: &DatabaseRecord<T>,
+        to: &DatabaseRecord<Identity>,
+    ) -> Result<ResolveRecord, Error> {
         let found = Self::find_by_name_system(db, &self.name, &self.system).await?;
         match found {
             Some(mut edge) => {
@@ -375,10 +397,11 @@ impl<T: Record + std::marker::Sync> Edge<T, Identity, ResolveRecord> for Resolve
                 }
             }
             None => Ok(DatabaseRecord::link(from, to, db, self.clone())
-                .await?
-                .into()),
+                    .await?
+                    .into()),
         }
     }
+    */
 
     // notice this function is deprecated
     async fn two_way_binding(
