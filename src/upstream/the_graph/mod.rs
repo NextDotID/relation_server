@@ -197,8 +197,8 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                         profile_url: None,
                         updated_at: naive_now(),
                     }
-                        .create_or_update(&db)
-                        .await?;
+                    .create_or_update(&db)
+                    .await?;
                     let resolve = Resolve {
                         uuid: Uuid::new_v4(),
                         source: DataSource::TheGraph,
@@ -208,8 +208,9 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                         updated_at: naive_now(),
                     };
 
+                    // 'reverse' resolution
                     resolve
-                        .connect(&db, &contract_record, &resolve_target)
+                        .connect(&db, &resolve_target, &contract_record)
                         .await?;
                 }
             }
@@ -280,7 +281,20 @@ async fn create_or_update_own(
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
     };
-    let (_owner_record, contract_record, _hold_record) =
+    let (owner_record, contract_record, _hold_record) =
         create_identity_to_contract_record(db, &owner, &conrtract, &ownership).await?;
+
+    let resolve = Resolve {
+        uuid: Uuid::new_v4(),
+        source: DataSource::TheGraph,
+        system: DomainNameSystem::ENS,
+        name: domain.name.clone(),
+        fetcher: DataFetcher::RelationService,
+        updated_at: naive_now(),
+    };
+    // As the same time record 'regular' resolution
+    resolve
+        .connect(&db, &contract_record, &owner_record)
+        .await?;
     Ok(contract_record)
 }

@@ -183,7 +183,7 @@ impl Resolve {
                     uuid: r.record.uuid,
                     source: r.record.source,
                     system: DomainNameSystem::ENS,
-                    name: r.record.id.clone(),
+                    name: name.to_string(),
                     fetcher: r.record.fetcher,
                     updated_at: r.record.updated_at,
                 });
@@ -349,7 +349,9 @@ impl From<DatabaseRecord<EdgeRecord<Resolve>>> for ResolveRecord {
 }
 
 #[async_trait::async_trait]
-impl<T: Record + std::marker::Sync> Edge<T, Identity, ResolveRecord> for Resolve {
+impl<T1: Record + std::marker::Sync, T2: Record + std::marker::Sync> Edge<T1, T2, ResolveRecord>
+    for Resolve
+{
     fn uuid(&self) -> Option<Uuid> {
         Some(self.uuid)
     }
@@ -357,8 +359,8 @@ impl<T: Record + std::marker::Sync> Edge<T, Identity, ResolveRecord> for Resolve
     async fn connect(
         &self,
         db: &DatabaseConnection,
-        from: &DatabaseRecord<T>,
-        to: &DatabaseRecord<Identity>,
+        from: &DatabaseRecord<T1>,
+        to: &DatabaseRecord<T2>,
     ) -> Result<ResolveRecord, Error> {
         let filter = Filter::new(Comparison::field("_from").equals_str(from.id()))
             .and(Comparison::field("_to").equals_str(to.id()))
@@ -407,8 +409,8 @@ impl<T: Record + std::marker::Sync> Edge<T, Identity, ResolveRecord> for Resolve
     async fn two_way_binding(
         &self,
         _db: &DatabaseConnection,
-        _from: &DatabaseRecord<T>,
-        _to: &DatabaseRecord<Identity>,
+        _from: &DatabaseRecord<T1>,
+        _to: &DatabaseRecord<T2>,
     ) -> Result<(ResolveRecord, ResolveRecord), Error> {
         todo!()
     }
