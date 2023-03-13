@@ -30,4 +30,10 @@ pub enum DataFetcher {
     #[serde(rename = "aggregation_service")]
     #[graphql(name = "aggregation_service")]
     AggregationService,
+
+    /// DataMgr service
+    #[strum(serialize = "data_service")]
+    #[serde(rename = "data_service")]
+    #[graphql(name = "data_service")]
+    DataMgrService,
 }

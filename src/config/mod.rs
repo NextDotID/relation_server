@@ -42,6 +42,7 @@ pub struct Upstream {
     pub dotbit_service: ConfigDotbitService,
     pub lens_api: ConfigLensAPI,
     pub unstoppable_api: ConfigUnstoppableDomainsAPI,
+    pub datamgr_api: ConfigDataMgrAPI,
 }
 
 #[derive(Clone, Deserialize, Default)]
@@ -113,6 +114,11 @@ pub struct ConfigLensAPI {
 pub struct ConfigUnstoppableDomainsAPI {
     pub url: String,
     pub token: String,
+}
+
+#[derive(Clone, Deserialize, Default)]
+pub struct ConfigDataMgrAPI {
+    pub url: String,
 }
 
 #[derive(Clone, Deserialize)]
