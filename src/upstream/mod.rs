@@ -2,6 +2,7 @@
 mod aggregation;
 mod dotbit;
 mod ens_reverse;
+mod farcaster;
 mod keybase;
 mod knn3;
 mod lens;
@@ -23,9 +24,9 @@ use std::{
 use crate::{
     error::Error,
     upstream::{
-        aggregation::Aggregation, dotbit::DotBit, ens_reverse::ENSReverseLookup, keybase::Keybase,
-        knn3::Knn3, lens::Lens, proof_client::ProofClient, rss3::Rss3, sybil_list::SybilList,
-        the_graph::TheGraph, unstoppable::UnstoppableDomains,
+        aggregation::Aggregation, dotbit::DotBit, ens_reverse::ENSReverseLookup,
+        farcaster::Farcaster, keybase::Keybase, knn3::Knn3, lens::Lens, proof_client::ProofClient,
+        rss3::Rss3, sybil_list::SybilList, the_graph::TheGraph, unstoppable::UnstoppableDomains,
     },
     util::hashset_append,
 };
@@ -109,6 +110,7 @@ pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
         ENSReverseLookup::fetch(target),
         DotBit::fetch(target),
         UnstoppableDomains::fetch(target),
+        Farcaster::fetch(target),
         Lens::fetch(target),
     ])
     .await

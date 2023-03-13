@@ -87,6 +87,11 @@ pub enum DataSource {
     #[graphql(name = "lens")]
     Lens,
 
+    #[strum(serialize = "farcaster")]
+    #[serde(rename = "farcaster")]
+    #[graphql(name = "farcaster")]
+    Farcaster,
+
     /// Unknown
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
