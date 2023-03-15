@@ -8,9 +8,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_farcaster_profile_by_username() -> Result<(), Error> {
         let username = "zella";
-        let data = get_farcaster_profile_by_username(&username)
-            .await?
-            .expect("Record not found");
+        let data = get_farcaster_profile_by_username(&username).await?;
         println!("data: {:?}", data);
         Ok(())
     }
@@ -18,9 +16,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_farcaster_profile_by_signer() -> Result<(), Error> {
         let address = "0xb86ff7e3f4e6186dfd25cff40605441d0c0481c4";
-        let data = get_farcaster_profile_by_signer(&address)
-            .await?
-            .expect("Record not found");
+        let data = get_farcaster_profile_by_signer(&address).await?;
         println!("data: {:?}", data);
         Ok(())
     }

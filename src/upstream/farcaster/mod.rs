@@ -3,11 +3,19 @@ mod tests;
 use crate::{
     config::C,
     error::Error,
-    graph::{edge::Edge, edge::Hold, new_db_connection, vertex::Identity, vertex::Vertex},
+    graph::{
+        edge::Edge,
+        edge::Hold,
+        new_db_connection,
+        vertex::Identity,
+        vertex::{IdentityRecord, Vertex},
+    },
     upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList},
     util::naive_now,
 };
+use aragog::DatabaseConnection;
 use async_trait::async_trait;
+use futures::future::join_all;
 use gql_client::Client;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
@@ -38,7 +46,7 @@ struct UsernameQueryVars {
 pub struct UsernameQueryResponse {
     // farcasterProfile
     #[serde(rename = "farcasterProfile")]
-    data: Option<FarcasterProfile>,
+    data: Vec<FarcasterProfile>,
 }
 
 #[derive(Serialize)]
@@ -51,7 +59,7 @@ struct SignerAddressQueryVars {
 pub struct SignerAddressQueryResponse {
     // farcasterSigner
     #[serde(rename = "farcasterSigner")]
-    data: Option<FarcasterProfile>,
+    data: Vec<FarcasterProfile>,
 }
 
 pub struct Farcaster {}
@@ -85,9 +93,7 @@ async fn fetch_connections_by_platform_identity(
     }
 }
 
-async fn get_farcaster_profile_by_username(
-    username: &str,
-) -> Result<Option<FarcasterProfile>, Error> {
+async fn get_farcaster_profile_by_username(username: &str) -> Result<Vec<FarcasterProfile>, Error> {
     const QUERY_BY_NAME: &str = r#"
         query FarcasterSignerByName($username: String!) {
             farcasterProfile(username: $username) {
@@ -112,14 +118,14 @@ async fn get_farcaster_profile_by_username(
             username,
             response.err()
         );
-        return Ok(None);
+        return Ok(vec![]);
     }
 
     let result = response.unwrap().unwrap();
     Ok(result.data)
 }
 
-async fn get_farcaster_profile_by_signer(address: &str) -> Result<Option<FarcasterProfile>, Error> {
+async fn get_farcaster_profile_by_signer(address: &str) -> Result<Vec<FarcasterProfile>, Error> {
     const QUERY_BY_SIGNER: &str = r#"
         query FarcasterNameBySigner($signer: String!) {
             farcasterSigner(signer: $signer) {
@@ -143,10 +149,113 @@ async fn get_farcaster_profile_by_signer(address: &str) -> Result<Option<Farcast
             address,
             response.err()
         );
-        return Ok(None);
+        return Ok(vec![]);
     }
     let result = response.unwrap().unwrap();
     Ok(result.data)
+}
+
+async fn save_profile_ethereum(
+    db: &DatabaseConnection,
+    profile: FarcasterProfile,
+) -> Result<TargetProcessedList, Error> {
+    let target_list = match profile.signerAddress {
+        None => vec![], // signer address is null
+        Some(signer_address) => match signer_address.as_str() {
+            "" => vec![], // signer address is empty string
+            &_ => {
+                let eth_identity: Identity = Identity {
+                    uuid: Some(Uuid::new_v4()),
+                    platform: Platform::Ethereum,
+                    identity: signer_address.to_lowercase().to_string(),
+                    created_at: None,
+                    display_name: None,
+                    added_at: naive_now(),
+                    avatar_url: None,
+                    profile_url: None,
+                    updated_at: naive_now(),
+                };
+                let farcaster_identity: Identity = Identity {
+                    uuid: Some(Uuid::new_v4()),
+                    platform: Platform::Farcaster,
+                    identity: profile.username.clone(),
+                    created_at: None,
+                    display_name: profile.displayName.clone(),
+                    added_at: naive_now(),
+                    avatar_url: None,
+                    profile_url: None,
+                    updated_at: naive_now(),
+                };
+                let hold: Hold = Hold {
+                    uuid: Uuid::new_v4(),
+                    source: DataSource::Farcaster,
+                    transaction: None,
+                    id: "".to_string(),
+                    created_at: None,
+                    updated_at: naive_now(),
+                    fetcher: DataFetcher::DataMgrService,
+                };
+                let eth_record = eth_identity.create_or_update(&db).await?;
+                let farcaster_record = farcaster_identity.create_or_update(&db).await?;
+                hold.connect(&db, &eth_record, &farcaster_record).await?;
+
+                vec![Target::Identity(
+                    Platform::Ethereum,
+                    signer_address.to_lowercase().to_string(),
+                )]
+            }
+        },
+    };
+    Ok(target_list)
+}
+
+async fn save_profile_signer(
+    db: &DatabaseConnection,
+    profile: FarcasterProfile,
+) -> Result<TargetProcessedList, Error> {
+    let eth_identity: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Ethereum,
+        identity: profile
+            .signerAddress
+            .clone()
+            .unwrap()
+            .to_lowercase()
+            .to_string(),
+        created_at: None,
+        display_name: None,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+    };
+    let farcaster_identity: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Farcaster,
+        identity: profile.username.clone(),
+        created_at: None,
+        display_name: profile.displayName.clone(),
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+    };
+    let hold: Hold = Hold {
+        uuid: Uuid::new_v4(),
+        source: DataSource::Farcaster,
+        transaction: None,
+        id: "".to_string(),
+        created_at: None,
+        updated_at: naive_now(),
+        fetcher: DataFetcher::DataMgrService,
+    };
+    let eth_record = eth_identity.create_or_update(&db).await?;
+    let farcaster_record = farcaster_identity.create_or_update(&db).await?;
+    hold.connect(&db, &eth_record, &farcaster_record).await?;
+    Ok(vec![Target::Identity(
+        Platform::Farcaster,
+        profile.username.clone(),
+    )])
 }
 
 async fn fetch_by_username(
@@ -154,59 +263,20 @@ async fn fetch_by_username(
     username: &str,
 ) -> Result<TargetProcessedList, Error> {
     let db = new_db_connection().await?;
-    let profile = get_farcaster_profile_by_username(&username).await?;
-
-    let target_processed_list = match profile {
-        None => vec![], // profile is null
-        Some(profile) => match profile.signerAddress {
-            None => vec![], // signer address is null
-            Some(signer_address) => match signer_address.as_str() {
-                "" => vec![], // signer address is empty string
-                &_ => {
-                    let eth_identity: Identity = Identity {
-                        uuid: Some(Uuid::new_v4()),
-                        platform: Platform::Ethereum,
-                        identity: signer_address.to_lowercase().to_string(),
-                        created_at: None,
-                        display_name: None,
-                        added_at: naive_now(),
-                        avatar_url: None,
-                        profile_url: None,
-                        updated_at: naive_now(),
-                    };
-                    let farcaster_identity: Identity = Identity {
-                        uuid: Some(Uuid::new_v4()),
-                        platform: Platform::Farcaster,
-                        identity: profile.username.clone(),
-                        created_at: None,
-                        display_name: profile.displayName.clone(),
-                        added_at: naive_now(),
-                        avatar_url: None,
-                        profile_url: None,
-                        updated_at: naive_now(),
-                    };
-                    let hold: Hold = Hold {
-                        uuid: Uuid::new_v4(),
-                        source: DataSource::Farcaster,
-                        transaction: None,
-                        id: "".to_string(),
-                        created_at: None,
-                        updated_at: naive_now(),
-                        fetcher: DataFetcher::DataMgrService,
-                    };
-                    let eth_record = eth_identity.create_or_update(&db).await?;
-                    let farcaster_record = farcaster_identity.create_or_update(&db).await?;
-                    hold.connect(&db, &eth_record, &farcaster_record).await?;
-
-                    vec![Target::Identity(
-                        Platform::Ethereum,
-                        signer_address.to_lowercase().to_string(),
-                    )]
-                }
-            },
-        },
-    };
-    Ok(target_processed_list)
+    let profiles = get_farcaster_profile_by_username(&username).await?;
+    if profiles.is_empty() {
+        return Err(Error::NoResult);
+    }
+    let futures: Vec<_> = profiles
+        .into_iter()
+        .map(|profile| save_profile_ethereum(&db, profile))
+        .collect();
+    let targets: TargetProcessedList = join_all(futures)
+        .await
+        .into_iter()
+        .flat_map(|result| result.unwrap_or_default())
+        .collect();
+    Ok(targets)
 }
 
 async fn fetch_by_signer(
@@ -214,53 +284,18 @@ async fn fetch_by_signer(
     address: &str,
 ) -> Result<TargetProcessedList, Error> {
     let db = new_db_connection().await?;
-    let profile = get_farcaster_profile_by_signer(&address).await?;
-
-    let target_processed_list = match profile {
-        None => vec![], // profile is null
-        Some(profile) => {
-            let eth_identity: Identity = Identity {
-                uuid: Some(Uuid::new_v4()),
-                platform: Platform::Ethereum,
-                identity: profile
-                    .signerAddress
-                    .clone()
-                    .unwrap()
-                    .to_lowercase()
-                    .to_string(),
-                created_at: None,
-                display_name: None,
-                added_at: naive_now(),
-                avatar_url: None,
-                profile_url: None,
-                updated_at: naive_now(),
-            };
-            let farcaster_identity: Identity = Identity {
-                uuid: Some(Uuid::new_v4()),
-                platform: Platform::Farcaster,
-                identity: profile.username.clone(),
-                created_at: None,
-                display_name: profile.displayName.clone(),
-                added_at: naive_now(),
-                avatar_url: None,
-                profile_url: None,
-                updated_at: naive_now(),
-            };
-            let hold: Hold = Hold {
-                uuid: Uuid::new_v4(),
-                source: DataSource::Farcaster,
-                transaction: None,
-                id: "".to_string(),
-                created_at: None,
-                updated_at: naive_now(),
-                fetcher: DataFetcher::DataMgrService,
-            };
-            let eth_record = eth_identity.create_or_update(&db).await?;
-            let farcaster_record = farcaster_identity.create_or_update(&db).await?;
-            hold.connect(&db, &eth_record, &farcaster_record).await?;
-
-            vec![Target::Identity(Platform::Farcaster, address.to_string())]
-        }
-    };
-    Ok(target_processed_list)
+    let profiles = get_farcaster_profile_by_signer(&address).await?;
+    if profiles.is_empty() {
+        return Err(Error::NoResult);
+    }
+    let futures: Vec<_> = profiles
+        .into_iter()
+        .map(|profile| save_profile_signer(&db, profile))
+        .collect();
+    let targets: TargetProcessedList = join_all(futures)
+        .await
+        .into_iter()
+        .flat_map(|result| result.unwrap_or_default())
+        .collect();
+    Ok(targets)
 }
