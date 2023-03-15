@@ -116,7 +116,6 @@ async fn get_farcaster_profile_by_username(
     }
 
     let result = response.unwrap().unwrap();
-    println!("{:?}", result);
     Ok(result.data)
 }
 
@@ -147,7 +146,6 @@ async fn get_farcaster_profile_by_signer(address: &str) -> Result<Option<Farcast
         return Ok(None);
     }
     let result = response.unwrap().unwrap();
-    println!("{:?}", result);
     Ok(result.data)
 }
 
@@ -155,7 +153,6 @@ async fn fetch_by_username(
     _platform: &Platform,
     username: &str,
 ) -> Result<TargetProcessedList, Error> {
-    warn!("fetch_by_username");
     let db = new_db_connection().await?;
     let profile = get_farcaster_profile_by_username(&username).await?;
 
@@ -216,7 +213,6 @@ async fn fetch_by_signer(
     _platform: &Platform,
     address: &str,
 ) -> Result<TargetProcessedList, Error> {
-    warn!("fetch_by_signer");
     let db = new_db_connection().await?;
     let profile = get_farcaster_profile_by_signer(&address).await?;
 

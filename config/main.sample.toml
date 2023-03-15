@@ -42,3 +42,6 @@ url = "https://api.lens.dev/playground"
 [upstream.unstoppable_api]
 url = "https://resolve.unstoppabledomains.com"
 token = "4cb4358d-ce8b-4bf5-fill-yourstokenid"
+
+[upstream.datamgr_api]
+url = "https://cryptodata.store"
