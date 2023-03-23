@@ -123,13 +123,21 @@ async fn fetch_domain_by_address(
         fetcher: DataFetcher::RelationService,
         updated_at: naive_now(),
     };
+    let reverse: Resolve = Resolve {
+        uuid: Uuid::new_v4(),
+        source: DataSource::SpaceId,
+        system: DomainNameSystem::SpaceId,
+        name: name.clone().unwrap(),
+        fetcher: DataFetcher::RelationService,
+        updated_at: naive_now(),
+    };
 
     // hold record
     create_identity_to_identity_hold_record(&db, &eth_identity, &sid_identity, &hold).await?;
     // 'regular' resolution involves mapping from a name to an address.
     create_domain_resolve_record(&db, &sid_identity, &eth_identity, &resolve).await?;
     // 'reverse' resolution maps from an address back to a name.
-    create_domain_resolve_record(&db, &eth_identity, &sid_identity, &resolve).await?;
+    create_domain_resolve_record(&db, &eth_identity, &sid_identity, &reverse).await?;
 
     return Ok(vec![Target::Identity(
         Platform::SpaceId,
@@ -192,10 +200,17 @@ async fn fetch_address_by_domain(
     create_domain_resolve_record(&db, &sid_identity, &eth_identity, &resolve).await?;
 
     // lookup reverse resolve name
-    let name = get_name(&address).await?;
-    if !name.is_none() {
+    if let Some(domain) = get_name(&address).await? {
         // 'reverse' resolution maps from an address back to a name.
-        create_domain_resolve_record(&db, &eth_identity, &sid_identity, &resolve).await?;
+        let reverse: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::SpaceId,
+            system: DomainNameSystem::SpaceId,
+            name: domain,
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+        create_domain_resolve_record(&db, &eth_identity, &sid_identity, &reverse).await?;
     }
 
     return Ok(vec![Target::Identity(
