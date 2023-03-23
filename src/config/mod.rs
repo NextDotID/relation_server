@@ -43,6 +43,7 @@ pub struct Upstream {
     pub lens_api: ConfigLensAPI,
     pub unstoppable_api: ConfigUnstoppableDomainsAPI,
     pub datamgr_api: ConfigDataMgrAPI,
+    pub spaceid_api: ConfigSpaceIdAPI,
 }
 
 #[derive(Clone, Deserialize, Default)]
@@ -118,6 +119,11 @@ pub struct ConfigUnstoppableDomainsAPI {
 
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigDataMgrAPI {
+    pub url: String,
+}
+
+#[derive(Clone, Deserialize, Default)]
+pub struct ConfigSpaceIdAPI {
     pub url: String,
 }
 

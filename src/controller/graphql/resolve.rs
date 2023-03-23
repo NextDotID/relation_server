@@ -85,7 +85,7 @@ impl ResolveQuery {
         )]
         domain_system: DomainNameSystem,
         #[graphql(
-            desc = "Name of domain. For example the name is (name: \"abc.eth\") or (name: \"abc.bit\")"
+            desc = "Name of domain. For example the name is (name: \"abc.eth\") or (name: \"abc.bit\") or (name: \"abc.bnb\")"
         )]
         name: String,
     ) -> Result<Option<ResolveEdge>> {
@@ -115,7 +115,8 @@ impl ResolveQuery {
             }
             DomainNameSystem::DotBit
             | DomainNameSystem::Lens
-            | DomainNameSystem::UnstoppableDomains => {
+            | DomainNameSystem::UnstoppableDomains
+            | DomainNameSystem::SpaceId => {
                 let platform = domain_system.into();
                 let target = Target::Identity(platform, name.clone());
                 match Resolve::find_by_domain_platform_name(&pool, &name, &domain_system, &platform)

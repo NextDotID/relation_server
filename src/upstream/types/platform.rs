@@ -91,6 +91,12 @@ pub enum Platform {
     #[graphql(name = "farcaster")]
     Farcaster,
 
+    /// SpaceId
+    #[strum(serialize = "space_id")]
+    #[serde(rename = "space_id")]
+    #[graphql(name = "space_id")]
+    SpaceId,
+
     /// Unknown
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]

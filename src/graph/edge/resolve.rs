@@ -56,6 +56,12 @@ pub enum DomainNameSystem {
     #[graphql(name = "unstoppabledomains")]
     UnstoppableDomains,
 
+    /// https://api.prd.space.id/
+    #[strum(serialize = "space_id")]
+    #[serde(rename = "space_id")]
+    #[graphql(name = "space_id")]
+    SpaceId,
+
     #[default]
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
@@ -69,6 +75,7 @@ impl From<DomainNameSystem> for Platform {
             DomainNameSystem::DotBit => Platform::Dotbit,
             DomainNameSystem::UnstoppableDomains => Platform::UnstoppableDomains,
             DomainNameSystem::Lens => Platform::Lens,
+            DomainNameSystem::SpaceId => Platform::SpaceId,
             _ => Platform::Unknown,
         }
     }
