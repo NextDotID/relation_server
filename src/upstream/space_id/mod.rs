@@ -17,7 +17,7 @@ use async_trait::async_trait;
 use http::uri::InvalidUri;
 use hyper::{Body, Method, Request};
 use serde::Deserialize;
-use tracing::error;
+use tracing::{error, warn};
 use uuid::Uuid;
 
 #[derive(Deserialize, Debug, Clone)]
@@ -243,7 +243,7 @@ async fn get_address(domain: &str) -> Result<String, Error> {
     };
     if result.address == "0x0000000000000000000000000000000000000000" {
         // domain is valid but has not been registered.
-        error!(
+        warn!(
             "SpaceId {} domain is valid but has not been registered.",
             domain
         );
