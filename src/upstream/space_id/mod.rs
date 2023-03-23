@@ -128,7 +128,7 @@ async fn fetch_domain_by_address(
     create_identity_to_identity_hold_record(&db, &eth_identity, &sid_identity, &hold).await?;
     // 'regular' resolution involves mapping from a name to an address.
     create_domain_resolve_record(&db, &sid_identity, &eth_identity, &resolve).await?;
-    // das_reverseRecord: 'reverse' resolution maps from an address back to a name.
+    // 'reverse' resolution maps from an address back to a name.
     create_domain_resolve_record(&db, &eth_identity, &sid_identity, &resolve).await?;
 
     return Ok(vec![Target::Identity(
@@ -190,6 +190,13 @@ async fn fetch_address_by_domain(
     create_identity_to_identity_hold_record(&db, &eth_identity, &sid_identity, &hold).await?;
     // 'regular' resolution involves mapping from a name to an address.
     create_domain_resolve_record(&db, &sid_identity, &eth_identity, &resolve).await?;
+
+    // lookup reverse resolve name
+    let name = get_name(&address).await?;
+    if !name.is_none() {
+        // 'reverse' resolution maps from an address back to a name.
+        create_domain_resolve_record(&db, &eth_identity, &sid_identity, &resolve).await?;
+    }
 
     return Ok(vec![Target::Identity(
         Platform::Ethereum,
