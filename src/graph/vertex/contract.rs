@@ -165,6 +165,27 @@ pub enum Chain {
     #[graphql(name = "crossbell")]
     Crossbell,
 
+    /// Avalanche is an open, programmable smart contracts platform for decentralized applications.
+    /// https://www.avax.com/
+    #[serde(rename = "avalanche")]
+    #[strum(serialize = "avalanche")]
+    #[graphql(name = "avalanche")]
+    Avalanche,
+
+    /// Fantom is a highly scalable blockchain platform for DeFi, crypto dApps, and enterprise applications.
+    /// https://fantom.foundation/
+    #[serde(rename = "fantom")]
+    #[strum(serialize = "fantom")]
+    #[graphql(name = "fantom")]
+    Fantom,
+
+    /// Celo is the carbon-negative, mobile-first, EVM-compatible blockchain ecosystem leading a thriving new digital economy for all.
+    /// https://celo.org/
+    #[serde(rename = "celo")]
+    #[strum(serialize = "celo")]
+    #[graphql(name = "celo")]
+    Celo,
+
     #[default]
     #[serde(rename = "unknown")]
     #[strum(serialize = "unknown")]
@@ -217,6 +238,9 @@ impl Chain {
             Arbitrum => ChainType::EVM(42161),
             Optimism => ChainType::EVM(10),
             Crossbell => ChainType::EVM(3737),
+            Avalanche => ChainType::EVM(43114),
+            Fantom => ChainType::EVM(250),
+            Celo => ChainType::EVM(42220),
             Unknown => todo!(),
         }
     }
