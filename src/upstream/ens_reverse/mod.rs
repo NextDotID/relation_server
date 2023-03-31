@@ -5,9 +5,10 @@ use crate::{
     config::C,
     error::Error,
     graph::{new_db_connection, vertex::Identity, Vertex},
-    util::{make_client, parse_body},
+    util::{make_client, parse_body, request_with_timeout},
 };
 use async_trait::async_trait;
+use hyper::{Body, Method};
 use serde::Deserialize;
 use tracing::info;
 
@@ -62,7 +63,19 @@ async fn fetch_record(wallet: &str) -> Result<Response, Error> {
             Error::ParamError(format!("URI Format error: {}", err))
         })?;
 
-    let mut resp = client.get(url).await?;
+    let req = hyper::Request::builder()
+        .method(Method::GET)
+        .uri(url)
+        .body(Body::empty())
+        .map_err(|_err| Error::ParamError(format!("ENSReverse Build Request Error {}", _err)))?;
+
+    let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!(
+            "ENSReverse fetch | fetch_record error: {:?}",
+            err.to_string()
+        ))
+    })?;
+
     if !resp.status().is_success() {
         return Err(Error::General(
             format!("ENSReverse fetch Error: {}", resp.status()),

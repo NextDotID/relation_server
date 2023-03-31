@@ -154,20 +154,28 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
     let client = Client::new(&C.upstream.the_graph.ens);
     let vars = QueryVars { target: target_var };
 
-    let resp = client
-        .query_with_vars::<QueryResponse, QueryVars>(&query, vars)
-        .await;
+    let resp = client.query_with_vars::<QueryResponse, QueryVars>(&query, vars);
 
-    if resp.is_err() {
-        warn!(
-            "TheGraph {} | Failed to fetch: {}",
-            target,
-            resp.unwrap_err(),
-        );
+    let data: Option<QueryResponse> =
+        match tokio::time::timeout(std::time::Duration::from_secs(5), resp).await {
+            Ok(resp) => match resp {
+                Ok(resp) => resp,
+                Err(err) => {
+                    warn!("TheGraph {} | Failed to fetch: {}", target, err);
+                    None
+                }
+            },
+            Err(_) => {
+                warn!("TheGraph | Timeout: no response in 5 seconds.");
+                None
+            }
+        };
+
+    if data.is_none() {
+        info!("TheGraph {} | No result", target);
         return Ok(vec![]);
     }
-
-    let res = resp.unwrap().unwrap();
+    let res = data.unwrap();
     if res.domains.is_empty() {
         info!("TheGraph {} | No result", target);
         return Ok(vec![]);

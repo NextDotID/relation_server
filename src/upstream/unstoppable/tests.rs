@@ -7,6 +7,8 @@ use crate::{
     upstream::{Fetcher, Target},
 };
 
+use super::fetch_domain;
+
 #[tokio::test]
 async fn test_fetch_domains_by_account() -> Result<(), Error> {
     let target = Target::Identity(
@@ -20,6 +22,15 @@ async fn test_fetch_domains_by_account() -> Result<(), Error> {
             .await?
             .expect("Record not found");
     print!("found: {:?}", found);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_fetch_domain() -> Result<(), Error> {
+    let owners = "0xCbCca6e22d90b8d2B829852a8D551e8410f40956";
+    let page = "";
+    let data = fetch_domain(&owners, &page).await?;
+    print!("data: {:?}", data);
     Ok(())
 }
 

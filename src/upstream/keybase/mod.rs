@@ -6,10 +6,11 @@ use crate::error::Error;
 use crate::graph::create_identity_to_identity_two_way_binding;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
-use crate::util::{make_client, naive_now, parse_body};
+use crate::util::{make_client, naive_now, parse_body, request_with_timeout};
 use async_trait::async_trait;
 use serde::Deserialize;
 
+use hyper::{Body, Method};
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -110,7 +111,16 @@ async fn fetch_connections_by_platform_identity(
         Err(err) => return Err(Error::ParamError(format!("Uri format Error: {}", err))),
     };
 
-    let mut resp = client.get(uri).await?;
+    let req = hyper::Request::builder()
+        .method(Method::GET)
+        .uri(uri)
+        .body(Body::empty())
+        .map_err(|_err| Error::ParamError(format!("Keybase Build Request Error {}", _err)))?;
+
+    let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!("Keybase fetch | error: {:?}", err.to_string()))
+    })?;
+
     if !resp.status().is_success() {
         let body: ErrorResponse = parse_body(&mut resp).await?;
         return Err(Error::General(

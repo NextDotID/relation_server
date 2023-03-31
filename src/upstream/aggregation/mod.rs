@@ -8,9 +8,10 @@ use crate::graph::edge::Proof;
 use crate::graph::vertex::Identity;
 use crate::graph::{create_identity_to_identity_record, new_db_connection};
 use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
-use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
+use crate::util::{make_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive};
 use async_trait::async_trait;
 use futures::future::join_all;
+use hyper::{Body, Method};
 use serde::Deserialize;
 use std::str::FromStr;
 use tracing::{error, info};
@@ -82,11 +83,20 @@ async fn fetch_connections_by_platform_identity(
             Err(err) => return Err(Error::ParamError(format!("Uri format Error: {}", err))),
         };
 
-        let mut resp = client.get(uri).await?;
-        if !resp.status().is_success() {
-            error!("aggregation service fetch error, status {}", resp.status());
-            break;
-        }
+        let req = hyper::Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .body(Body::empty())
+            .map_err(|_err| {
+                Error::ParamError(format!("Aggregation Service Build Request Error {}", _err))
+            })?;
+
+        let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "Aggregation Service fetch | error: {:?}",
+                err.to_string()
+            ))
+        })?;
 
         let body: Response = parse_body(&mut resp).await?;
         if body.records.is_empty() {

@@ -86,17 +86,33 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
         addr: &identity.to_lowercase(), // Yes, KNN3 is case-sensitive.
     };
 
-    let resp: Result<Option<EthQueryResponse>, _> = client.query_with_vars(query, vars).await;
-    if resp.is_err() {
-        warn!(
-            "KNN3 fetch | Failed to fetch addrs: {}, err: {:?}",
-            identity,
-            resp.err()
-        );
+    let resp = client.query_with_vars(query, vars);
+    let data: Option<EthQueryResponse> =
+        match tokio::time::timeout(std::time::Duration::from_secs(5), resp).await {
+            Ok(resp) => match resp {
+                Ok(resp) => {
+                    let res = resp.unwrap();
+                    res
+                }
+                Err(err) => {
+                    warn!(
+                        "KNN3 fetch | Failed to fetch addrs: {}, err: {:?}",
+                        identity, err
+                    );
+                    None
+                }
+            },
+            Err(_) => {
+                warn!("KNN3 fetch | Timeout: no response in 5 seconds.");
+                None
+            }
+        };
+
+    if data.is_none() {
+        info!("KNN3 fetch | address: {} cannot find any result", identity);
         return Ok(vec![]);
     }
-
-    let res = resp.unwrap().unwrap();
+    let res = data.unwrap();
     if res.addrs.is_empty() {
         info!("KNN3 fetch | address: {} cannot find any result", identity);
         return Ok(vec![]);
@@ -163,19 +179,31 @@ async fn fetch_eth_wallet_by_ens(id: &str) -> Result<TargetProcessedList, Error>
     let vars = ENSQueryVars {
         ens: vec![id.to_string()],
     };
-    let response = client
-        .query_with_vars::<EnsQueryResponse, _>(query, vars)
-        .await;
-    if response.is_err() {
-        warn!(
-            "KNN3 fetch | Failed to fetch addrs using ENS: {}, error: {:?}",
-            id,
-            response.err()
-        );
+    let response = client.query_with_vars::<EnsQueryResponse, _>(query, vars);
+
+    let data: Option<EnsQueryResponse> =
+        match tokio::time::timeout(std::time::Duration::from_secs(5), response).await {
+            Ok(response) => match response {
+                Ok(response) => response,
+                Err(err) => {
+                    warn!(
+                        "KNN3 fetch | Failed to fetch addrs using ENS: {}, error: {:?}",
+                        id, err
+                    );
+                    None
+                }
+            },
+            Err(_) => {
+                warn!("KNN3 fetch | Timeout: no response in 5 seconds.");
+                None
+            }
+        };
+
+    if data.is_none() {
+        info!("KNN3 fetch | ENS {} has no result", id);
         return Ok(vec![]);
     }
-
-    let result = response.unwrap().unwrap();
+    let result = data.unwrap();
     if result.addrs.is_empty() {
         info!("KNN3 fetch | ENS {} has no result", id);
         return Ok(vec![]);

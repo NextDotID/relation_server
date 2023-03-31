@@ -8,15 +8,15 @@ use crate::graph::edge::ProofRecord;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
 use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
-use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
+use crate::util::{make_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive};
 use aragog::query::{Comparison, Filter, QueryResult};
 use aragog::{DatabaseConnection, DatabaseRecord, EdgeRecord, Record};
 use async_trait::async_trait;
 use http::StatusCode;
+use hyper::{Body, Method};
 use serde::Deserialize;
-use tracing::{debug, info};
-
 use serde_json::{Map, Value};
+use tracing::{debug, info};
 
 use uuid::Uuid;
 
@@ -109,7 +109,15 @@ pub async fn prefetch() -> Result<(), Error> {
     let client = make_client();
     let uri: http::Uri = (C.upstream.sybil_service.url).parse().unwrap();
 
-    let mut resp = client.get(uri).await?;
+    let req = hyper::Request::builder()
+        .method(Method::GET)
+        .uri(uri)
+        .body(Body::empty())
+        .map_err(|_err| Error::ParamError(format!("SybilList Build Request Error {}", _err)))?;
+
+    let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!("SybilList fetch | error: {:?}", err.to_string()))
+    })?;
 
     if !resp.status().is_success() {
         let body: ErrorResponse = parse_body(&mut resp).await?;
