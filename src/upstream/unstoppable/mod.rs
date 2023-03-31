@@ -9,7 +9,7 @@ use crate::graph::vertex::IdentityRecord;
 use crate::graph::vertex::Vertex;
 use crate::graph::{new_db_connection, vertex::Identity};
 use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
-use crate::util::{make_client, naive_now, parse_body};
+use crate::util::{make_client, naive_now, parse_body, request_with_timeout};
 use aragog::DatabaseConnection;
 use async_trait::async_trait;
 use futures::future::join_all;
@@ -154,26 +154,27 @@ async fn fetch_domain(owners: &str, page: &str) -> Result<RecordsForOwnerRespons
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("Invalid Head Error {}", _err)))?;
 
-    let mut resp = client.request(req).await?;
-    if !resp.status().is_success() {
-        let err_message = format!(
-            "UnstoppableDomains fetch error, statusCode: {}",
-            resp.status()
-        );
-        error!(err_message);
-        return Err(Error::General(err_message, resp.status()));
-    }
+    let mut body = request_with_timeout(&client, req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!(
+            "UnstoppableDomains fetch | Fail to fetch_domain record: {:?}",
+            err.to_string()
+        ))
+    })?;
+
     // Parse response body
-    let result: RecordsForOwnerResponse = match parse_body(&mut resp).await {
+    let result: RecordsForOwnerResponse = match parse_body(&mut body).await {
         Ok(result) => result,
         Err(_) => {
-            let err: BadResponse = parse_body(&mut resp).await?;
+            let err: BadResponse = parse_body(&mut body).await?;
             let err_message = format!(
                 "UnstoppableDomains fetch error, Code: {}, Message: {}",
                 err.code, err.message
             );
             error!(err_message);
-            return Err(Error::General(err_message, resp.status()));
+            return Err(Error::General(
+                err_message,
+                lambda_http::http::StatusCode::INTERNAL_SERVER_ERROR,
+            ));
         }
     };
     Ok(result)
@@ -193,17 +194,17 @@ async fn fetch_reverse(owner: &str) -> Result<ReverseResponse, Error> {
             format!("Bearer {}", C.upstream.unstoppable_api.token),
         )
         .body(Body::empty())
-        .expect("request builder");
+        .map_err(|_err| Error::ParamError(format!("Invalid Head Error {}", _err)))?;
 
-    let mut reverse_resp = client.request(reverse_req).await?;
-    if !reverse_resp.status().is_success() {
-        let err_message = format!(
-            "UnstoppableDomains reverse fetch error, statusCode: {}",
-            reverse_resp.status()
-        );
-        error!(err_message);
-        return Err(Error::General(err_message, reverse_resp.status()));
-    };
+    let mut reverse_resp = request_with_timeout(&client, reverse_req)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "UnstoppableDomains fetch | Fail to fetch reverse record: {:?}",
+                err.to_string()
+            ))
+        })?;
+
     let result = match parse_body::<ReverseResponse>(&mut reverse_resp).await {
         Ok(r) => r,
         Err(_) => {
@@ -334,21 +335,19 @@ async fn fetch_owner(domains: &str) -> Result<DomainResponse, Error> {
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("Invalid Head Error {}", _err)))?;
 
-    let mut resp = client.request(req).await?;
-    if !resp.status().is_success() {
-        let err_message = format!(
-            "UnstoppableDomains fetch error, statusCode: {}",
-            resp.status()
-        );
-        error!(err_message);
-        return Err(Error::General(err_message, resp.status()));
-    }
+    let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!(
+            "UnstoppableDomains fetch | Fail to fetch_domain record: {:?}",
+            err.to_string()
+        ))
+    })?;
+
     let result = match parse_body::<DomainResponse>(&mut resp).await {
         Ok(result) => result,
         Err(_) => {
             let err: BadResponse = parse_body(&mut resp).await?;
             let err_message = format!(
-                "UnstoppableDomains fetch error, Code: {}, Message: {}",
+                "UnstoppableDomains fetch | errCode: {}, errMessage: {}",
                 err.code, err.message
             );
             error!(err_message);

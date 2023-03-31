@@ -7,9 +7,10 @@ use crate::error::Error;
 use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
 use crate::graph::{Edge, Vertex};
 use crate::upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList};
-use crate::util::{make_client, naive_now, parse_body, timestamp_to_naive};
+use crate::util::{make_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive};
 
 use async_trait::async_trait;
+use hyper::{Body, Method};
 use serde::Deserialize;
 use std::str::FromStr;
 use tracing::{debug, error, info};
@@ -93,7 +94,19 @@ async fn fetch_connections_by_platform_identity(
     )
     .parse()
     .map_err(|_err| Error::ParamError("Uri format Error".to_string()))?;
-    let mut resp = client.get(uri).await?;
+
+    let req = hyper::Request::builder()
+        .method(Method::GET)
+        .uri(uri)
+        .body(Body::empty())
+        .map_err(|_err| Error::ParamError(format!("Proof Service Build Request Error {}", _err)))?;
+
+    let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!(
+            "Proof Service fetch | error: {:?}",
+            err.to_string()
+        ))
+    })?;
 
     if !resp.status().is_success() {
         let body: ErrorResponse = parse_body(&mut resp).await?;

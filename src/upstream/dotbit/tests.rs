@@ -15,7 +15,7 @@ async fn test_smoke_dotbit_by_dotbit_identity() -> Result<(), Error> {
     let found = Identity::find_by_platform_identity(&db, &target.platform()?, &target.identity()?)
         .await?
         .expect("Record not found");
-
+    print!("found {:?}", found);
     assert_eq!(found.updated_at.timestamp(), naive_now().timestamp());
 
     Ok(())

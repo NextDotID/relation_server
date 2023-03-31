@@ -108,21 +108,28 @@ async fn get_farcaster_profile_by_username(username: &str) -> Result<Vec<Farcast
     let vars = UsernameQueryVars {
         username: username.to_string(),
     };
-    let response = client
-        .query_with_vars::<UsernameQueryResponse, _>(QUERY_BY_NAME, vars)
-        .await;
+    let response = client.query_with_vars::<UsernameQueryResponse, _>(QUERY_BY_NAME, vars);
 
-    if response.is_err() {
-        warn!(
-            "Farcaster fetch | Failed to fetch profile using `username`: {}, error: {:?}",
-            username,
-            response.err()
-        );
-        return Ok(vec![]);
-    }
-
-    let result = response.unwrap().unwrap();
-    Ok(result.data)
+    let data = match tokio::time::timeout(std::time::Duration::from_secs(5), response).await {
+        Ok(response) => match response {
+            Ok(response) => {
+                let result = response.unwrap();
+                result.data
+            }
+            Err(err) => {
+                warn!(
+                    "GraphQLError: Farcaster fetch | Failed to fetch profile using `username`: {}, error: {:?}", 
+                    username,
+                    err);
+                vec![]
+            }
+        },
+        Err(_) => {
+            warn!("Farcaster fetch | Timeout: no response in 5 seconds.");
+            vec![]
+        }
+    };
+    Ok(data)
 }
 
 async fn get_farcaster_profile_by_signer(address: &str) -> Result<Vec<FarcasterProfile>, Error> {
@@ -140,19 +147,28 @@ async fn get_farcaster_profile_by_signer(address: &str) -> Result<Vec<FarcasterP
     let vars = SignerAddressQueryVars {
         signer: address.to_string(),
     };
-    let response = client
-        .query_with_vars::<SignerAddressQueryResponse, _>(QUERY_BY_SIGNER, vars)
-        .await;
-    if response.is_err() {
-        warn!(
-            "Farcaster fetch | Failed to fetch profile using `signer`: {}, error: {:?}",
-            address,
-            response.err()
-        );
-        return Ok(vec![]);
-    }
-    let result = response.unwrap().unwrap();
-    Ok(result.data)
+    let response = client.query_with_vars::<SignerAddressQueryResponse, _>(QUERY_BY_SIGNER, vars);
+
+    let data = match tokio::time::timeout(std::time::Duration::from_secs(5), response).await {
+        Ok(response) => match response {
+            Ok(response) => {
+                let result = response.unwrap();
+                result.data
+            }
+            Err(err) => {
+                warn!(
+                    "Farcaster fetch | Failed to fetch profile using `signer`: {}, error: {:?}",
+                    address, err
+                );
+                vec![]
+            }
+        },
+        Err(_) => {
+            warn!("Farcaster fetch | Timeout: no response in 5 seconds.");
+            vec![]
+        }
+    };
+    Ok(data)
 }
 
 async fn save_profile_ethereum(

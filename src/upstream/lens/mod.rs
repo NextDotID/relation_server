@@ -16,6 +16,8 @@ use crate::{
 use aragog::DatabaseConnection;
 use async_trait::async_trait;
 use cynic::{http::SurfExt, QueryBuilder};
+use std::convert::TryInto;
+use surf::{middleware::Next, Client, Config, HttpClient, Request, Response};
 use tracing::{info, warn};
 use uuid::Uuid;
 

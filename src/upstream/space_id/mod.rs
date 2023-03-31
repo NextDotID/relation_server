@@ -9,7 +9,7 @@ use crate::{
         create_domain_resolve_record, create_identity_to_identity_hold_record, new_db_connection,
     },
     upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList},
-    util::{make_client, naive_now, parse_body},
+    util::{make_client, naive_now, parse_body, request_with_timeout},
 };
 
 // use super::types::target;
@@ -234,9 +234,12 @@ async fn get_address(domain: &str) -> Result<String, Error> {
         .method(Method::GET)
         .uri(uri)
         .body(Body::empty())
-        .map_err(|_err| Error::ParamError(format!("Param Error {}", _err)))?;
+        .map_err(|_err| Error::ParamError(format!("SpaceId Build Request Error {}", _err)))?;
 
-    let mut resp = client.request(req).await?;
+    let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!("SpaceId fetch | error: {:?}", err.to_string()))
+    })?;
+
     if !resp.status().is_success() {
         let err_message = format!("SpaceId fetch error, statusCode: {}", resp.status());
         error!(err_message);
@@ -282,9 +285,12 @@ async fn get_name(address: &str) -> Result<Option<String>, Error> {
         .method(Method::GET)
         .uri(uri)
         .body(Body::empty())
-        .map_err(|_err| Error::ParamError(format!("Param Error {}", _err)))?;
+        .map_err(|_err| Error::ParamError(format!("SpaceId Build Request Error {}", _err)))?;
 
-    let mut resp = client.request(req).await?;
+    let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!("SpaceId fetch | error: {:?}", err.to_string()))
+    })?;
+
     if !resp.status().is_success() {
         let err_message = format!("SpaceId fetch error, statusCode: {}", resp.status());
         error!(err_message);

@@ -10,12 +10,13 @@ use crate::{
         vertex::{contract::Chain, contract::ContractCategory, Contract, Identity},
     },
     upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList},
-    util::{make_client, naive_now, parse_body},
+    util::{make_client, naive_now, parse_body, request_with_timeout},
 };
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime};
 use futures::future::join_all;
 use http::uri::InvalidUri;
+use hyper::{Body, Method};
 use serde::Deserialize;
 use std::str::FromStr;
 use tracing::{error, info};
@@ -123,11 +124,16 @@ async fn fetch_nfts_by_account(
             .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
         }
 
-        let mut resp = client.get(uri).await?;
-        if !resp.status().is_success() {
-            error!("Rss3 fetch error, statusCode: {}", resp.status());
-            break;
-        }
+        let req = hyper::Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .body(Body::empty())
+            .map_err(|_err| Error::ParamError(format!("Rss3 Build Request Error {}", _err)))?;
+
+        let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
+            Error::ManualHttpClientError(format!("Rss3 fetch fetch | error: {:?}", err.to_string()))
+        })?;
+
         let body: Rss3Response = parse_body(&mut resp).await?;
         if body.total == 0 {
             info!("Rss3 Response result is empty");
