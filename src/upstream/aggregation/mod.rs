@@ -14,7 +14,7 @@ use futures::future::join_all;
 use hyper::{Body, Method};
 use serde::Deserialize;
 use std::str::FromStr;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
 #[derive(Deserialize, Debug)]
@@ -174,9 +174,14 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         .try_into()
         .unwrap();
 
+    let source = DataSource::from_str(p.source.as_str()).unwrap_or(DataSource::Unknown);
+    if source == DataSource::Rss3 {
+        debug!("AggregationService filter source={}", DataSource::Rss3);
+        return Ok(vec![]);
+    }
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
-        source: DataSource::from_str(p.source.as_str()).unwrap_or(DataSource::Unknown),
+        source,
         record_id: Some(p.id.clone()),
         created_at: Some(timestamp_to_naive(
             p.create_timestamp.parse::<i64>().unwrap() / 1000,
