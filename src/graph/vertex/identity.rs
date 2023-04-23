@@ -312,7 +312,7 @@ impl BatchFn<String, Option<(IdentityRecord, IdentityRecord)>> for FromToLoadFn 
         &mut self,
         ids: &[String],
     ) -> HashMap<String, Option<(IdentityRecord, IdentityRecord)>> {
-        debug!("Loading edge_id for: {:?}", ids);
+        trace!(ids = ids.len(), "Loading edge_id");
         let records = get_from_to_record(&self.pool, ids.to_vec()).await;
         match records {
             Ok(records) => records,
@@ -561,6 +561,7 @@ impl IdentityRecord {
     }
 
     // Return all neighbors of this identity with path<ProofRecord>
+    #[tracing::instrument(skip(self, pool), level = "trace")]
     pub async fn neighbors_with_traversal(
         &self,
         pool: &ConnectionPool,
@@ -590,7 +591,9 @@ impl IdentityRecord {
             .batch_size(1)
             .count(false);
 
+        trace!("Querying...");
         let resp: Vec<Value> = db.aql_query(aql).await?;
+        debug!(records = resp.len(), "Query completed.");
         let mut paths: Vec<IdentityFromToRecord> = Vec::new();
         for p in resp {
             let pp: IdentityFromToRecord = from_value(p)?;
