@@ -8,7 +8,7 @@ use crate::upstream::{fetch_all, DataSource, Platform, Target};
 use async_graphql::{Context, Object};
 use deadpool::managed::Object;
 use strum::IntoEnumIterator;
-use tracing::{debug, info};
+use tracing::{debug, Level, event};
 
 /// Status for a record in RelationService DB
 #[derive(Default, Copy, Clone, PartialEq, Eq, async_graphql::Enum)]
@@ -199,6 +199,7 @@ impl IdentityQuery {
     }
 
     /// Query an `identity` by given `platform` and `identity`.
+    #[tracing::instrument(level = "trace", skip(self, ctx))]
     async fn identity(
         &self,
         ctx: &Context<'_>,
@@ -220,14 +221,18 @@ impl IdentityQuery {
         // FIXME: Still kinda dirty. Should be in an background queue/worker-like shape.
         match Identity::find_by_platform_identity(&db, &platform, &identity).await? {
             None => {
-                let _ = fetch_all(target).await; // TODO: print error message here (but not break the return value)
+                let fetch_result = fetch_all(target).await;
+                if fetch_result.is_err() {
+                    event!(Level::WARN, ?platform, identity, err = fetch_result.unwrap_err().to_string(),  "Failed to fetch");
+                }
                 Ok(Identity::find_by_platform_identity(&db, &platform, &identity).await?)
             }
             Some(found) => {
                 if found.is_outdated() {
-                    info!(
-                        "Identity: {}/{} is outdated. Refetching...",
-                        platform, identity
+                    event!(
+                        Level::DEBUG,
+                        ?platform, identity,
+                        "Outdated. Refetching."
                     );
                     tokio::spawn(fetch_all(target)); // Fetch in the background
                 }

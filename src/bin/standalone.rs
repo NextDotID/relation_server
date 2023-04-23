@@ -27,7 +27,8 @@ async fn main() -> Result<()> {
             EnvFilter::builder()
                 .with_default_directive(LevelFilter::INFO.into())
                 .from_env_lossy()
-                .add_directive("hyper=info".parse().unwrap()),
+                .add_directive("hyper=info".parse().unwrap())
+                .add_directive("tokio=info".parse().unwrap()),
         )
         .finish();
 

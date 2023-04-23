@@ -34,7 +34,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::{future::join_all, StreamExt};
-use tracing::{info, warn};
+use tracing::{event, info, warn, Level};
 
 pub(crate) use types::{DataFetcher, DataSource, Platform, Target, TargetProcessedList};
 
@@ -54,10 +54,12 @@ pub trait Fetcher {
 }
 
 /// Find all available (platform, identity) in all `Upstream`s.
+#[tracing::instrument(name = "fetch_all", level = "trace")]
 pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
+    let mut round: u16 = 0;
     const CONCURRENT: usize = 5;
     if FETCHING.lock().unwrap().contains(&initial_target) {
-        info!("{} is fetching. Skipped.", initial_target);
+        event!(Level::INFO, ?initial_target, "Fetching. Skipped.");
         return Ok(());
     }
 
@@ -67,23 +69,40 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
     let mut processed: HashSet<Target> = HashSet::new();
 
     while up_next.len() > 0 {
+        round += 1;
         let futures: Vec<_> = up_next
             .iter()
             .filter(|target| !processed.contains(target))
             .map(|target| fetch_one(target))
             .collect();
         // Limit concurrent tasks to 5.
+        event!(
+            Level::DEBUG,
+            round,
+            to_be_fetched = futures.len(),
+            "Fetching"
+        );
         let futures_stream = futures::stream::iter(futures).buffer_unordered(CONCURRENT);
 
         let mut result: Vec<Target> = futures_stream
             .collect::<Vec<Result<Vec<Target>, Error>>>()
             .await
             .into_iter()
-            .flat_map(|handle_result| match handle_result {
-                Ok(result) => result,
-                Err(err) => {
-                    warn!("Error happened in fetching task: {}", err);
-                    vec![]
+            .flat_map(|handle_result| -> Vec<Target> {
+                match handle_result {
+                    Ok(result) => {
+                        event!(
+                            Level::DEBUG,
+                            round,
+                            fetched_length = result.len(),
+                            "Round completed."
+                        );
+                        result
+                    }
+                    Err(err) => {
+                        event!(Level::WARN, round, %err, "Error happened in fetching task");
+                        vec![]
+                    }
                 }
             })
             .collect();
@@ -95,6 +114,12 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
     }
 
     FETCHING.lock().unwrap().remove(&initial_target);
+    event!(
+        Level::INFO,
+        round,
+        processed = processed.len(),
+        "Fetch completed."
+    );
     Ok(())
 }
 

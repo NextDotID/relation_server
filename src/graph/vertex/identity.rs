@@ -23,7 +23,7 @@ use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, json, to_value, value::Value};
 use std::collections::HashMap;
-use tracing::debug;
+use tracing::{debug, trace};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Deserialize, Serialize, Record)]
@@ -89,6 +89,7 @@ impl PartialEq for Identity {
 
 impl Identity {
     /// Find record by given platform and identity.
+    #[tracing::instrument(level = "trace", skip(db))]
     pub async fn find_by_platform_identity(
         db: &DatabaseConnection,
         platform: &Platform,
@@ -101,30 +102,13 @@ impl Identity {
         let query_result = Self::get(&query, db).await?;
 
         if query_result.len() == 0 {
+            trace!("Identity not found in DB");
             Ok(None)
         } else {
-            Ok(Some(query_result.first().unwrap().to_owned().into()))
+            let result: IdentityRecord = query_result.first().unwrap().to_owned().into();
+            trace!(uuid = ?result.uuid, "Identity found in DB");
+            Ok(Some(result))
         }
-
-        /* Use connection pool
-        let db = pool.db().await?;
-        let aql = r"FOR v IN @@collection_name
-        FILTER v.identity == @identity AND v.platform == @platform
-        RETURN v";
-        let aql = AqlQuery::new(aql)
-            .bind_var("@collection_name", Identity::COLLECTION_NAME)
-            .bind_var("identity", identity)
-            .bind_var("platform", platform.to_string())
-            .batch_size(1)
-            .count(false);
-
-        let result: Vec<IdentityRecord> = db.aql_query(aql).await?;
-        if result.len() == 0 {
-            Ok(None)
-        } else {
-            Ok(Some(result.first().unwrap().to_owned().into()))
-        }
-        */
     }
 
     pub async fn find_by_platforms_identity(
@@ -465,6 +449,7 @@ async fn get_from_to_record(
 
 impl IdentityRecord {
     /// Returns all neighbors of this identity. Depth and upstream data souce can be specified.
+    #[tracing::instrument(skip(self, pool, _source), level = "trace")]
     pub async fn neighbors(
         &self,
         pool: &ConnectionPool,
@@ -493,8 +478,10 @@ impl IdentityRecord {
             .bind_var("depth", depth)
             .batch_size(1)
             .count(false);
-
+        trace!("Querying...");
         let resp: Vec<Value> = db.aql_query(aql).await?;
+        trace!(path_count = resp.len(), "Query completed.");
+
         let mut identity_map: HashMap<String, IdentityRecord> = HashMap::new();
         let mut sources_map: HashMap<String, Vec<String>> = HashMap::new();
         for p in resp {
@@ -510,6 +497,7 @@ impl IdentityRecord {
                     .push(e.source.to_string());
             }
         }
+        trace!(identity_count = identity_map.len(), sources_count = sources_map.len(), "Identity/Source map arranged.");
 
         let mut identity_sources: Vec<IdentityWithSource> = Vec::new();
         for (k, v) in &identity_map {
@@ -518,10 +506,10 @@ impl IdentityRecord {
                 Some(ss) => {
                     let unique_sources = ss.to_owned().unique();
                     // debug!("unique_sources = {:#?}", unique_sources);
-                    let _sources = vec_string_to_vec_datasource(unique_sources)?;
-                    if _sources.len() > 0 {
+                    let sources = vec_string_to_vec_datasource(unique_sources)?;
+                    if sources.len() > 0 {
                         let id = IdentityWithSource {
-                            sources: _sources,
+                            sources,
                             identity: v.to_owned(),
                         };
                         identity_sources.push(id);
@@ -530,6 +518,7 @@ impl IdentityRecord {
                 None => continue,
             };
         }
+        trace!(idnetity_count = identity_sources.len(), "Ientities with sources arranged.");
         Ok(identity_sources)
     }
 
