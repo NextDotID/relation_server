@@ -1,0 +1,1 @@
+CREATE GRAPH IdentityGraph(Identities, Proof_Forward, Hold_Identity)
