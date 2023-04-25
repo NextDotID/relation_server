@@ -5,6 +5,7 @@ pub mod config;
 pub mod controller;
 pub mod error;
 pub mod graph;
+pub mod tigergraph;
 pub mod util;
 
 pub mod upstream;

@@ -1,5 +1,5 @@
-CREATE VERTEX Identities(PRIMARY_ID uuid STRING, uuid STRING, platform STRING, identity STRING, display_name STRING, profile_url STRING, avatar_url STRING, created_at DATETIME, added_at DATETIME, updated_at DATETIME) WITH STATS="OUTDEGREE_BY_EDGETYPE"
-CREATE VERTEX Contracts(PRIMARY_ID uuid STRING, uuid STRING, category STRING, address STRING, chain STRING, symbol STRING, updated_at DATETIME) WITH STATS="OUTDEGREE_BY_EDGETYPE"
+CREATE VERTEX Identities(PRIMARY_ID id STRING, id STRING, uuid STRING, platform STRING, identity STRING, display_name STRING, profile_url STRING, avatar_url STRING, created_at DATETIME, added_at DATETIME, updated_at DATETIME) WITH STATS="OUTDEGREE_BY_EDGETYPE"
+CREATE VERTEX Contracts(PRIMARY_ID id STRING, id STRING, uuid STRING, category STRING, address STRING, chain STRING, symbol STRING, updated_at DATETIME) WITH STATS="OUTDEGREE_BY_EDGETYPE"
 CREATE DIRECTED EDGE Proof_Forward(FROM Identities, TO Identities, uuid STRING, source STRING, record_id STRING, created_at DATETIME, updated_at DATETIME, fetcher STRING) WITH REVERSE_EDGE="Proof_Backward"
 CREATE DIRECTED EDGE Hold_Identity(FROM Identities, TO Identities, uuid STRING, source STRING, transaction STRING, id STRING, created_at DATETIME, updated_at DATETIME, fetcher STRING)
 CREATE DIRECTED EDGE Hold_Contract(FROM Identities, TO Contracts, uuid STRING, source STRING, transaction STRING, id STRING, created_at DATETIME, updated_at DATETIME, fetcher STRING)
