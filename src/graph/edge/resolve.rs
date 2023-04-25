@@ -153,8 +153,11 @@ impl Resolve {
 
         let aql_str = r###"
             FOR r IN @@resolves
-                FILTER r.system == @system AND r.name == @name
-                LET resolved = FIRST(FOR c IN @@identities FILTER c._id == r._to RETURN c)
+                FILTER r.system == @system AND 
+                r.name == @name AND
+                CONTAINS(r._from, "Identities") AND
+                CONTAINS(r._to, "Contracts")
+                LET resolved = FIRST(FOR c IN @@identities FILTER c._id == r._from RETURN c)
             FOR h IN @@holds
                 FILTER h.id == @name
                 LET owner = FIRST(FOR c IN @@identities FILTER c._id == h._from RETURN c)
