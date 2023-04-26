@@ -13,10 +13,10 @@ pub type TargetProcessedList = Vec<Target>;
 /// Target to fetch.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Target {
-    /// Identity with given platform and identity.
+    /// `Identity(platform, identity)`
     Identity(Platform, String),
 
-    /// NFT with given chain, category and contract_address, NFT_ID.
+    /// `NFT(chain, category, contract_address, NFT_ID)`
     NFT(Chain, ContractCategory, String, String),
 }
 impl Default for Target {
