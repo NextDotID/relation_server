@@ -119,26 +119,26 @@ impl IdentityRecord {
 
     /// Neighbor identity from current. Flattened.
     // FIXME: <2023-04-23 SUN> broken of high CPU / bandwidth consumption. Maybe something is wrong with SQL.
-    // async fn neighbor(
-    //     &self,
-    //     ctx: &Context<'_>,
-    //     // #[graphql(
-    //     //     desc = "Upstream source of this connection. Will search all upstreams if omitted."
-    //     // )]
-    //     // upstream: Option<String>,
-    //     #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
-    // ) -> Result<Vec<IdentityWithSource>> {
-    //     let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
-    //     debug!("Connection pool status: {:?}", pool.status());
+    async fn neighbor(
+        &self,
+        ctx: &Context<'_>,
+        // #[graphql(
+        //     desc = "Upstream source of this connection. Will search all upstreams if omitted."
+        // )]
+        // upstream: Option<String>,
+        #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
+    ) -> Result<Vec<IdentityWithSource>> {
+        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
+        debug!("Connection pool status: {:?}", pool.status());
 
-    //     self.neighbors(
-    //         pool,
-    //         depth.unwrap_or(1),
-    //         // upstream.map(|u| DataSource::from_str(&u).unwrap_or(DataSource::Unknown))
-    //         None,
-    //     )
-    //     .await
-    // }
+        self.neighbors(
+            pool,
+            depth.unwrap_or(1),
+            // upstream.map(|u| DataSource::from_str(&u).unwrap_or(DataSource::Unknown))
+            None,
+        )
+        .await
+    }
 
     async fn neighbor_with_traversal(
         &self,
