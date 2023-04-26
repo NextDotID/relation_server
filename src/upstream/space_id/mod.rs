@@ -236,9 +236,11 @@ async fn get_address(domain: &str) -> Result<String, Error> {
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("SpaceId Build Request Error {}", _err)))?;
 
-    let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
-        Error::ManualHttpClientError(format!("SpaceId fetch | error: {:?}", err.to_string()))
-    })?;
+    let mut resp = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!("SpaceId fetch | error: {:?}", err.to_string()))
+        })?;
 
     if !resp.status().is_success() {
         let err_message = format!("SpaceId fetch error, statusCode: {}", resp.status());
@@ -287,9 +289,11 @@ async fn get_name(address: &str) -> Result<Option<String>, Error> {
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("SpaceId Build Request Error {}", _err)))?;
 
-    let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
-        Error::ManualHttpClientError(format!("SpaceId fetch | error: {:?}", err.to_string()))
-    })?;
+    let mut resp = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!("SpaceId fetch | error: {:?}", err.to_string()))
+        })?;
 
     if !resp.status().is_success() {
         let err_message = format!("SpaceId fetch error, statusCode: {}", resp.status());

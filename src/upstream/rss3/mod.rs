@@ -130,9 +130,14 @@ async fn fetch_nfts_by_account(
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("Rss3 Build Request Error {}", _err)))?;
 
-        let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
-            Error::ManualHttpClientError(format!("Rss3 fetch fetch | error: {:?}", err.to_string()))
-        })?;
+        let mut resp = request_with_timeout(&client, req, None)
+            .await
+            .map_err(|err| {
+                Error::ManualHttpClientError(format!(
+                    "Rss3 fetch fetch | error: {:?}",
+                    err.to_string()
+                ))
+            })?;
 
         let body: Rss3Response = parse_body(&mut resp).await?;
         if body.total == 0 {

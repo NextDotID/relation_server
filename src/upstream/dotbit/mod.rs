@@ -185,12 +185,14 @@ async fn fetch_connections_by_account_info(
         .body(Body::from(json_params))
         .map_err(|_err| Error::ParamError(format!("Dotbit Build Request Error {}", _err)))?;
 
-    let mut result = request_with_timeout(&client, req).await.map_err(|err| {
-        Error::ManualHttpClientError(format!(
-            "Dotbit fetch | das_accountInfo error: {:?}",
-            err.to_string()
-        ))
-    })?;
+    let mut result = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "Dotbit fetch | das_accountInfo error: {:?}",
+                err.to_string()
+            ))
+        })?;
 
     let resp: AccountInfoResponse = parse_body(&mut result).await?;
     if resp.result.errno.unwrap() != 0 {
@@ -292,12 +294,14 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
         .body(Body::from(json_params))
         .map_err(|_err| Error::ParamError(format!("Dotbit Build Request Error {}", _err)))?;
 
-    let mut result = request_with_timeout(&client, req).await.map_err(|err| {
-        Error::ManualHttpClientError(format!(
-            "Dotbit fetch | das_reverseRecord error: {:?}",
-            err.to_string()
-        ))
-    })?;
+    let mut result = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "Dotbit fetch | das_reverseRecord error: {:?}",
+                err.to_string()
+            ))
+        })?;
 
     let resp: ReverseResponse = parse_body(&mut result).await?;
     if resp.result.errno.unwrap() != 0 {
@@ -387,12 +391,14 @@ async fn fetch_account_list_by_addrs(
         .body(Body::from(json_params))
         .map_err(|_err| Error::ParamError(format!("Dotbit Build Request Error {}", _err)))?;
 
-    let mut result = request_with_timeout(&client, req).await.map_err(|err| {
-        Error::ManualHttpClientError(format!(
-            "Dotbit fetch | das_accountList error: {:?}",
-            err.to_string()
-        ))
-    })?;
+    let mut result = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "Dotbit fetch | das_accountList error: {:?}",
+                err.to_string()
+            ))
+        })?;
 
     let resp: AccountListResponse = parse_body(&mut result).await?;
     if resp.result.errno.unwrap() != 0 || resp.result.data.is_none() {

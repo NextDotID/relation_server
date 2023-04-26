@@ -42,11 +42,13 @@ pub fn make_client() -> Client<HttpsConnector<HttpConnector>> {
     Client::builder().build::<_, hyper::Body>(https)
 }
 
+/// If timeout is None, default timeout is 5 seconds.
 pub async fn request_with_timeout(
     client: &Client<HttpsConnector<HttpConnector>>,
     req: Request<Body>,
+    timeout: Option<std::time::Duration>,
 ) -> Result<Response<Body>, Error> {
-    match tokio::time::timeout(DEFAULT_TIMEOUT, client.request(req)).await {
+    match tokio::time::timeout(timeout.unwrap_or(DEFAULT_TIMEOUT), client.request(req)).await {
         Ok(resp) => match resp {
             Ok(resp) => Ok(resp),
             Err(err) => Err(Error::General(
@@ -55,7 +57,10 @@ pub async fn request_with_timeout(
             )),
         },
         Err(_) => Err(Error::General(
-            format!("Timeout: no response in {:?}.", DEFAULT_TIMEOUT),
+            format!(
+                "Timeout: no response in {:?}.",
+                timeout.unwrap_or(DEFAULT_TIMEOUT)
+            ),
             lambda_http::http::StatusCode::REQUEST_TIMEOUT,
         )),
     }

@@ -117,9 +117,11 @@ async fn fetch_connections_by_platform_identity(
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("Keybase Build Request Error {}", _err)))?;
 
-    let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
-        Error::ManualHttpClientError(format!("Keybase fetch | error: {:?}", err.to_string()))
-    })?;
+    let mut resp = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!("Keybase fetch | error: {:?}", err.to_string()))
+        })?;
 
     if !resp.status().is_success() {
         let body: ErrorResponse = parse_body(&mut resp).await?;

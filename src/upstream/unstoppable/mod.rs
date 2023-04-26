@@ -154,12 +154,14 @@ async fn fetch_domain(owners: &str, page: &str) -> Result<RecordsForOwnerRespons
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("Invalid Head Error {}", _err)))?;
 
-    let mut body = request_with_timeout(&client, req).await.map_err(|err| {
-        Error::ManualHttpClientError(format!(
-            "UnstoppableDomains fetch | Fail to fetch_domain record: {:?}",
-            err.to_string()
-        ))
-    })?;
+    let mut body = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "UnstoppableDomains fetch | Fail to fetch_domain record: {:?}",
+                err.to_string()
+            ))
+        })?;
 
     // Parse response body
     let result: RecordsForOwnerResponse = match parse_body(&mut body).await {
@@ -196,7 +198,7 @@ async fn fetch_reverse(owner: &str) -> Result<ReverseResponse, Error> {
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("Invalid Head Error {}", _err)))?;
 
-    let mut reverse_resp = request_with_timeout(&client, reverse_req)
+    let mut reverse_resp = request_with_timeout(&client, reverse_req, None)
         .await
         .map_err(|err| {
             Error::ManualHttpClientError(format!(
@@ -335,12 +337,14 @@ async fn fetch_owner(domains: &str) -> Result<DomainResponse, Error> {
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("Invalid Head Error {}", _err)))?;
 
-    let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
-        Error::ManualHttpClientError(format!(
-            "UnstoppableDomains fetch | Fail to fetch_domain record: {:?}",
-            err.to_string()
-        ))
-    })?;
+    let mut resp = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "UnstoppableDomains fetch | Fail to fetch_domain record: {:?}",
+                err.to_string()
+            ))
+        })?;
 
     let result = match parse_body::<DomainResponse>(&mut resp).await {
         Ok(result) => result,

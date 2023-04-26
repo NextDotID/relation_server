@@ -69,12 +69,14 @@ async fn fetch_record(wallet: &str) -> Result<Response, Error> {
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("ENSReverse Build Request Error {}", _err)))?;
 
-    let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
-        Error::ManualHttpClientError(format!(
-            "ENSReverse fetch | fetch_record error: {:?}",
-            err.to_string()
-        ))
-    })?;
+    let mut resp = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "ENSReverse fetch | fetch_record error: {:?}",
+                err.to_string()
+            ))
+        })?;
 
     if !resp.status().is_success() {
         return Err(Error::General(

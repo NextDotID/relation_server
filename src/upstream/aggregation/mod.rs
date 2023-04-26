@@ -91,12 +91,14 @@ async fn fetch_connections_by_platform_identity(
                 Error::ParamError(format!("Aggregation Service Build Request Error {}", _err))
             })?;
 
-        let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
-            Error::ManualHttpClientError(format!(
-                "Aggregation Service fetch | error: {:?}",
-                err.to_string()
-            ))
-        })?;
+        let mut resp = request_with_timeout(&client, req, None)
+            .await
+            .map_err(|err| {
+                Error::ManualHttpClientError(format!(
+                    "Aggregation Service fetch | error: {:?}",
+                    err.to_string()
+                ))
+            })?;
 
         let body: Response = parse_body(&mut resp).await?;
         if body.records.is_empty() {
