@@ -8,3 +8,7 @@ CREATE GLOBAL SCHEMA_CHANGE job update_index {
 END
 
 RUN GLOBAL SCHEMA_CHANGE JOB update_index
+
+CREATE GLOBAL SCHEMA_CHANGE job add_level2 {
+  ALTER EDGE Proof_Forward ADD ATTRIBUTE (level INT);
+}

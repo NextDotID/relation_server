@@ -1,1 +1,20 @@
-CREATE GRAPH IdentityGraph(Identities, Proof_Forward, Hold_Identity)
+CREATE GRAPH IdentityGraph (Identities, Proof_Forward, Proof_Backward, Hold_Identity)
+
+CREATE QUERY neighbors5(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph {
+  SetAccum<EDGE> @@edges;
+  SetAccum<VERTEX> @@vertices;
+  OrAccum @visited = FALSE;
+  OrAccum @visited2 = FALSE;
+  
+  seed = {p};
+  seed2 = {p};
+  FOREACH i in RANGE[1, depth] DO
+    seed = SELECT v FROM seed-(Proof_Forward>|Hold_Identity>:e)-:v
+           WHERE v.@visited == FALSE
+           ACCUM @@edges += e, @@vertices += v, v.@visited = TRUE;
+    seed2 = SELECT v FROM seed2-(<Proof_Backward:e)-:v
+           WHERE v.@visited2 == FALSE
+           ACCUM @@edges += e, @@vertices += v, v.@visited2 = TRUE;
+  END;
+  PRINT @@vertices, @@edges;
+}
