@@ -42,6 +42,13 @@ pub fn make_client() -> Client<HttpsConnector<HttpConnector>> {
     Client::builder().build::<_, hyper::Body>(https)
 }
 
+pub fn make_http_client() -> Client<HttpConnector> {
+    let mut http = HttpConnector::new();
+    // tigergraphdb default idle timeout is 16 seconds
+    http.set_connect_timeout(Some(std::time::Duration::from_secs(30)));
+    Client::builder().build::<_, hyper::Body>(http)
+}
+
 /// If timeout is None, default timeout is 5 seconds.
 pub async fn request_with_timeout(
     client: &Client<HttpsConnector<HttpConnector>>,

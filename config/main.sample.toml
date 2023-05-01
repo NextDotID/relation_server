@@ -5,6 +5,13 @@ password = "ieNgoo5roong9Chu"
 db = "relation_server_development"
 schema_path = "./src/config/db/schema.yaml"
 
+[tdb]
+host = "http://ec2-44-229-226-27.us-west-2.compute.amazonaws.com:9000"
+username = "tigergraph"
+password = "examplepassword123456"
+identity_graph_token = "01234567abcdefgh01234567abcdefgh"
+social_graph_token = "01234567abcdefgh01234567abcdefgh"
+
 [web]
 listen = "127.0.0.1"
 port = 3722
