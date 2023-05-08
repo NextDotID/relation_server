@@ -8,7 +8,7 @@ use chrono::NaiveDateTime;
 use http::Response;
 use hyper::{body::HttpBody as _, client::HttpConnector, Body, Client, Request};
 use hyper_tls::HttpsConnector;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 const DEFAULT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
@@ -94,4 +94,53 @@ where
     for i in items {
         set.insert(i);
     }
+}
+
+pub fn option_naive_datetime_from_string<'de, D>(
+    deserializer: D,
+) -> Result<Option<NaiveDateTime>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt_s = Option::<String>::deserialize(deserializer)?;
+    match opt_s {
+        Some(s) => {
+            let dt = NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S")
+                .map_err(serde::de::Error::custom)?;
+            Ok(Some(dt))
+        }
+        None => Ok(None),
+    }
+}
+
+pub fn option_naive_datetime_to_string<S>(
+    dt: &Option<NaiveDateTime>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match dt {
+        Some(dt) => {
+            let s = dt.format("%Y-%m-%d %H:%M:%S").to_string();
+            Serialize::serialize(&s, serializer)
+        }
+        None => serializer.serialize_none(),
+    }
+}
+
+pub fn naive_datetime_from_string<'de, D>(deserializer: D) -> Result<NaiveDateTime, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S").map_err(serde::de::Error::custom)
+}
+
+pub fn naive_datetime_to_string<S>(dt: &NaiveDateTime, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let formatted = dt.format("%Y-%m-%d %H:%M:%S").to_string();
+    serializer.serialize_str(&formatted)
 }
