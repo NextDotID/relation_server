@@ -7,9 +7,13 @@ use crate::{
         Attribute, EdgeWrapper, OpCode, Transfer,
     },
     upstream::{DataFetcher, DataSource},
-    util::naive_now,
+    util::{
+        naive_datetime_from_string, naive_datetime_to_string, naive_now,
+        option_naive_datetime_from_string, option_naive_datetime_to_string, parse_body,
+    },
 };
 
+use async_graphql::{Enum, ObjectType, SimpleObject};
 use chrono::{Duration, NaiveDateTime};
 use hyper::{client::HttpConnector, Body, Client, Request};
 use serde::{Deserialize, Serialize};
@@ -33,6 +37,7 @@ pub const IS_DIRECTED: bool = true;
     PartialEq,
     Eq,
     EnumIter,
+    Enum,
     Default,
     Copy,
 )]
@@ -66,16 +71,34 @@ pub struct Proof {
     /// ID of this connection in upstream platform to locate (if any).
     pub record_id: Option<String>,
     /// When this connection is recorded in upstream platform (if platform gives such data).
+    #[serde(deserialize_with = "option_naive_datetime_from_string")]
+    #[serde(serialize_with = "option_naive_datetime_to_string")]
     pub created_at: Option<NaiveDateTime>,
     /// When this connection is fetched by us RelationService.
+    #[serde(deserialize_with = "naive_datetime_from_string")]
+    #[serde(serialize_with = "naive_datetime_to_string")]
     pub updated_at: NaiveDateTime,
     /// Who collects this data.
     /// It works as a "data cleansing" or "proxy" between `source`s and us.
     pub fetcher: DataFetcher,
 }
 
+impl Default for Proof {
+    fn default() -> Self {
+        Self {
+            uuid: Uuid::new_v4(),
+            source: DataSource::default(),
+            level: Level::default(),
+            record_id: None,
+            created_at: None,
+            updated_at: naive_now(),
+            fetcher: Default::default(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ProofRecord(EdgeRecord<Proof>);
+pub struct ProofRecord(pub EdgeRecord<Proof>);
 
 impl FromWithParams<Proof> for EdgeRecord<Proof> {
     fn from_with_params(
@@ -94,6 +117,7 @@ impl FromWithParams<Proof> for EdgeRecord<Proof> {
             from_type,
             to_id,
             to_type,
+            discriminator: None,
             attributes,
         }
     }
@@ -122,7 +146,7 @@ impl std::ops::DerefMut for ProofRecord {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ProofAttribute(HashMap<String, Attribute>);
 
-// Implement the `From` trait for converting `Identity` into a `HashMap<String, Attr>`.
+// Implement the `From` trait for converting `ProofRecord` into a `HashMap<String, Attr>`.
 impl Transfer for ProofRecord {
     fn to_attributes_map(&self) -> HashMap<String, Attribute> {
         let mut attributes_map = HashMap::new();
@@ -162,7 +186,7 @@ impl Transfer for ProofRecord {
             attributes_map.insert(
                 "created_at".to_string(),
                 Attribute {
-                    value: json!(created_at.to_string()),
+                    value: json!(created_at),
                     op: Some(OpCode::IgnoreIfExists),
                 },
             );
@@ -171,7 +195,7 @@ impl Transfer for ProofRecord {
         attributes_map.insert(
             "updated_at".to_string(),
             Attribute {
-                value: json!(self.attributes.updated_at.to_string()),
+                value: json!(self.attributes.updated_at),
                 op: Some(OpCode::Max),
             },
         );
@@ -186,21 +210,7 @@ impl Transfer for ProofRecord {
     }
 }
 
-impl Default for Proof {
-    fn default() -> Self {
-        Self {
-            uuid: Uuid::new_v4(),
-            source: DataSource::default(),
-            level: Level::default(),
-            record_id: None,
-            created_at: None,
-            updated_at: naive_now(),
-            fetcher: Default::default(),
-        }
-    }
-}
-
-impl Wrapper<Identity, Identity, ProofRecord> for Proof {
+impl Wrapper<ProofRecord, Identity, Identity> for Proof {
     fn wrapper(
         &self,
         from: &Identity,
@@ -245,3 +255,17 @@ impl Edge<Identity, Identity, ProofRecord> for ProofRecord {
         todo!()
     }
 }
+
+// #[derive(Debug, Clone, Deserialize, Serialize)]
+// pub struct ProofWrapper(EdgeWrapper<ProofRecord, Identity, Identity>);
+
+// impl ProofWrapper {
+//     pub fn new(
+//         proof: &impl Wrapper<ProofRecord, Identity, Identity>,
+//         from: &Identity,
+//         to: &Identity,
+//         name: &str,
+//     ) -> Self {
+//         ProofWrapper(proof.wrapper(from, to, name))
+//     }
+// }

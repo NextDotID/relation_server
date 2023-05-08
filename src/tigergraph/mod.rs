@@ -6,10 +6,17 @@ use crate::{
     config::C,
     error::Error,
     tigergraph::{
-        edge::{proof, Edge, EdgeRecord, FromWithParams, Proof, ProofRecord, Wrapper},
+        edge::{
+            Edge, EdgeRecord, FromWithParams, Hold, HoldRecord, Proof, ProofRecord, Resolve,
+            ResolveRecord, Wrapper,
+        },
+        edge::{
+            HOLD_CONTRACT, HOLD_IDENTITY, PROOF_EDGE, PROOF_REVERSE_EDGE, RESOLVE, REVERSE_RESOLVE,
+            REVERSE_RESOLVE_CONTRACT,
+        },
         vertex::{
-            FromWithParams as IdentityFromWithParams, Identity, IdentityRecord, Vertex,
-            VertexRecord,
+            Contract, ContractRecord, FromWithParams as IdentityFromWithParams, Identity,
+            IdentityRecord, Vertex, VertexRecord,
         },
     },
     upstream::Target,
@@ -93,7 +100,6 @@ pub async fn upsert_identity_graph(
 ) -> Result<(), Error> {
     let uri = upsert_graph_uri(IDENTITY_GRAPH)?;
     let json_params = serde_json::to_string(&payload).map_err(|err| Error::JSONParseError(err))?;
-    debug!("json_params {}", json_params);
     let req = hyper::Request::builder()
         .method(Method::POST)
         .uri(uri)
@@ -109,16 +115,13 @@ pub async fn upsert_identity_graph(
             err.to_string()
         ))
     })?;
-    debug!("resp {:?}", resp);
     let result = match parse_body::<UpsertGraphResponse>(&mut resp).await {
         Ok(result) => result,
         Err(_) => {
-            let err: UpsertGraphResponse = parse_body(&mut resp).await?;
-            // code=1, domain name is invalid
-            // code=1, rpc error
+            let err_resp: UpsertGraphResponse = parse_body(&mut resp).await?;
             let err_message = format!(
-                "TigerGraph upsert error, Code: {}, Message: {:?}",
-                err.code, err.message
+                "TigerGraph upsert error, Code: {:?}, Message: {:?}",
+                err_resp.base.code, err_resp.base.message
             );
             error!(err_message);
             return Err(Error::General(err_message, resp.status()));
@@ -141,10 +144,16 @@ pub struct UpsertGraph {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-struct UpsertGraphResponse {
+struct BaseResponse {
     error: bool,
-    code: String,
+    code: Option<String>,
     message: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct UpsertGraphResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
     results: Option<Vec<UpsertResult>>,
 }
 
@@ -252,10 +261,13 @@ pub async fn create_identity_to_identity_proof_two_way_binding(
     proof_forward: &Proof,
     proof_backward: &Proof,
 ) -> Result<(), Error> {
-    let pf = proof_forward.wrapper(from, to, proof::EDGE_NAME);
-    let pb = proof_backward.wrapper(to, from, proof::REVERSE_EDGE_NAME);
+    let pf = proof_forward.wrapper(from, to, PROOF_EDGE);
+    let pb = proof_backward.wrapper(to, from, PROOF_REVERSE_EDGE);
     // <Proof as Edge<Identity, Identity, Proof>>::reverse_e_type(&proof_backward),
     // <Proof as Edge<Identity, Identity, Proof>>::directed(&proof_backward),
+
+    // let pf = ProofWrapper::new(proof_forward, from, to, PROOF_EDGE);
+    // let pb = ProofWrapper::new(proof_backward, from, to, PROOF_REVERSE_EDGE);
     let edges = Edges(vec![pf, pb]);
     let upsert_graph: UpsertGraph = edges.into();
     // let json_raw =
@@ -264,4 +276,57 @@ pub async fn create_identity_to_identity_proof_two_way_binding(
     upsert_identity_graph(client, &upsert_graph).await?;
 
     Ok(())
+}
+
+pub async fn create_identity_to_identity_hold_record(
+    client: &Client<HttpConnector>,
+    from: &Identity,
+    to: &Identity,
+    hold: &Hold,
+) -> Result<(), Error> {
+    let hold_record = hold.wrapper(from, to, HOLD_IDENTITY);
+    let edges = Edges(vec![hold_record]);
+    let upsert_graph: UpsertGraph = edges.into();
+    // let json_raw =
+    //     serde_json::to_string(&upsert_graph).map_err(|err| Error::JSONParseError(err))?;
+    // println!("{}", json_raw);
+    upsert_identity_graph(client, &upsert_graph).await?;
+
+    Ok(())
+}
+
+pub async fn create_identity_to_contract_hold_record(
+    client: &Client<HttpConnector>,
+    from: &Identity,
+    to: &Contract,
+    hold: &Hold,
+) -> Result<(), Error> {
+    todo!()
+}
+
+pub async fn create_contract_to_identity_reverse_resolve_record(
+    client: &Client<HttpConnector>,
+    from: &Contract,
+    to: &Identity,
+    resolve: &Resolve,
+) -> Result<(), Error> {
+    todo!()
+}
+
+pub async fn create_identity_domain_resolve_record(
+    client: &Client<HttpConnector>,
+    from: &Identity,
+    to: &Identity,
+    resolve: &Resolve,
+) -> Result<(), Error> {
+    todo!()
+}
+
+pub async fn create_identity_domain_reverse_resolve_record(
+    client: &Client<HttpConnector>,
+    from: &Identity,
+    to: &Identity,
+    reverse: &Resolve,
+) -> Result<(), Error> {
+    todo!()
 }
