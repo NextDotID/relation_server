@@ -1,12 +1,12 @@
+mod contract;
 mod identity;
 use async_trait::async_trait;
-pub use identity::{Identity, IdentityRecord};
-use serde::de::DeserializeOwned;
+pub use contract::{Contract, ContractRecord};
+pub use identity::{Identity, IdentityRecord, NeighborsResponse};
 use serde::{Deserialize, Serialize};
 
 /// All `Vertex` records.
 #[async_trait]
-#[typetag::serde(tag = "v_type", content = "attributes")]
 pub trait Vertex {
     fn primary_key(&self) -> String;
 
