@@ -1,20 +1,85 @@
 CREATE GRAPH IdentityGraph (Identities, Proof_Forward, Proof_Backward, Hold_Identity)
 
-CREATE QUERY neighbors5(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph {
+CREATE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph { 
   SetAccum<EDGE> @@edges;
   SetAccum<VERTEX> @@vertices;
   OrAccum @visited = FALSE;
   OrAccum @visited2 = FALSE;
-  
+
   seed = {p};
-  seed2 = {p};
   FOREACH i in RANGE[1, depth] DO
-    seed = SELECT v FROM seed-(Proof_Forward>|Hold_Identity>:e)-:v
+    SetAccum<VERTEX> @@pool;
+    proof = SELECT v FROM seed-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:v-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed
            WHERE v.@visited == FALSE
-           ACCUM @@edges += e, @@vertices += v, v.@visited = TRUE;
-    seed2 = SELECT v FROM seed2-(<Proof_Backward:e)-:v
+           ACCUM @@edges += pf, @@edges += pw, @@vertices += v, v.@visited = TRUE
+           POST-ACCUM @@pool += v;
+    hold = SELECT v FROM seed-((Hold_Identity>):e)-Identities:v
            WHERE v.@visited2 == FALSE
-           ACCUM @@edges += e, @@vertices += v, v.@visited2 = TRUE;
+           ACCUM @@edges += e, @@vertices += v, v.@visited2 = TRUE
+           POST-ACCUM @@pool += v;
+    seed = {@@pool};
+  END;
+  PRINT @@vertices AS vertices, @@edges AS edges;
+}
+
+CREATE QUERY neighbors_with_path4(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph { 
+  OrAccum @visited = FALSE;
+  OrAccum @visited2 = FALSE;
+  SetAccum<EDGE> @edges;
+  SetAccum<EDGE> @tmp;
+  MapAccum<VERTEX<Identities>, MapAccum<VERTEX<Identities>, SetAccum<EDGE>>> @@path;
+
+  VERTEX<Identities> start = p;
+  SetAccum<VERTEX<Identities>> @@vertices;
+  @@vertices += start;
+  seed = {p};
+  FOREACH i in RANGE[1, depth] DO
+    SetAccum<VERTEX<Identities>> @@pool;
+    proof = SELECT v FROM seed-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:v-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed
+            WHERE v.@visited == FALSE
+            ACCUM v.@visited = TRUE, v.@edges += pf, v.@edges += pw
+            POST-ACCUM
+              @@pool += v,
+              FOREACH s IN @@vertices DO
+                IF v == start THEN
+                  CONTINUE
+                ELSE
+                  @@path += (s -> (v -> v.@edges))
+                END
+              END;
+              PRINT "innner", @@path;
+    PRINT i, @@path;
+    @@vertices.clear();
+    @@vertices += @@pool;
+    seed = {@@pool};
+  END;
+  PRINT @@path;
+}
+
+
+CREATE QUERY neighbors19(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph { 
+  SetAccum<EDGE> @@edges;
+  SetAccum<VERTEX> @@vertices;
+  OrAccum @visited = FALSE;
+  OrAccum @visited2 = FALSE;
+
+  seed = {p};
+  FOREACH i in RANGE[1, depth] DO
+    SetAccum<VERTEX> @@pool;
+    proof = SELECT v FROM seed-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:v-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed
+           WHERE v.@visited == FALSE
+           ACCUM @@edges += pf, @@edges += pw, @@vertices += v, v.@visited = TRUE
+           POST-ACCUM @@pool += v;
+    PRINT i, proof;
+    hold = SELECT v FROM seed-((Hold_Identity>):e)-Identities:v
+           WHERE v.@visited2 == FALSE
+           ACCUM @@edges += e, @@vertices += v, v.@visited2 = TRUE
+           POST-ACCUM @@pool += v;
+    PRINT i, hold;
+    seed = {@@pool};
+    PRINT i, seed, seed.size();
   END;
   PRINT @@vertices, @@edges;
 }
+
+
