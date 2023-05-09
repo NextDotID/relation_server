@@ -284,14 +284,13 @@ pub async fn create_identity_to_identity_hold_record(
     to: &Identity,
     hold: &Hold,
 ) -> Result<(), Error> {
-    let hold_record = hold.wrapper(from, to, HOLD_IDENTITY);
-    let edges = Edges(vec![hold_record]);
+    let hold_identity = hold.wrapper(from, to, HOLD_IDENTITY);
+    let edges = Edges(vec![hold_identity]);
     let upsert_graph: UpsertGraph = edges.into();
     // let json_raw =
     //     serde_json::to_string(&upsert_graph).map_err(|err| Error::JSONParseError(err))?;
     // println!("{}", json_raw);
     upsert_identity_graph(client, &upsert_graph).await?;
-
     Ok(())
 }
 
@@ -301,16 +300,24 @@ pub async fn create_identity_to_contract_hold_record(
     to: &Contract,
     hold: &Hold,
 ) -> Result<(), Error> {
-    todo!()
+    let hold_contract = hold.wrapper(from, to, HOLD_CONTRACT);
+    let edges = Edges(vec![hold_contract]);
+    let upsert_graph: UpsertGraph = edges.into();
+    upsert_identity_graph(client, &upsert_graph).await?;
+    Ok(())
 }
 
 pub async fn create_contract_to_identity_reverse_resolve_record(
     client: &Client<HttpConnector>,
     from: &Contract,
     to: &Identity,
-    resolve: &Resolve,
+    reverse: &Resolve,
 ) -> Result<(), Error> {
-    todo!()
+    let reverse_contract = reverse.wrapper(from, to, REVERSE_RESOLVE_CONTRACT);
+    let edges = Edges(vec![reverse_contract]);
+    let upsert_graph: UpsertGraph = edges.into();
+    upsert_identity_graph(client, &upsert_graph).await?;
+    Ok(())
 }
 
 pub async fn create_identity_domain_resolve_record(
@@ -319,7 +326,11 @@ pub async fn create_identity_domain_resolve_record(
     to: &Identity,
     resolve: &Resolve,
 ) -> Result<(), Error> {
-    todo!()
+    let resolve_record = resolve.wrapper(from, to, RESOLVE);
+    let edges = Edges(vec![resolve_record]);
+    let upsert_graph: UpsertGraph = edges.into();
+    upsert_identity_graph(client, &upsert_graph).await?;
+    Ok(())
 }
 
 pub async fn create_identity_domain_reverse_resolve_record(
@@ -328,5 +339,9 @@ pub async fn create_identity_domain_reverse_resolve_record(
     to: &Identity,
     reverse: &Resolve,
 ) -> Result<(), Error> {
-    todo!()
+    let reverse_record = reverse.wrapper(from, to, REVERSE_RESOLVE);
+    let edges = Edges(vec![reverse_record]);
+    let upsert_graph: UpsertGraph = edges.into();
+    upsert_identity_graph(client, &upsert_graph).await?;
+    Ok(())
 }

@@ -23,7 +23,7 @@ use hyper::Method;
 use hyper::{client::HttpConnector, Body, Client, Request};
 use hyper_tls::HttpsConnector;
 use serde::de::DeserializeOwned;
-use serde::de::{self, Deserialize as DeDeserialize, Deserializer, MapAccess, Visitor};
+use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;

@@ -284,3 +284,49 @@ impl Edge<Contract, Identity, ResolveRecord> for ResolveRecord {
         todo!()
     }
 }
+
+impl Wrapper<ResolveRecord, Identity, Identity> for Resolve {
+    fn wrapper(
+        &self,
+        from: &Identity,
+        to: &Identity,
+        name: &str,
+    ) -> EdgeWrapper<ResolveRecord, Identity, Identity> {
+        let resolve = EdgeRecord::from_with_params(
+            name.to_string(),
+            IS_DIRECTED,
+            from.primary_key(),
+            from.vertex_type(),
+            to.primary_key(),
+            to.vertex_type(),
+            self.to_owned(),
+        );
+        EdgeWrapper {
+            edge: ResolveRecord(resolve),
+            source: from.to_owned(),
+            target: to.to_owned(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Edge<Identity, Identity, ResolveRecord> for ResolveRecord {
+    fn e_type(&self) -> String {
+        self.e_type.clone()
+    }
+
+    fn directed(&self) -> bool {
+        // TODO: query from server is the best solution
+        self.directed.clone()
+    }
+
+    /// Connect 2 vertex.
+    async fn connect(
+        &self,
+        client: &Client<HttpConnector>,
+        from: &Identity,
+        to: &Identity,
+    ) -> Result<(), Error> {
+        todo!()
+    }
+}

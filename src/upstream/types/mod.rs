@@ -6,6 +6,7 @@ pub(crate) mod target;
 use serde::{Deserialize, Serialize};
 
 pub use data_fetcher::DataFetcher;
+pub use data_source::vec_string_to_vec_datasource;
 pub use data_source::DataSource;
 pub use platform::Platform;
 pub use target::{Target, TargetProcessedList};

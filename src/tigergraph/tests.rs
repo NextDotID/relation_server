@@ -23,8 +23,9 @@ mod tests {
         from.uuid = Some(Uuid::new_v4());
         to.uuid = Some(Uuid::new_v4());
 
-        from.identity = "d".to_string();
-        to.identity = "b".to_string();
+        from.identity = "g".to_string();
+        from.display_name = Some("ggbound".to_string());
+        to.identity = "f".to_string();
 
         from.platform = Platform::Ethereum;
         to.platform = Platform::NextID;
@@ -67,7 +68,7 @@ mod tests {
 
         let mut hold = Hold::default();
         hold.uuid = Uuid::new_v4();
-        hold.source = DataSource::NextID;
+        hold.source = DataSource::Dotbit;
 
         create_identity_to_identity_hold_record(&client, &from, &to, &hold).await?;
         Ok(())
@@ -84,6 +85,23 @@ mod tests {
             let json_raw =
                 serde_json::to_string(&edges).map_err(|err| Error::JSONParseError(err))?;
             println!("neighbors: {}", json_raw);
+        } else {
+            return Err(Error::NoResult);
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_neighbors_with_source() -> Result<(), Error> {
+        let client = make_http_client();
+        if let Some(found) =
+            Identity::find_by_platform_identity(&client, &Platform::Ethereum, "d").await?
+        {
+            println!("found = {:?}", found);
+            let edges = found.neighbors(&client, 3).await?;
+            let json_raw =
+                serde_json::to_string(&edges).map_err(|err| Error::JSONParseError(err))?;
+            println!("neighbors_with_source: {}", json_raw);
         } else {
             return Err(Error::NoResult);
         }

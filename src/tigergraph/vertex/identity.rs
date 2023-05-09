@@ -6,7 +6,7 @@ use crate::{
         vertex::{FromWithParams, Vertex, VertexRecord},
         Attribute, BaseResponse, OpCode, Transfer, IDENTITY_GRAPH,
     },
-    upstream::{DataSource, Platform},
+    upstream::{vec_string_to_vec_datasource, DataSource, Platform},
     util::{
         naive_datetime_from_string, naive_datetime_to_string, naive_now,
         option_naive_datetime_from_string, option_naive_datetime_to_string, parse_body,
@@ -18,9 +18,11 @@ use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use http::uri::InvalidUri;
 use hyper::Method;
 use hyper::{client::HttpConnector, Body, Client};
+use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, json, to_value, Value};
 use std::collections::HashMap;
+use std::fmt;
 use tracing::{debug, error};
 use uuid::Uuid;
 
@@ -225,6 +227,25 @@ impl PartialEq for Identity {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct NeighborsWithSource {
+    #[serde(flatten)]
+    base: BaseResponse,
+    // results: Option<Vec<IdentityWithSource>>,
+    results: Option<Vec<VertexWithSource>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct VertexWithSource {
+    vertices: Vec<IdentityWithSource>,
+}
+
+#[derive(Clone, Serialize, Debug)]
+pub struct IdentityWithSource {
+    pub identity: IdentityRecord,
+    pub sources: Vec<DataSource>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NeighborsResponse {
     #[serde(flatten)]
     base: BaseResponse,
@@ -241,6 +262,69 @@ pub struct VertexResponse {
     #[serde(flatten)]
     base: BaseResponse,
     results: Option<Vec<IdentityRecord>>,
+}
+
+impl<'de> Deserialize<'de> for IdentityWithSource {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct IdentityWithSourceVisitor;
+        impl<'de> Visitor<'de> for IdentityWithSourceVisitor {
+            type Value = IdentityWithSource;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct IdentityWithSource")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut v_type: Option<String> = None;
+                let mut v_id: Option<String> = None;
+                let mut attributes: Option<serde_json::Map<String, serde_json::Value>> = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        "v_type" => v_type = Some(map.next_value()?),
+                        "v_id" => v_id = Some(map.next_value()?),
+                        "attributes" => attributes = Some(map.next_value()?),
+                        _ => {}
+                    }
+                }
+
+                let mut attributes =
+                    attributes.ok_or_else(|| de::Error::missing_field("attributes"))?;
+
+                let source_list = attributes
+                    .remove("@source_list")
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(de::Error::custom)?;
+
+                let attributes = serde_json::from_value(serde_json::Value::Object(attributes))
+                    .map_err(de::Error::custom)?;
+                let v_type = v_type.ok_or_else(|| de::Error::missing_field("v_type"))?;
+                let v_id = v_id.ok_or_else(|| de::Error::missing_field("v_id"))?;
+                let source_list =
+                    source_list.ok_or_else(|| de::Error::missing_field("@source_list"))?;
+                let sources =
+                    vec_string_to_vec_datasource(source_list).map_err(de::Error::custom)?;
+
+                Ok(IdentityWithSource {
+                    identity: IdentityRecord(VertexRecord {
+                        v_type,
+                        v_id,
+                        attributes,
+                    }),
+                    sources,
+                })
+            }
+        }
+
+        deserializer.deserialize_map(IdentityWithSourceVisitor)
+    }
 }
 
 impl Identity {
@@ -370,6 +454,71 @@ impl Identity {
 }
 
 impl IdentityRecord {
+    pub async fn neighbors(
+        &self,
+        client: &Client<HttpConnector>,
+        depth: u16,
+    ) -> Result<Vec<IdentityWithSource>, Error> {
+        // query see in Solution: CREATE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph
+        let uri: http::Uri = format!(
+            "{}/query/IdentityGraph/neighbors_with_source?p={}&depth={}",
+            C.tdb.host, self.v_id, depth,
+        )
+        .parse()
+        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+
+        let req = hyper::Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .header(
+                "Authorization",
+                format!("Bearer {}", C.tdb.identity_graph_token),
+            )
+            .body(Body::empty())
+            .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+        let mut resp = client.request(req).await.map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "query neighbors_with_source | Fail to request: {:?}",
+                err.to_string()
+            ))
+        })?;
+
+        match parse_body::<NeighborsWithSource>(&mut resp).await {
+            Ok(r) => {
+                if r.base.error {
+                    let err_message = format!(
+                        "TigerGraph query neighbors_with_source error | Code: {:?}, Message: {:?}",
+                        r.base.code, r.base.message
+                    );
+                    error!(err_message);
+                    return Err(Error::General(err_message, resp.status()));
+                }
+                if let Some(results) = r.results {
+                    if results.len() > 0 {
+                        let res: VertexWithSource = results.first().unwrap().to_owned().into();
+                        // filter out self::node_id
+                        Ok(res
+                            .vertices
+                            .into_iter()
+                            .filter(|target| target.identity.v_id != self.v_id)
+                            .collect())
+                    } else {
+                        Ok(vec![])
+                    }
+                } else {
+                    Ok(vec![])
+                }
+            }
+            Err(err) => {
+                let err_message = format!(
+                    "TigerGraph neighbors_with_source parse_body error: {:?}",
+                    err
+                );
+                error!(err_message);
+                return Err(err);
+            }
+        }
+    }
     // Return all neighbors of this identity with traversal paths.
     pub async fn neighbors_with_traversal(
         &self,

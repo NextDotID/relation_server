@@ -36,6 +36,7 @@ use async_trait::async_trait;
 use futures::{future::join_all, StreamExt};
 use tracing::{info, warn};
 
+pub(crate) use types::vec_string_to_vec_datasource;
 pub(crate) use types::{DataFetcher, DataSource, Platform, Target, TargetProcessedList};
 
 lazy_static! {

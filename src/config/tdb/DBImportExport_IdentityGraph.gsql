@@ -22,64 +22,54 @@ CREATE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph 
   PRINT @@vertices AS vertices, @@edges AS edges;
 }
 
-CREATE QUERY neighbors_with_path4(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph { 
-  OrAccum @visited = FALSE;
-  OrAccum @visited2 = FALSE;
-  SetAccum<EDGE> @edges;
-  SetAccum<EDGE> @tmp;
-  MapAccum<VERTEX<Identities>, MapAccum<VERTEX<Identities>, SetAccum<EDGE>>> @@path;
+CREATE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth=10) FOR GRAPH IdentityGraph SYNTAX V2 { 
+  MinAccum<INT> @min_dis;
+  OrAccum @or_visited = false;
+  OrAccum @or_visited2 = false;
+  ListAccum<VERTEX<Identities>> @path_list;
+  SetAccum<STRING> @source_list;
+  SetAccum<EDGE> @@edge_set;
 
-  VERTEX<Identities> start = p;
-  SetAccum<VERTEX<Identities>> @@vertices;
-  @@vertices += start;
+  ##### Initialization  #####
   seed = {p};
-  FOREACH i in RANGE[1, depth] DO
-    SetAccum<VERTEX<Identities>> @@pool;
-    proof = SELECT v FROM seed-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:v-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed
-            WHERE v.@visited == FALSE
-            ACCUM v.@visited = TRUE, v.@edges += pf, v.@edges += pw
-            POST-ACCUM
-              @@pool += v,
-              FOREACH s IN @@vertices DO
-                IF v == start THEN
-                  CONTINUE
-                ELSE
-                  @@path += (s -> (v -> v.@edges))
-                END
-              END;
-              PRINT "innner", @@path;
-    PRINT i, @@path;
-    @@vertices.clear();
-    @@vertices += @@pool;
-    seed = {@@pool};
-  END;
-  PRINT @@path;
-}
+  seed = SELECT s
+           FROM seed:s
+     ACCUM s.@or_visited += true,
+           s.@min_dis = 0,
+           s.@path_list = s;
+  ResultSet = {p};
 
-
-CREATE QUERY neighbors19(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph { 
-  SetAccum<EDGE> @@edges;
-  SetAccum<VERTEX> @@vertices;
-  OrAccum @visited = FALSE;
-  OrAccum @visited2 = FALSE;
-
-  seed = {p};
-  FOREACH i in RANGE[1, depth] DO
+  ##### Calculate distances and paths #####
+  WHILE(seed.size()>0) LIMIT depth DO
     SetAccum<VERTEX> @@pool;
-    proof = SELECT v FROM seed-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:v-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed
-           WHERE v.@visited == FALSE
-           ACCUM @@edges += pf, @@edges += pw, @@vertices += v, v.@visited = TRUE
-           POST-ACCUM @@pool += v;
-    PRINT i, proof;
-    hold = SELECT v FROM seed-((Hold_Identity>):e)-Identities:v
-           WHERE v.@visited2 == FALSE
-           ACCUM @@edges += e, @@vertices += v, v.@visited2 = TRUE
-           POST-ACCUM @@pool += v;
-    PRINT i, hold;
+    proof = SELECT t
+      FROM seed:s1-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:t-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed:s2
+        WHERE t.@or_visited == false AND s1 == s2
+          ACCUM
+            t.@min_dis += s1.@min_dis + 1,
+            t.@path_list = s1.@path_list + [t],
+            t.@source_list += s1.@source_list,
+            t.@source_list += pf.source,
+            t.@source_list += pw.source,
+            t.@or_visited += true
+          POST-ACCUM @@pool += t
+        ORDER BY getvid(t);
+    ResultSet = ResultSet UNION proof;
+
+    hold = SELECT v
+      FROM seed:s-((Hold_Identity>):e)-Identities:v
+        WHERE v.@or_visited2 == false
+        ACCUM
+          v.@min_dis += s.@min_dis + 1,
+          v.@path_list = s.@path_list + [v],
+          v.@source_list += s.@source_list,
+          v.@source_list += e.source,
+          v.@or_visited2 += true
+        POST-ACCUM @@pool += v
+      ORDER BY getvid(v);
+    ResultSet = ResultSet UNION hold;
+
     seed = {@@pool};
-    PRINT i, seed, seed.size();
   END;
-  PRINT @@vertices, @@edges;
+  PRINT ResultSet AS vertices;
 }
-
-

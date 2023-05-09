@@ -2,7 +2,7 @@ use crate::{
     error::Error,
     tigergraph::{
         edge::{Edge, EdgeRecord, EdgeWrapper, FromWithParams, Wrapper},
-        vertex::{Identity, Vertex},
+        vertex::{Contract, Identity, Vertex},
         Attribute, OpCode, Transfer,
     },
     upstream::{DataFetcher, DataSource},
@@ -226,6 +226,52 @@ impl Edge<Identity, Identity, HoldRecord> for HoldRecord {
         client: &Client<HttpConnector>,
         from: &Identity,
         to: &Identity,
+    ) -> Result<(), Error> {
+        todo!()
+    }
+}
+
+impl Wrapper<HoldRecord, Identity, Contract> for Hold {
+    fn wrapper(
+        &self,
+        from: &Identity,
+        to: &Contract,
+        name: &str,
+    ) -> EdgeWrapper<HoldRecord, Identity, Contract> {
+        let hold = EdgeRecord::from_with_params(
+            name.to_string(),
+            IS_DIRECTED,
+            from.primary_key(),
+            from.vertex_type(),
+            to.primary_key(),
+            to.vertex_type(),
+            self.to_owned(),
+        );
+        EdgeWrapper {
+            edge: HoldRecord(hold),
+            source: from.to_owned(),
+            target: to.to_owned(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Edge<Identity, Contract, HoldRecord> for HoldRecord {
+    fn e_type(&self) -> String {
+        self.e_type.clone()
+    }
+
+    fn directed(&self) -> bool {
+        // TODO: query from server is the best solution
+        self.directed.clone()
+    }
+
+    /// Connect 2 vertex.
+    async fn connect(
+        &self,
+        client: &Client<HttpConnector>,
+        from: &Identity,
+        to: &Contract,
     ) -> Result<(), Error> {
         todo!()
     }

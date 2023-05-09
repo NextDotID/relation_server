@@ -1,3 +1,4 @@
+use crate::error::Error;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
 
@@ -103,4 +104,12 @@ pub enum DataSource {
     #[graphql(name = "unknown")]
     #[default]
     Unknown,
+}
+
+pub fn vec_string_to_vec_datasource(vec_string: Vec<String>) -> Result<Vec<DataSource>, Error> {
+    let datasource_result: Result<Vec<DataSource>, _> = vec_string
+        .into_iter()
+        .map(|p_string| p_string.parse())
+        .collect();
+    Ok(datasource_result?)
 }
