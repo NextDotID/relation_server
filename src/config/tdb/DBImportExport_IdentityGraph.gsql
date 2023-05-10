@@ -1,5 +1,7 @@
 CREATE GRAPH IdentityGraph (Identities, Proof_Forward, Proof_Backward, Hold_Identity)
 
+CREATE GRAPH AssetGraph (Identities, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Reverse_Resolve_Contract)
+
 CREATE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph { 
   SetAccum<EDGE> @@edges;
   SetAccum<VERTEX> @@vertices;
@@ -20,13 +22,6 @@ CREATE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph 
     seed = {@@pool};
   END;
   PRINT @@vertices AS vertices, @@edges AS edges;
-}
-
-CREATE QUERY identity_owned_by(VERTEX<Identities> p, STRING platform) FOR GRAPH IdentityGraph SYNTAX V2 {
-  start = {p};
-  owner = SELECT v FROM start-((<Hold_Identity):e)-Identities:v
-        WHERE e.source == platform;
-  PRINT owner;
 }
 
 CREATE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth=10) FOR GRAPH IdentityGraph SYNTAX V2 { 
@@ -79,4 +74,30 @@ CREATE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth=10) FOR GRAPH
     seed = {@@pool};
   END;
   PRINT ResultSet AS vertices;
+}
+
+CREATE QUERY identity_owned_by(VERTEX<Identities> p, STRING platform) FOR GRAPH AssetGraph SYNTAX V2 {
+  start = {p};
+  owner = SELECT v FROM start-((<Hold_Identity):e)-Identities:v
+        WHERE e.source == platform;
+  PRINT owner;
+}
+
+CREATE QUERY nfts(VERTEX<Identities> p, SET<STRING> categories, INT numPerPage = 100, INT pageNum = 0) FOR GRAPH AssetGraph {
+  SetAccum<EDGE> @@edges;
+  start = {p};
+  
+  IF categories.size() > 0 THEN
+    hold = SELECT v FROM start-((Hold_Contract>):e)-Contracts:v
+          WHERE v.category IN categories
+          ACCUM @@edges += e
+          ORDER BY getvid(v)
+          LIMIT numPerPage OFFSET pageNum * numPerPage;
+  ELSE
+    hold = SELECT v FROM start-((Hold_Contract>):e)-Contracts:v
+          ACCUM @@edges += e
+          ORDER BY getvid(v)
+          LIMIT numPerPage OFFSET pageNum * numPerPage;
+  END;
+  PRINT @@edges AS edges;
 }

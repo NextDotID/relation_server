@@ -3,13 +3,18 @@ mod tests {
     use uuid::Uuid;
 
     use crate::error::Error;
+    use crate::graph::vertex::contract;
     use crate::tigergraph::{
-        create_identity_to_identity_hold_record, create_identity_to_identity_proof_two_way_binding,
+        create_identity_to_contract_hold_record, create_identity_to_identity_hold_record,
+        create_identity_to_identity_proof_two_way_binding,
     };
     use crate::{
         tigergraph::{
             edge::{proof::Level, Hold, Proof},
-            vertex::{Identity, IdentityRecord, NeighborsResponse},
+            vertex::{
+                Chain, Contract, ContractCategory, ContractRecord, Identity, IdentityRecord,
+                NeighborsResponse,
+            },
         },
         upstream::{DataFetcher, DataSource, Platform},
         util::make_http_client,
@@ -61,16 +66,43 @@ mod tests {
         to.uuid = Some(Uuid::new_v4());
 
         from.identity = "d".to_string();
-        to.identity = "e".to_string();
-
         from.platform = Platform::Ethereum;
-        to.platform = Platform::Dotbit;
+
+        to.identity = "d.bnd".to_string();
+        to.platform = Platform::SpaceId;
 
         let mut hold = Hold::default();
         hold.uuid = Uuid::new_v4();
-        hold.source = DataSource::Dotbit;
+        hold.source = DataSource::SpaceId;
 
         create_identity_to_identity_hold_record(&client, &from, &to, &hold).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_create_i2c_hold_record() -> Result<(), Error> {
+        let client = make_http_client();
+        let mut identity = Identity::default();
+        let mut contract = Contract::default();
+
+        identity.uuid = Some(Uuid::new_v4());
+        identity.platform = Platform::Ethereum;
+        identity.identity = "d".to_string();
+        identity.display_name = Some("ggbound_thlzyx".to_string());
+
+        contract.uuid = Uuid::new_v4();
+        contract.category = ContractCategory::ENS;
+        contract.chain = Chain::Ethereum;
+        contract.address = "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85".to_string();
+
+        let mut hold = Hold::default();
+        hold.uuid = Uuid::new_v4();
+        hold.source = DataSource::TheGraph;
+        hold.transaction =
+            Some("0x54faf5579a3a39dd8da4aad78f9823e89a75c1d255f588c06d99b883ae3b5128".to_string());
+        hold.id = "tinpeiling.eth".to_string();
+
+        create_identity_to_contract_hold_record(&client, &identity, &contract, &hold).await?;
         Ok(())
     }
 
@@ -102,6 +134,30 @@ mod tests {
             let json_raw =
                 serde_json::to_string(&edges).map_err(|err| Error::JSONParseError(err))?;
             println!("neighbors_with_source: {}", json_raw);
+        } else {
+            return Err(Error::NoResult);
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_query_nfts() -> Result<(), Error> {
+        let client = make_http_client();
+        if let Some(found) =
+            Identity::find_by_platform_identity(&client, &Platform::Ethereum, "d").await?
+        {
+            println!("found = {:?}", found);
+            let nfts = found
+                .nfts(
+                    &client,
+                    Some(vec![ContractCategory::ENS, ContractCategory::ERC721]),
+                    100,
+                    0,
+                )
+                .await?;
+            let json_raw =
+                serde_json::to_string(&nfts).map_err(|err| Error::JSONParseError(err))?;
+            println!("nfts: {}", json_raw);
         } else {
             return Err(Error::NoResult);
         }

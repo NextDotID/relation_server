@@ -3,8 +3,8 @@ use crate::{
     error::Error,
     tigergraph::{
         edge::{EdgeUnion, FromWithParams as EdgeFromWithParams, HoldRecord, ProofRecord},
-        vertex::{FromWithParams, Vertex, VertexRecord},
-        Attribute, BaseResponse, OpCode, Transfer, IDENTITY_GRAPH,
+        vertex::{ContractCategory, FromWithParams, Vertex, VertexRecord},
+        Attribute, BaseResponse, Graph, OpCode, Transfer,
     },
     upstream::{vec_string_to_vec_datasource, DataSource, Platform},
     util::{
@@ -270,6 +270,18 @@ struct Owner {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct QueryNftsResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<Nfts>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct Nfts {
+    edges: Vec<HoldRecord>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct VertexResponse {
     #[serde(flatten)]
     base: BaseResponse,
@@ -362,7 +374,7 @@ impl Identity {
         let uri: http::Uri = format!(
             "{}/graph/{}/vertices/{}?filter=uuid=%22{}%22",
             C.tdb.host,
-            IDENTITY_GRAPH,
+            Graph::IdentityGraph.to_string(),
             VERTEX_NAME,
             uuid.to_string(),
         )
@@ -371,10 +383,7 @@ impl Identity {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header(
-                "Authorization",
-                format!("Bearer {}", C.tdb.identity_graph_token),
-            )
+            .header("Authorization", Graph::IdentityGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
 
@@ -417,7 +426,7 @@ impl Identity {
         let uri: http::Uri = format!(
             "{}/graph/{}/vertices/{}?filter=platform=%22{}%22,identity=%22{}%22",
             C.tdb.host,
-            IDENTITY_GRAPH,
+            Graph::IdentityGraph.to_string(),
             VERTEX_NAME,
             platform.to_string(),
             identity.to_string(),
@@ -427,10 +436,7 @@ impl Identity {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header(
-                "Authorization",
-                format!("Bearer {}", C.tdb.identity_graph_token),
-            )
+            .header("Authorization", Graph::IdentityGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error | {}", _err)))?;
 
@@ -473,8 +479,11 @@ impl IdentityRecord {
     ) -> Result<Vec<IdentityWithSource>, Error> {
         // query see in Solution: CREATE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth)
         let uri: http::Uri = format!(
-            "{}/query/IdentityGraph/neighbors_with_source?p={}&depth={}",
-            C.tdb.host, self.v_id, depth,
+            "{}/query/{}/neighbors_with_source?p={}&depth={}",
+            C.tdb.host,
+            Graph::IdentityGraph.to_string(),
+            self.v_id,
+            depth,
         )
         .parse()
         .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
@@ -482,10 +491,7 @@ impl IdentityRecord {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header(
-                "Authorization",
-                format!("Bearer {}", C.tdb.identity_graph_token),
-            )
+            .header("Authorization", Graph::IdentityGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {
@@ -537,18 +543,18 @@ impl IdentityRecord {
     ) -> Result<Vec<EdgeUnion>, Error> {
         // query see in Solution: CREATE QUERY neighbors(VERTEX<Identities> p, INT depth)
         let uri: http::Uri = format!(
-            "{}/query/IdentityGraph/neighbors?p={}&depth={}",
-            C.tdb.host, self.v_id, depth,
+            "{}/query/{}/neighbors?p={}&depth={}",
+            Graph::IdentityGraph.to_string(),
+            C.tdb.host,
+            self.v_id,
+            depth,
         )
         .parse()
         .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header(
-                "Authorization",
-                format!("Bearer {}", C.tdb.identity_graph_token),
-            )
+            .header("Authorization", Graph::IdentityGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {
@@ -589,8 +595,9 @@ impl IdentityRecord {
     ) -> Result<Option<IdentityRecord>, Error> {
         // query see in Solution: CREATE QUERY identity_owned_by(VERTEX<Identities> p, STRING platform)
         let uri: http::Uri = format!(
-            "{}/query/IdentityGraph/identity_owned_by?p={}&platform={}",
+            "{}/query/{}/identity_owned_by?p={}&platform={}",
             C.tdb.host,
+            Graph::AssetGraph.to_string(),
             self.v_id.to_string(),
             self.attributes.platform.to_string(),
         )
@@ -599,10 +606,7 @@ impl IdentityRecord {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header(
-                "Authorization",
-                format!("Bearer {}", C.tdb.identity_graph_token),
-            )
+            .header("Authorization", Graph::AssetGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {
@@ -630,6 +634,87 @@ impl IdentityRecord {
             }
             Err(err) => {
                 let err_message = format!("TigerGraph query owned_by parse_body error: {:?}", err);
+                error!(err_message);
+                return Err(err);
+            }
+        }
+    }
+
+    /// Returns all Contracts owned by this identity. Empty list if `self.platform != Ethereum`.
+    pub async fn nfts(
+        &self,
+        client: &Client<HttpConnector>,
+        category: Option<Vec<ContractCategory>>,
+        limit: u16,
+        offset: u16,
+    ) -> Result<Vec<HoldRecord>, Error> {
+        if self.attributes.platform != Platform::Ethereum {
+            return Ok(vec![]);
+        }
+        // query see in Solution: nfts(VERTEX<Identities> p, SET<STRING> categories, INT numPerPage, INT pageNum)
+        let uri: http::Uri;
+        if category.is_none() || category.as_ref().unwrap().len() == 0 {
+            uri = format!(
+                "{}/query/{}/nfts?p={}&numPerPage={}&pageNum={}",
+                C.tdb.host,
+                Graph::AssetGraph.to_string(),
+                self.v_id.to_string(),
+                limit,
+                offset
+            )
+            .parse()
+            .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+        } else {
+            let categories: Vec<String> = category
+                .unwrap()
+                .into_iter()
+                .map(|field| format!("categories={}", field.to_string()))
+                .collect();
+            let combined = categories.join("&");
+            uri = format!(
+                "{}/query/{}/nfts?p={}&{}&numPerPage={}&pageNum={}",
+                C.tdb.host,
+                Graph::AssetGraph.to_string(),
+                self.v_id.to_string(),
+                combined,
+                limit,
+                offset
+            )
+            .parse()
+            .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+        }
+        debug!("uri = {:?}", uri);
+        let req = hyper::Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .header("Authorization", Graph::AssetGraph.token())
+            .body(Body::empty())
+            .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+        let mut resp = client.request(req).await.map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "query nfts | Fail to request: {:?}",
+                err.to_string()
+            ))
+        })?;
+        match parse_body::<QueryNftsResponse>(&mut resp).await {
+            Ok(r) => {
+                if r.base.error {
+                    let err_message = format!(
+                        "TigerGraph query neighbors error | Code: {:?}, Message: {:?}",
+                        r.base.code, r.base.message
+                    );
+                    error!(err_message);
+                    return Err(Error::General(err_message, resp.status()));
+                }
+
+                let result = r
+                    .results
+                    .and_then(|vec_unions| vec_unions.first().cloned())
+                    .map_or(vec![], |union| union.edges);
+                Ok(result)
+            }
+            Err(err) => {
+                let err_message = format!("TigerGraph query neighbors parse_body error: {:?}", err);
                 error!(err_message);
                 return Err(err);
             }

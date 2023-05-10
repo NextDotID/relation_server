@@ -1,7 +1,7 @@
 mod contract;
 mod identity;
 use async_trait::async_trait;
-pub use contract::{Contract, ContractRecord};
+pub use contract::{Chain, Contract, ContractCategory, ContractRecord};
 pub use identity::{Identity, IdentityRecord, NeighborsResponse};
 use serde::{Deserialize, Serialize};
 
