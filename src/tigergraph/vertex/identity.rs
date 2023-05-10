@@ -21,8 +21,8 @@ use hyper::{client::HttpConnector, Body, Client};
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, json, to_value, Value};
-use std::collections::HashMap;
 use std::fmt;
+use std::{collections::HashMap, result};
 use tracing::{debug, error};
 use uuid::Uuid;
 
@@ -258,6 +258,18 @@ struct EdgeUnions {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct OwnedByResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<Owner>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct Owner {
+    owner: Vec<IdentityRecord>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct VertexResponse {
     #[serde(flatten)]
     base: BaseResponse,
@@ -382,11 +394,10 @@ impl Identity {
                     error!(err_message);
                     return Err(Error::General(err_message, resp.status()));
                 }
-                if let Some(results) = r.results {
-                    Ok(results.first().unwrap().to_owned().into())
-                } else {
-                    Ok(None)
-                }
+                let result: Option<IdentityRecord> = r
+                    .results
+                    .and_then(|results: Vec<IdentityRecord>| results.first().cloned());
+                Ok(result)
             }
             Err(err) => {
                 let err_message = format!("TigerGraph query filter parse_body error: {:?}", err);
@@ -395,6 +406,7 @@ impl Identity {
             }
         }
     }
+
     /// Find `IdentityRecord` by given platform and identity.
     pub async fn find_by_platform_identity(
         client: &Client<HttpConnector>,
@@ -438,11 +450,10 @@ impl Identity {
                     error!(err_message);
                     return Err(Error::General(err_message, resp.status()));
                 }
-                if let Some(results) = r.results {
-                    Ok(results.first().unwrap().to_owned().into())
-                } else {
-                    Ok(None)
-                }
+                let result: Option<IdentityRecord> = r
+                    .results
+                    .and_then(|results: Vec<IdentityRecord>| results.first().cloned());
+                Ok(result)
             }
             Err(err) => {
                 let err_message = format!("TigerGraph query filter parse_body error: {:?}", err);
@@ -454,12 +465,13 @@ impl Identity {
 }
 
 impl IdentityRecord {
+    /// Return all neighbors of this identity with sources.
     pub async fn neighbors(
         &self,
         client: &Client<HttpConnector>,
         depth: u16,
     ) -> Result<Vec<IdentityWithSource>, Error> {
-        // query see in Solution: CREATE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph
+        // query see in Solution: CREATE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth)
         let uri: http::Uri = format!(
             "{}/query/IdentityGraph/neighbors_with_source?p={}&depth={}",
             C.tdb.host, self.v_id, depth,
@@ -493,21 +505,18 @@ impl IdentityRecord {
                     error!(err_message);
                     return Err(Error::General(err_message, resp.status()));
                 }
-                if let Some(results) = r.results {
-                    if results.len() > 0 {
-                        let res: VertexWithSource = results.first().unwrap().to_owned().into();
-                        // filter out self::node_id
-                        Ok(res
+
+                let result: Vec<IdentityWithSource> = r
+                    .results
+                    .and_then(|vec_with_sources| vec_with_sources.first().cloned())
+                    .map_or(vec![], |result| {
+                        result
                             .vertices
                             .into_iter()
                             .filter(|target| target.identity.v_id != self.v_id)
-                            .collect())
-                    } else {
-                        Ok(vec![])
-                    }
-                } else {
-                    Ok(vec![])
-                }
+                            .collect()
+                    });
+                Ok(result)
             }
             Err(err) => {
                 let err_message = format!(
@@ -519,13 +528,14 @@ impl IdentityRecord {
             }
         }
     }
-    // Return all neighbors of this identity with traversal paths.
+
+    /// Return all neighbors of this identity with traversal paths.
     pub async fn neighbors_with_traversal(
         &self,
         client: &Client<HttpConnector>,
         depth: u16,
     ) -> Result<Vec<EdgeUnion>, Error> {
-        // query see in Solution: CREATE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph
+        // query see in Solution: CREATE QUERY neighbors(VERTEX<Identities> p, INT depth)
         let uri: http::Uri = format!(
             "{}/query/IdentityGraph/neighbors?p={}&depth={}",
             C.tdb.host, self.v_id, depth,
@@ -558,16 +568,11 @@ impl IdentityRecord {
                     return Err(Error::General(err_message, resp.status()));
                 }
 
-                if let Some(results) = r.results {
-                    if results.len() > 0 {
-                        let res: EdgeUnions = results.first().unwrap().to_owned().into();
-                        Ok(res.edges)
-                    } else {
-                        Ok(vec![])
-                    }
-                } else {
-                    Ok(vec![])
-                }
+                let result = r
+                    .results
+                    .and_then(|vec_unions| vec_unions.first().cloned())
+                    .map_or(vec![], |union| union.edges);
+                Ok(result)
             }
             Err(err) => {
                 let err_message = format!("TigerGraph query neighbors parse_body error: {:?}", err);
