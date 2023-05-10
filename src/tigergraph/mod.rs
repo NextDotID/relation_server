@@ -22,6 +22,7 @@ use crate::{
     upstream::Target,
     util::{make_http_client, naive_now, parse_body, request_with_timeout},
 };
+
 use async_trait::async_trait;
 use http::uri::InvalidUri;
 use hyper::Method;
@@ -84,29 +85,65 @@ pub struct Attribute {
     pub op: Option<OpCode>,
 }
 
-pub const IDENTITY_GRAPH: &str = "IdentityGraph";
-pub const SOCIAL_GRAPH: &str = "SocialGraph";
+/// List of GraphName in TigerGraph.
+#[derive(
+    Default,
+    Clone,
+    Copy,
+    Serialize,
+    Deserialize,
+    Debug,
+    Display,
+    PartialEq,
+    Eq,
+    EnumString,
+    EnumIter,
+    Hash,
+)]
+pub enum Graph {
+    #[default]
+    #[serde(rename = "IdentityGraph")]
+    #[strum(serialize = "IdentityGraph")]
+    IdentityGraph,
 
-pub fn upsert_graph_uri(graph_name: &str) -> Result<http::Uri, Error> {
-    let uri: http::Uri = format!("{}/graph/{}?vertex_must_exist=true", C.tdb.host, graph_name)
-        .parse()
-        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
-    Ok(uri)
+    #[serde(rename = "AssetGraph")]
+    #[strum(serialize = "AssetGraph")]
+    AssetGraph,
+
+    #[serde(rename = "SocialGraph")]
+    #[strum(serialize = "SocialGraph")]
+    SocialGraph,
 }
 
-pub async fn upsert_identity_graph(
+impl Graph {
+    pub fn token(&self) -> String {
+        use Graph::*;
+        match self {
+            IdentityGraph => format!("Bearer {}", C.tdb.identity_graph_token),
+            AssetGraph => format!("Bearer {}", C.tdb.asset_graph_token),
+            SocialGraph => format!("Bearer {}", C.tdb.social_graph_token),
+        }
+    }
+}
+
+pub async fn upsert_graph(
     client: &Client<HttpConnector>,
     payload: &UpsertGraph,
+    graph_name: Graph,
 ) -> Result<(), Error> {
-    let uri = upsert_graph_uri(IDENTITY_GRAPH)?;
+    let uri: http::Uri = format!(
+        "{}/graph/{}?vertex_must_exist=true",
+        C.tdb.host,
+        graph_name.to_string()
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+
     let json_params = serde_json::to_string(&payload).map_err(|err| Error::JSONParseError(err))?;
     let req = hyper::Request::builder()
         .method(Method::POST)
         .uri(uri)
-        .header(
-            "Authorization",
-            format!("Bearer {}", C.tdb.identity_graph_token),
-        )
+        .header("Authorization", graph_name.token())
         .body(Body::from(json_params))
         .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
     let mut resp = client.request(req).await.map_err(|err| {
@@ -265,15 +302,9 @@ pub async fn create_identity_to_identity_proof_two_way_binding(
     let pb = proof_backward.wrapper(to, from, PROOF_REVERSE_EDGE);
     // <Proof as Edge<Identity, Identity, Proof>>::reverse_e_type(&proof_backward),
     // <Proof as Edge<Identity, Identity, Proof>>::directed(&proof_backward),
-
-    // let pf = ProofWrapper::new(proof_forward, from, to, PROOF_EDGE);
-    // let pb = ProofWrapper::new(proof_backward, from, to, PROOF_REVERSE_EDGE);
     let edges = Edges(vec![pf, pb]);
-    let upsert_graph: UpsertGraph = edges.into();
-    // let json_raw =
-    //     serde_json::to_string(&upsert_graph).map_err(|err| Error::JSONParseError(err))?;
-    // println!("{}", json_raw);
-    upsert_identity_graph(client, &upsert_graph).await?;
+    let graph: UpsertGraph = edges.into();
+    upsert_graph(client, &graph, Graph::IdentityGraph).await?;
 
     Ok(())
 }
@@ -286,11 +317,8 @@ pub async fn create_identity_to_identity_hold_record(
 ) -> Result<(), Error> {
     let hold_identity = hold.wrapper(from, to, HOLD_IDENTITY);
     let edges = Edges(vec![hold_identity]);
-    let upsert_graph: UpsertGraph = edges.into();
-    // let json_raw =
-    //     serde_json::to_string(&upsert_graph).map_err(|err| Error::JSONParseError(err))?;
-    // println!("{}", json_raw);
-    upsert_identity_graph(client, &upsert_graph).await?;
+    let graph: UpsertGraph = edges.into();
+    upsert_graph(client, &graph, Graph::IdentityGraph).await?;
     Ok(())
 }
 
@@ -302,8 +330,8 @@ pub async fn create_identity_to_contract_hold_record(
 ) -> Result<(), Error> {
     let hold_contract = hold.wrapper(from, to, HOLD_CONTRACT);
     let edges = Edges(vec![hold_contract]);
-    let upsert_graph: UpsertGraph = edges.into();
-    upsert_identity_graph(client, &upsert_graph).await?;
+    let graph: UpsertGraph = edges.into();
+    upsert_graph(client, &graph, Graph::AssetGraph).await?;
     Ok(())
 }
 
@@ -315,8 +343,8 @@ pub async fn create_contract_to_identity_reverse_resolve_record(
 ) -> Result<(), Error> {
     let reverse_contract = reverse.wrapper(from, to, REVERSE_RESOLVE_CONTRACT);
     let edges = Edges(vec![reverse_contract]);
-    let upsert_graph: UpsertGraph = edges.into();
-    upsert_identity_graph(client, &upsert_graph).await?;
+    let graph: UpsertGraph = edges.into();
+    upsert_graph(client, &graph, Graph::AssetGraph).await?;
     Ok(())
 }
 
@@ -328,8 +356,8 @@ pub async fn create_identity_domain_resolve_record(
 ) -> Result<(), Error> {
     let resolve_record = resolve.wrapper(from, to, RESOLVE);
     let edges = Edges(vec![resolve_record]);
-    let upsert_graph: UpsertGraph = edges.into();
-    upsert_identity_graph(client, &upsert_graph).await?;
+    let graph: UpsertGraph = edges.into();
+    upsert_graph(client, &graph, Graph::AssetGraph).await?;
     Ok(())
 }
 
@@ -341,7 +369,7 @@ pub async fn create_identity_domain_reverse_resolve_record(
 ) -> Result<(), Error> {
     let reverse_record = reverse.wrapper(from, to, REVERSE_RESOLVE);
     let edges = Edges(vec![reverse_record]);
-    let upsert_graph: UpsertGraph = edges.into();
-    upsert_identity_graph(client, &upsert_graph).await?;
+    let graph: UpsertGraph = edges.into();
+    upsert_graph(client, &graph, Graph::AssetGraph).await?;
     Ok(())
 }

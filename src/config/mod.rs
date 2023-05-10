@@ -62,6 +62,7 @@ pub struct TigerGDB {
     pub username: String,
     pub password: String,
     pub identity_graph_token: String,
+    pub asset_graph_token: String,
     pub social_graph_token: String,
 }
 
