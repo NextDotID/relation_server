@@ -581,4 +581,58 @@ impl IdentityRecord {
             }
         }
     }
+
+    /// Return domain-identity owned by another identity: wallet address.
+    pub async fn domain_owned_by(
+        &self,
+        client: &Client<HttpConnector>,
+    ) -> Result<Option<IdentityRecord>, Error> {
+        // query see in Solution: CREATE QUERY identity_owned_by(VERTEX<Identities> p, STRING platform)
+        let uri: http::Uri = format!(
+            "{}/query/IdentityGraph/identity_owned_by?p={}&platform={}",
+            C.tdb.host,
+            self.v_id.to_string(),
+            self.attributes.platform.to_string(),
+        )
+        .parse()
+        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+        let req = hyper::Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .header(
+                "Authorization",
+                format!("Bearer {}", C.tdb.identity_graph_token),
+            )
+            .body(Body::empty())
+            .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+        let mut resp = client.request(req).await.map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "query owned_by | Fail to request: {:?}",
+                err.to_string()
+            ))
+        })?;
+        match parse_body::<OwnedByResponse>(&mut resp).await {
+            Ok(r) => {
+                if r.base.error {
+                    let err_message = format!(
+                        "TigerGraph query neighbors error | Code: {:?}, Message: {:?}",
+                        r.base.code, r.base.message
+                    );
+                    error!(err_message);
+                    return Err(Error::General(err_message, resp.status()));
+                }
+                let result = r
+                    .results
+                    .and_then(|results| results.first().cloned())
+                    .map(|owner| owner.owner)
+                    .and_then(|res| res.first().cloned());
+                Ok(result)
+            }
+            Err(err) => {
+                let err_message = format!("TigerGraph query owned_by parse_body error: {:?}", err);
+                error!(err_message);
+                return Err(err);
+            }
+        }
+    }
 }
