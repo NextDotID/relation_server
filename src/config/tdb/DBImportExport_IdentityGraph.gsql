@@ -83,6 +83,15 @@ CREATE QUERY identity_owned_by(VERTEX<Identities> p, STRING platform) FOR GRAPH 
   PRINT owner;
 }
 
+CREATE QUERY hold_nft(STRING id, STRING chain, STRING address) FOR GRAPH AssetGraph SYNTAX V2 {
+  SetAccum<EDGE> @@holds;
+  contract = SELECT v FROM Identities:s-((Hold_Contract>):e)-Contracts:v
+        WHERE v.chain == chain AND v.address == address AND e.id == id
+        ACCUM
+          @@holds += e;
+  PRINT @@holds AS holds;
+}
+
 CREATE QUERY nfts(VERTEX<Identities> p, SET<STRING> categories, INT numPerPage = 100, INT pageNum = 0) FOR GRAPH AssetGraph {
   SetAccum<EDGE> @@edges;
   start = {p};

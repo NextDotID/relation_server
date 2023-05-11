@@ -1,9 +1,10 @@
 use crate::{
+    config::C,
     error::Error,
     tigergraph::{
         edge::{Edge, EdgeRecord, EdgeWrapper, FromWithParams, Wrapper},
-        vertex::{Contract, Identity, Vertex},
-        Attribute, OpCode, Transfer,
+        vertex::{Chain, Contract, Identity, Vertex},
+        Attribute, BaseResponse, Graph, OpCode, Transfer,
     },
     upstream::{DataFetcher, DataSource},
     util::{
@@ -14,10 +15,13 @@ use crate::{
 
 use async_graphql::{ObjectType, SimpleObject};
 use chrono::{Duration, NaiveDateTime};
-use hyper::{client::HttpConnector, Body, Client, Request};
+use http::uri::InvalidUri;
+use hyper::{client::HttpConnector, Body, Client, Method, Request};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, to_value};
 use std::collections::HashMap;
+use strum_macros::{Display, EnumIter, EnumString};
+use tracing::{debug, error};
 use uuid::Uuid;
 
 pub const HOLD_IDENTITY: &str = "Hold_Identity";
@@ -277,36 +281,80 @@ impl Edge<Identity, Contract, HoldRecord> for HoldRecord {
     }
 }
 
-// impl From<EdgeWrapper<HoldRecord, Identity, Identity>> for HoldIdentity {
-//     fn from(record: EdgeWrapper<HoldRecord, Identity, Identity>) -> Self {
-//         HoldIdentity(record)
-//     }
-// }
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct NftHolderResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<NftHolder>>,
+}
 
-// impl std::ops::Deref for HoldIdentity {
-//     type Target = EdgeWrapper<HoldRecord, Identity, Identity>;
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct NftHolder {
+    holds: Vec<HoldRecord>,
+}
 
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }
+impl Hold {
+    pub fn is_outdated(&self) -> bool {
+        let outdated_in = Duration::hours(8);
+        self.updated_at
+            .checked_add_signed(outdated_in)
+            .unwrap()
+            .lt(&naive_now())
+    }
 
-// impl std::ops::DerefMut for HoldIdentity {
-//     fn deref_mut(&mut self) -> &mut Self::Target {
-//         &mut self.0
-//     }
-// }
+    /// Find a hold record by Chain, NFT_ID and NFT Address.
+    /// merge these 2 queries into one.
+    pub async fn find_by_id_chain_address(
+        client: &Client<HttpConnector>,
+        id: &str,
+        chain: &Chain,
+        address: &str,
+    ) -> Result<Option<HoldRecord>, Error> {
+        let uri: http::Uri = format!(
+            "{}/query/{}/hold_nft?id={}&chain={}&address={}",
+            C.tdb.host,
+            Graph::AssetGraph.to_string(),
+            id.to_string(),
+            chain.to_string(),
+            address.to_string(),
+        )
+        .parse()
+        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+        let req = hyper::Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .header("Authorization", Graph::AssetGraph.token())
+            .body(Body::empty())
+            .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+        let mut resp = client.request(req).await.map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "query holder | Fail to request: {:?}",
+                err.to_string()
+            ))
+        })?;
+        match parse_body::<NftHolderResponse>(&mut resp).await {
+            Ok(r) => {
+                if r.base.error {
+                    let err_message = format!(
+                        "TigerGraph query holder error | Code: {:?}, Message: {:?}",
+                        r.base.code, r.base.message
+                    );
+                    error!(err_message);
+                    return Err(Error::General(err_message, resp.status()));
+                }
 
-// #[derive(Debug, Clone, Deserialize, Serialize)]
-// pub struct HoldIdentity(EdgeWrapper<HoldRecord, Identity, Identity>);
-
-// impl HoldIdentity {
-//     pub fn new(
-//         hold: &impl Wrapper<HoldRecord, Identity, Identity>,
-//         from: &Identity,
-//         to: &Identity,
-//         name: &str,
-//     ) -> Self {
-//         HoldIdentity(hold.wrapper(from, to, name))
-//     }
-// }
+                let result = r
+                    .results
+                    .and_then(|vec_holders| vec_holders.first().cloned())
+                    .map(|holders| holders.holds)
+                    .and_then(|res| res.first().cloned());
+                Ok(result)
+            }
+            Err(err) => {
+                let err_message = format!("TigerGraph query holder parse_body error: {:?}", err);
+                error!(err_message);
+                return Err(err);
+            }
+        }
+    }
+}
