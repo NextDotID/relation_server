@@ -14,6 +14,7 @@ use async_graphql::{Context, Object, ObjectType, Union};
 use deadpool::managed::Object;
 use strum::IntoEnumIterator;
 use tracing::{debug, event, Level};
+use uuid::Uuid;
 
 /// Status for a record in RelationService DB
 #[derive(Default, Copy, Clone, PartialEq, Eq, async_graphql::Enum)]
