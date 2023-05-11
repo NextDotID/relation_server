@@ -16,7 +16,7 @@ use futures::future::join_all;
 use http::uri::InvalidUri;
 use hyper::{Body, Method};
 use serde::Deserialize;
-use tracing::error;
+use tracing::{error, warn};
 use uuid::Uuid;
 
 use super::types::target;
@@ -93,6 +93,8 @@ pub struct Records {
     #[serde(rename = "crypto.ETH.address")]
     pub eth_address: Option<String>,
 }
+
+const UNKNOWN_OWNER: &str = "0x0000000000000000000000000000000000000000";
 
 pub struct UnstoppableDomains {}
 #[async_trait]
@@ -369,6 +371,11 @@ async fn fetch_account_by_domain(
     let result = fetch_owner(identity).await?;
     if result.meta.owner.is_none() {
         return Ok(vec![]);
+    }
+
+    if result.meta.owner.clone().unwrap().to_lowercase() == UNKNOWN_OWNER {
+        warn!("UnstoppableDomains owner is zero address");
+        return Err(Error::NoResult);
     }
 
     let eth_identity: Identity = Identity {

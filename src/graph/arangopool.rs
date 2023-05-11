@@ -5,7 +5,7 @@ use std::fmt;
 // use deadpool::Runtime;
 use serde::Deserialize;
 use std::ops::{Deref, DerefMut};
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ArangoConfig {
@@ -97,7 +97,7 @@ impl Manager for ArangoConnectionManager {
             Ok(_) => match conn.database().aql_str::<i8>(r"RETURN 1").await {
                 Ok(result) => match result {
                     _ if result[0] == 1 => {
-                        debug!("Recycle exist connection");
+                        trace!("Reuse exist DB connection.");
                         Ok(()) // recycle
                     }
                     _ => {

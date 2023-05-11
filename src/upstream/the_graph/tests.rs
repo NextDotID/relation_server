@@ -1,3 +1,5 @@
+use tracing::{span, Instrument, Level};
+
 use crate::{
     error::Error,
     graph::{
@@ -101,6 +103,39 @@ async fn test_find_wallet_by_ens() -> Result<(), Error> {
     assert_eq!(hold.source, DataSource::TheGraph);
     assert_eq!(hold.fetcher, DataFetcher::RelationService);
     assert_eq!(hold.created_at, parse_timestamp("1497775154").ok());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_wrapped_ens_find_by_wallet() -> Result<(), Error> {
+    let db = new_db_connection().await?;
+    db.truncate().await;
+    // It has `nykma.eth` wrapped.
+    let owner = "0x0da0ee86269797618032e56a69b1aad095c581fc".to_string();
+    let target = Target::Identity(Platform::Ethereum, owner);
+
+    let log = span!(Level::TRACE, "test_wrapped_domains");
+    let address_targets = TheGraph::fetch(&target).instrument(log).await?;
+    let _wrapped_ens = address_targets.iter().find(|t| t.nft_id().unwrap() == "nykma.eth").unwrap();
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_wrapped_ens_find_by_ens() -> Result<(), Error> {
+    let db = new_db_connection().await?;
+    db.truncate().await;
+    let owner = "0x0da0ee86269797618032e56a69b1aad095c581fc";
+    let ens = Target::NFT(
+        Chain::Ethereum,
+        ContractCategory::ENS,
+        ContractCategory::ENS.default_contract_address().unwrap(),
+        "nykma.eth".into(),
+    );
+    let log = span!(Level::TRACE, "test_wrapped_domains");
+    let address_targets = TheGraph::fetch(&ens).instrument(log).await?;
+    let _wrapped_ens = address_targets.iter().find(|t| t.identity().unwrap() == owner).unwrap();
 
     Ok(())
 }

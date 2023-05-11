@@ -32,43 +32,43 @@ struct QueryVars {
 #[derive(Deserialize, Debug)]
 struct QueryResponse {
     domains: Vec<Domain>,
-    // transfers: Option<Vec<EthQueryResponseTransfers>>,
+    #[serde(rename = "wrappedDomains")]
+    wrapped_domains: Vec<WrappedDomain>,
 }
 
-#[derive(Deserialize, Debug)]
-#[allow(non_snake_case)]
+#[derive(Deserialize, Debug, Clone)]
 struct Domain {
     /// ENS name (`something.eth`)
     name: String,
     /// Creation timestamp (in secods)
-    createdAt: String,
+    #[serde(rename = "createdAt")]
+    created_at: String,
     /// ETH event logs for this ENS.
     events: Vec<DomainEvent>,
     /// Reverse resolve record set on this ENS.
-    resolvedAddress: Option<Account>,
+    #[serde(rename = "resolvedAddress")]
+    resolved_address: Option<Account>,
     /// Owner info
     owner: Account,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
+struct WrappedDomain {
+    name: String,
+    owner: Account,
+    domain: Domain,
+}
+
+#[derive(Deserialize, Debug, Clone)]
 struct Account {
     /// Ethereum wallet
     id: String,
 }
 
-#[derive(Deserialize, Debug)]
-#[allow(non_snake_case)]
-#[allow(dead_code)]
+#[derive(Deserialize, Debug, Clone)]
 struct DomainEvent {
-    blockNumber: u128,
-    transactionID: String,
-    domain: DomainTiny,
-}
-
-#[derive(Deserialize, Debug)]
-#[allow(dead_code)]
-struct DomainTiny {
-    name: String,
+    #[serde(rename = "transactionID")]
+    transaction_id: String,
 }
 
 const QUERY_BY_ENS: &str = r#"
@@ -76,12 +76,8 @@ const QUERY_BY_ENS: &str = r#"
             domains(where: { name: $target }) {
                 name
                 createdAt
-                events {
-                    blockNumber
+                events(first: 1) {
                     transactionID
-                    domain {
-                        name
-                    }
                 }
                 resolvedAddress {
                   id
@@ -90,6 +86,25 @@ const QUERY_BY_ENS: &str = r#"
                   id
                 }
               }
+            wrappedDomains(where: { name: $target }) {
+              name
+              domain {
+                name
+                createdAt
+                events(first: 1) {
+                    transactionID
+                }
+                resolvedAddress {
+                  id
+                }
+                owner{
+                  id
+                }
+              }
+              owner {
+                id
+              }
+            }
         }
     "#;
 
@@ -98,12 +113,8 @@ const QUERY_BY_WALLET: &str = r#"
             domains(where: { owner: $target }) {
                 name
                 createdAt
-                events {
-                    blockNumber
+                events(first: 1) {
                     transactionID
-                    domain {
-                        name
-                    }
                 }
                 resolvedAddress {
                   id
@@ -112,6 +123,25 @@ const QUERY_BY_WALLET: &str = r#"
                   id
                 }
               }
+            wrappedDomains(where: { owner: $target }) {
+              name
+              domain {
+                name
+                createdAt
+                events(first: 1) {
+                    transactionID
+                }
+                resolvedAddress {
+                  id
+                }
+                owner{
+                  id
+                }
+              }
+              owner {
+                id
+              }
+            }
         }
     "#;
 
@@ -161,39 +191,57 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
             Ok(resp) => match resp {
                 Ok(resp) => resp,
                 Err(err) => {
-                    warn!("TheGraph {} | Failed to fetch: {}", target, err);
+                    warn!(?target, ?err, "TheGraph: Failed to fetch");
                     None
                 }
             },
             Err(_) => {
-                warn!("TheGraph | Timeout: no response in 5 seconds.");
+                warn!(?target, "TheGraph: Timeout: no response in 5 seconds.");
                 None
             }
         };
 
     if data.is_none() {
-        info!("TheGraph {} | No result", target);
+        info!(?target, "TheGraph: No result");
         return Ok(vec![]);
     }
     let res = data.unwrap();
-    if res.domains.is_empty() {
-        info!("TheGraph {} | No result", target);
+    debug!(?target, wrapped = res.wrapped_domains.len(), domains = res.domains.len(), "Records found.");
+    let mut merged_domains: Vec<Domain> = vec![];
+    // Rewrite correct owner info for wrapped domains.
+    for wd in res.wrapped_domains.into_iter() {
+        debug!(?target, domain = wd.name, "TheGraph: Wrapped ENS found.");
+        let mut domain = wd.domain.clone();
+        domain.owner = wd.owner;
+        merged_domains.push(domain);
+    }
+    for domain in res.domains.into_iter() {
+        if merged_domains.iter().any(|md| md.name == domain.name) {
+            debug!(?target, domain = domain.name, "TheGraph: Wrapped ENS found before. Skip this.");
+            continue;
+        } else {
+            merged_domains.push(domain);
+        }
+    }
+
+    if merged_domains.is_empty() {
+        info!(?target, "TheGraph: No result");
         return Ok(vec![]);
     }
     let db = new_db_connection().await?;
     let mut next_targets: TargetProcessedList = vec![];
 
-    for domain in res.domains.into_iter() {
+    for domain in merged_domains.into_iter() {
         // Create own record
         let contract_record = create_or_update_own(&db, &domain).await?;
 
         // Deal with resolve target.
-        let resolved_address = domain.resolvedAddress.map(|r| r.id);
+        let resolved_address = domain.resolved_address.map(|r| r.id);
         match resolved_address.clone() {
             Some(address) => {
                 if address != "0x0000000000000000000000000000000000000000".to_string() {
                     // Create resolve record
-                    debug!("TheGraph {} | Resolved address: {}", target, address);
+                    debug!(?target, address, domain = domain.name, "TheGraph: Resolved");
                     let resolve_target = Identity {
                         uuid: Some(Uuid::new_v4()),
                         platform: Platform::Ethereum,
@@ -259,8 +307,8 @@ async fn create_or_update_own(
     let creation_tx = domain
         .events
         .first() // TODO: really?
-        .map(|event| event.transactionID.clone());
-    let ens_created_at = parse_timestamp(&domain.createdAt).ok();
+        .map(|event| event.transaction_id.clone());
+    let ens_created_at = parse_timestamp(&domain.created_at).ok();
     let owner = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
