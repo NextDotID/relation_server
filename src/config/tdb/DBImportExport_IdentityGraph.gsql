@@ -101,3 +101,29 @@ CREATE QUERY nfts(VERTEX<Identities> p, SET<STRING> categories, INT numPerPage =
   END;
   PRINT @@edges AS edges;
 }
+
+CREATE QUERY domain(STRING name, STRING system) FOR GRAPH AssetGraph {
+  EDGE record;
+  EDGE hold;
+  IF system == "ENS" THEN
+    resolved = SELECT v FROM Contracts:s-((Reverse_Resolve_Contract>):e)-Identities:v
+              WHERE e.system == system AND e.name == name
+              ACCUM
+                record = e;
+    owner = SELECT s FROM Identities:s-((Hold_Contract>):e)-Contracts:v
+              WHERE e.id == name
+              ACCUM
+                hold = e;
+    PRINT record, hold, resolved, owner;
+  ELSE
+    resolved = SELECT v FROM Identities:s-((Resolve>):e)-Identities:v
+              WHERE e.system == system AND e.name == name
+              ACCUM
+                record = e;
+    owner = SELECT s FROM Identities:s-((Hold_Identity>):e)-Identities:v
+              WHERE v.platform == system AND v.identity == name
+              ACCUM
+                hold = e;
+    PRINT record, hold, resolved, owner;
+  END;
+}

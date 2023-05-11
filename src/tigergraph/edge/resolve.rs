@@ -1,9 +1,10 @@
 use crate::{
+    config::C,
     error::Error,
     tigergraph::{
-        edge::{Edge, EdgeRecord, EdgeWrapper, FromWithParams, Wrapper},
-        vertex::{Contract, Identity, Vertex},
-        Attribute, OpCode, Transfer,
+        edge::{Edge, EdgeRecord, EdgeWrapper, FromWithParams, HoldRecord, Wrapper},
+        vertex::{Contract, Identity, IdentityRecord, Vertex},
+        Attribute, BaseResponse, Graph, OpCode, Transfer,
     },
     upstream::{DataFetcher, DataSource, Platform},
     util::{
@@ -13,11 +14,13 @@ use crate::{
 };
 
 use chrono::{Duration, NaiveDateTime};
-use hyper::{client::HttpConnector, Body, Client, Request};
+use http::uri::InvalidUri;
+use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, to_value};
 use std::collections::HashMap;
 use strum_macros::{Display, EnumIter, EnumString};
+use tracing::{debug, error};
 use uuid::Uuid;
 
 #[derive(
@@ -328,5 +331,173 @@ impl Edge<Identity, Identity, ResolveRecord> for ResolveRecord {
         to: &Identity,
     ) -> Result<(), Error> {
         todo!()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct DomainResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<Domain>>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct Domain {
+    record: Option<ResolveRecordObject>,
+    hold: Option<HoldRecordObject>,
+    resolved: Option<Vec<IdentityRecord>>,
+    owner: Vec<IdentityRecord>,
+}
+
+#[derive(Clone, Deserialize, Serialize, Debug)]
+#[serde(untagged)]
+pub enum ResolveRecordObject {
+    Nonempty(ResolveRecord),
+    Empty {},
+}
+
+#[derive(Clone, Deserialize, Serialize, Debug)]
+#[serde(untagged)]
+pub enum HoldRecordObject {
+    Nonempty(HoldRecord),
+    Empty {},
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ResolveEdge {
+    pub record: Resolve,
+    pub resolved: Option<IdentityRecord>,
+    pub owner: Option<IdentityRecord>,
+}
+
+impl std::ops::Deref for ResolveEdge {
+    type Target = Resolve;
+
+    fn deref(&self) -> &Self::Target {
+        &self.record
+    }
+}
+impl std::ops::DerefMut for ResolveEdge {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.record
+    }
+}
+impl From<Resolve> for ResolveEdge {
+    fn from(record: Resolve) -> Self {
+        ResolveEdge {
+            record,
+            resolved: None,
+            owner: None,
+        }
+    }
+}
+
+impl Resolve {
+    pub fn is_outdated(&self) -> bool {
+        let outdated_in = Duration::days(1);
+        self.updated_at
+            .checked_add_signed(outdated_in)
+            .unwrap()
+            .lt(&naive_now())
+    }
+
+    pub async fn find_by_name_system(
+        client: &Client<HttpConnector>,
+        name: &str,
+        domain_system: &DomainNameSystem,
+    ) -> Result<Option<ResolveEdge>, Error> {
+        let uri: http::Uri = format!(
+            "{}/query/{}/domain?name={}&system={}",
+            C.tdb.host,
+            Graph::AssetGraph.to_string(),
+            name.to_string(),
+            domain_system.to_string(),
+        )
+        .parse()
+        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+        let req = hyper::Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .header("Authorization", Graph::AssetGraph.token())
+            .body(Body::empty())
+            .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+        let mut resp = client.request(req).await.map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "query domain | Fail to request: {:?}",
+                err.to_string()
+            ))
+        })?;
+        match parse_body::<DomainResponse>(&mut resp).await {
+            Ok(r) => {
+                if r.base.error {
+                    let err_message = format!(
+                        "TigerGraph query domain error | Code: {:?}, Message: {:?}",
+                        r.base.code, r.base.message
+                    );
+                    error!(err_message);
+                    return Err(Error::General(err_message, resp.status()));
+                }
+
+                let result = r
+                    .results
+                    .and_then(|domain_resp| domain_resp.first().cloned())
+                    .and_then(|domain| {
+                        domain.hold.map_or(None, |hold_obj| {
+                            use HoldRecordObject::*;
+                            let resolve_edge = match hold_obj {
+                                Nonempty(hold) => {
+                                    use ResolveRecordObject::*;
+                                    let resolve_edge = match domain.record {
+                                        Some(Empty {}) | None => {
+                                            let mut resolve_edge = ResolveEdge::from(Resolve {
+                                                uuid: hold.attributes.uuid,
+                                                source: hold.attributes.source,
+                                                system: domain_system.clone(),
+                                                name: domain
+                                                    .owner
+                                                    .first()
+                                                    .unwrap()
+                                                    .to_owned()
+                                                    .attributes
+                                                    .identity
+                                                    .clone(),
+                                                fetcher: hold.attributes.fetcher,
+                                                updated_at: hold.attributes.updated_at,
+                                            });
+                                            resolve_edge.owner = domain.owner.first().cloned();
+                                            resolve_edge.resolved = None;
+                                            resolve_edge
+                                        }
+                                        Some(Nonempty(record)) => {
+                                            let mut resolve_edge = ResolveEdge::from(Resolve {
+                                                uuid: record.attributes.uuid,
+                                                source: record.attributes.source,
+                                                system: record.attributes.system,
+                                                name: record.attributes.name.clone(),
+                                                fetcher: record.attributes.fetcher,
+                                                updated_at: record.attributes.updated_at,
+                                            });
+                                            resolve_edge.owner = domain.owner.first().cloned();
+                                            resolve_edge.resolved = domain
+                                                .resolved
+                                                .and_then(|resolves| resolves.first().cloned());
+                                            resolve_edge
+                                        }
+                                    };
+                                    Some(resolve_edge)
+                                }
+                                Empty {} => None,
+                            };
+                            resolve_edge
+                        })
+                    });
+                Ok(result)
+            }
+            Err(err) => {
+                let err_message = format!("TigerGraph query domain parse_body error: {:?}", err);
+                error!(err_message);
+                return Err(err);
+            }
+        }
     }
 }
