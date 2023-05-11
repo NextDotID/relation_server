@@ -5,12 +5,13 @@ mod tests {
     use crate::error::Error;
     use crate::graph::vertex::contract;
     use crate::tigergraph::{
+        create_contract_to_identity_reverse_resolve_record, create_identity_domain_resolve_record,
         create_identity_to_contract_hold_record, create_identity_to_identity_hold_record,
         create_identity_to_identity_proof_two_way_binding,
     };
     use crate::{
         tigergraph::{
-            edge::{proof::Level, Hold, Proof},
+            edge::{DomainNameSystem, Hold, Level, Proof, Resolve},
             vertex::{
                 Chain, Contract, ContractCategory, ContractRecord, Identity, IdentityRecord,
                 NeighborsResponse,
@@ -68,14 +69,38 @@ mod tests {
         from.identity = "d".to_string();
         from.platform = Platform::Ethereum;
 
-        to.identity = "d.bnd".to_string();
-        to.platform = Platform::SpaceId;
+        to.identity = "d.bit".to_string();
+        to.platform = Platform::Dotbit;
 
         let mut hold = Hold::default();
         hold.uuid = Uuid::new_v4();
-        hold.source = DataSource::SpaceId;
+        hold.source = DataSource::Dotbit;
 
         create_identity_to_identity_hold_record(&client, &from, &to, &hold).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_create_i2i_resolve_record() -> Result<(), Error> {
+        let client = make_http_client();
+        let mut from = Identity::default();
+        let mut to = Identity::default();
+        from.uuid = Some(Uuid::new_v4());
+        to.uuid = Some(Uuid::new_v4());
+
+        from.identity = "d".to_string();
+        from.platform = Platform::Ethereum;
+
+        to.identity = "d.bit".to_string();
+        to.platform = Platform::Dotbit;
+
+        let mut resolve = Resolve::default();
+        resolve.uuid = Uuid::new_v4();
+        resolve.system = DomainNameSystem::DotBit;
+        resolve.name = "d.bit".to_string();
+        resolve.source = DataSource::Dotbit;
+
+        create_identity_domain_resolve_record(&client, &to, &from, &resolve).await?;
         Ok(())
     }
 
@@ -99,10 +124,97 @@ mod tests {
         hold.uuid = Uuid::new_v4();
         hold.source = DataSource::TheGraph;
         hold.transaction =
-            Some("0x54faf5579a3a39dd8da4aad78f9823e89a75c1d255f588c06d99b883ae3b5128".to_string());
-        hold.id = "tinpeiling.eth".to_string();
+            Some("0x565cb9a10198629955f0f3c86124e45a7d1ad8c47c9e8614dea1ed0897092305".to_string());
+        hold.id = "maskbook.eth".to_string();
 
         create_identity_to_contract_hold_record(&client, &identity, &contract, &hold).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_c2i_reverse_resolve_record() -> Result<(), Error> {
+        let client = make_http_client();
+        let mut identity = Identity::default();
+        let mut contract = Contract::default();
+
+        identity.uuid = Some(Uuid::new_v4());
+        identity.platform = Platform::Ethereum;
+        identity.identity = "d".to_string();
+        identity.display_name = Some("ggbound_thlzyx".to_string());
+
+        contract.uuid = Uuid::new_v4();
+        contract.category = ContractCategory::ENS;
+        contract.chain = Chain::Ethereum;
+        contract.address = "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85".to_string();
+
+        let mut resolve = Resolve::default();
+        resolve.uuid = Uuid::new_v4();
+        resolve.system = DomainNameSystem::ENS;
+        resolve.name = "maskbook.eth".to_string();
+        resolve.source = DataSource::TheGraph;
+        create_contract_to_identity_reverse_resolve_record(&client, &contract, &identity, &resolve)
+            .await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_query_domain() -> Result<(), Error> {
+        let client = make_http_client();
+        if let Some(found) =
+            Resolve::find_by_name_system(&client, "tinpeiling.eth", &DomainNameSystem::ENS).await?
+        {
+            println!("domain = {:?}", found);
+            let json_raw =
+                serde_json::to_string(&found).map_err(|err| Error::JSONParseError(err))?;
+            println!("domain: {}", json_raw);
+        } else {
+            return Err(Error::NoResult);
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_query_holder() -> Result<(), Error> {
+        let client = make_http_client();
+        if let Some(found) = Hold::find_by_id_chain_address(
+            &client,
+            "maskbook.eth",
+            &Chain::Ethereum,
+            "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
+        )
+        .await?
+        {
+            println!("holder = {:?}", found);
+            let json_raw =
+                serde_json::to_string(&found).map_err(|err| Error::JSONParseError(err))?;
+            println!("holder: {}", json_raw);
+        } else {
+            return Err(Error::NoResult);
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_query_nfts() -> Result<(), Error> {
+        let client = make_http_client();
+        if let Some(found) =
+            Identity::find_by_platform_identity(&client, &Platform::Ethereum, "d").await?
+        {
+            println!("found = {:?}", found);
+            let nfts = found
+                .nfts(
+                    &client,
+                    Some(vec![ContractCategory::ENS, ContractCategory::ERC721]),
+                    100,
+                    0,
+                )
+                .await?;
+            let json_raw =
+                serde_json::to_string(&nfts).map_err(|err| Error::JSONParseError(err))?;
+            println!("nfts: {}", json_raw);
+        } else {
+            return Err(Error::NoResult);
+        }
         Ok(())
     }
 
@@ -134,30 +246,6 @@ mod tests {
             let json_raw =
                 serde_json::to_string(&edges).map_err(|err| Error::JSONParseError(err))?;
             println!("neighbors_with_source: {}", json_raw);
-        } else {
-            return Err(Error::NoResult);
-        }
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_query_nfts() -> Result<(), Error> {
-        let client = make_http_client();
-        if let Some(found) =
-            Identity::find_by_platform_identity(&client, &Platform::Ethereum, "d").await?
-        {
-            println!("found = {:?}", found);
-            let nfts = found
-                .nfts(
-                    &client,
-                    Some(vec![ContractCategory::ENS, ContractCategory::ERC721]),
-                    100,
-                    0,
-                )
-                .await?;
-            let json_raw =
-                serde_json::to_string(&nfts).map_err(|err| Error::JSONParseError(err))?;
-            println!("nfts: {}", json_raw);
         } else {
             return Err(Error::NoResult);
         }

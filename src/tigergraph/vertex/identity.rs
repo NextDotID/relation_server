@@ -16,8 +16,7 @@ use crate::{
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use http::uri::InvalidUri;
-use hyper::Method;
-use hyper::{client::HttpConnector, Body, Client};
+use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, json, to_value, Value};
@@ -544,8 +543,8 @@ impl IdentityRecord {
         // query see in Solution: CREATE QUERY neighbors(VERTEX<Identities> p, INT depth)
         let uri: http::Uri = format!(
             "{}/query/{}/neighbors?p={}&depth={}",
-            Graph::IdentityGraph.to_string(),
             C.tdb.host,
+            Graph::IdentityGraph.to_string(),
             self.v_id,
             depth,
         )
@@ -683,7 +682,6 @@ impl IdentityRecord {
             .parse()
             .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
         }
-        debug!("uri = {:?}", uri);
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)

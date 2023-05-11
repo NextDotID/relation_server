@@ -234,6 +234,16 @@ impl Wrapper<ProofRecord, Identity, Identity> for Proof {
     }
 }
 
+impl Proof {
+    pub fn is_outdated(&self) -> bool {
+        let outdated_in = Duration::days(1);
+        self.updated_at
+            .checked_add_signed(outdated_in)
+            .unwrap()
+            .lt(&naive_now())
+    }
+}
+
 #[async_trait::async_trait]
 impl Edge<Identity, Identity, ProofRecord> for ProofRecord {
     fn e_type(&self) -> String {

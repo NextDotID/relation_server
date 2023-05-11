@@ -3,9 +3,11 @@ pub mod proof;
 pub mod resolve;
 pub use hold::{Hold, HoldRecord, HOLD_CONTRACT, HOLD_IDENTITY};
 pub use proof::{
-    Proof, ProofRecord, EDGE_NAME as PROOF_EDGE, REVERSE_EDGE_NAME as PROOF_REVERSE_EDGE,
+    Level, Proof, ProofRecord, EDGE_NAME as PROOF_EDGE, REVERSE_EDGE_NAME as PROOF_REVERSE_EDGE,
 };
-pub use resolve::{Resolve, ResolveRecord, RESOLVE, REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT};
+pub use resolve::{
+    DomainNameSystem, Resolve, ResolveRecord, RESOLVE, REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT,
+};
 
 use crate::{
     config::C,
