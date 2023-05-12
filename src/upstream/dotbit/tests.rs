@@ -1,4 +1,3 @@
-use crate::graph::edge::Hold;
 use crate::upstream::Target;
 use crate::{error::Error, upstream::dotbit::DotBit, upstream::Fetcher};
 use crate::{

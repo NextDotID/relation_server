@@ -1,24 +1,18 @@
 use crate::{
     error::Error,
-    graph::{
-        edge::Hold,
-        new_db_connection,
-        vertex::contract::Chain,
-        vertex::Identity,
-        vertex::{contract::ContractCategory, Contract},
-    },
-    upstream::{lens::Lens, DataFetcher, DataSource, Fetcher, Platform, Target},
+    tigergraph::vertex::Identity,
+    upstream::{lens::Lens, Fetcher, Platform, Target},
+    util::make_http_client,
 };
 
 #[tokio::test]
 async fn test_fetch_by_lens_profile() -> Result<(), Error> {
-    let db = new_db_connection().await?;
-    db.truncate().await;
+    let client = make_http_client();
 
     let target = Target::Identity(Platform::Lens, "stani.lens".into());
     Lens::fetch(&target).await?;
 
-    Identity::find_by_platform_identity(&db, &target.platform()?, &target.identity()?)
+    Identity::find_by_platform_identity(&client, &target.platform()?, &target.identity()?)
         .await?
         .expect("Record not found");
 
@@ -27,8 +21,7 @@ async fn test_fetch_by_lens_profile() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_fetch_by_addrs() -> Result<(), Error> {
-    let db = new_db_connection().await?;
-    db.truncate().await;
+    let client = make_http_client();
 
     let target = Target::Identity(
         Platform::Ethereum,
@@ -36,7 +29,7 @@ async fn test_fetch_by_addrs() -> Result<(), Error> {
     );
     Lens::fetch(&target).await?;
 
-    Identity::find_by_platform_identity(&db, &target.platform()?, &target.identity()?)
+    Identity::find_by_platform_identity(&client, &target.platform()?, &target.identity()?)
         .await?
         .expect("Record not found");
 

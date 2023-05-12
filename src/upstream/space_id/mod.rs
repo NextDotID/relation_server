@@ -1,18 +1,16 @@
 mod tests;
 
-use crate::{
-    config::C,
-    error::Error,
-    graph::edge::{hold::Hold, resolve::DomainNameSystem, Resolve},
-    graph::vertex::Identity,
-    graph::{
-        create_domain_resolve_record, create_identity_to_identity_hold_record, new_db_connection,
-    },
-    upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList},
-    util::{make_client, naive_now, parse_body, request_with_timeout},
+use crate::config::C;
+use crate::error::Error;
+use crate::tigergraph::create_identity_domain_resolve_record;
+use crate::tigergraph::create_identity_domain_reverse_resolve_record;
+use crate::tigergraph::create_identity_to_identity_hold_record;
+use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::vertex::Identity;
+use crate::upstream::{
+    DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
 };
-
-// use super::types::target;
+use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};
 use async_trait::async_trait;
 use http::uri::InvalidUri;
 use hyper::{Body, Method, Request};
@@ -74,14 +72,14 @@ async fn fetch_domain_by_address(
     _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
-    let db = new_db_connection().await?;
+    let cli = make_http_client();
     let name = get_name(identity).await?;
     if name.is_none() {
         // name=null, address does not have a valid primary name
         return Ok(vec![]);
     }
 
-    let eth_identity: Identity = Identity {
+    let eth: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: identity.to_lowercase(),
@@ -93,7 +91,7 @@ async fn fetch_domain_by_address(
         updated_at: naive_now(),
     };
 
-    let sid_identity: Identity = Identity {
+    let sid: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::SpaceId,
         identity: name.clone().unwrap(),
@@ -133,11 +131,11 @@ async fn fetch_domain_by_address(
     };
 
     // hold record
-    create_identity_to_identity_hold_record(&db, &eth_identity, &sid_identity, &hold).await?;
+    create_identity_to_identity_hold_record(&cli, &eth, &sid, &hold).await?;
     // 'regular' resolution involves mapping from a name to an address.
-    create_domain_resolve_record(&db, &sid_identity, &eth_identity, &resolve).await?;
+    create_identity_domain_resolve_record(&cli, &sid, &eth, &resolve).await?;
     // 'reverse' resolution maps from an address back to a name.
-    create_domain_resolve_record(&db, &eth_identity, &sid_identity, &reverse).await?;
+    create_identity_domain_reverse_resolve_record(&cli, &eth, &sid, &reverse).await?;
 
     return Ok(vec![Target::Identity(
         Platform::SpaceId,
@@ -149,10 +147,10 @@ async fn fetch_address_by_domain(
     _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
-    let db = new_db_connection().await?;
+    let cli = make_http_client();
     let address = get_address(identity).await?;
 
-    let eth_identity: Identity = Identity {
+    let eth: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: address.clone().to_lowercase(),
@@ -164,7 +162,7 @@ async fn fetch_address_by_domain(
         updated_at: naive_now(),
     };
 
-    let sid_identity: Identity = Identity {
+    let sid: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::SpaceId,
         identity: identity.to_string(),
@@ -195,9 +193,9 @@ async fn fetch_address_by_domain(
     };
 
     // hold record
-    create_identity_to_identity_hold_record(&db, &eth_identity, &sid_identity, &hold).await?;
+    create_identity_to_identity_hold_record(&cli, &eth, &sid, &hold).await?;
     // 'regular' resolution involves mapping from a name to an address.
-    create_domain_resolve_record(&db, &sid_identity, &eth_identity, &resolve).await?;
+    create_identity_domain_resolve_record(&cli, &sid, &eth, &resolve).await?;
 
     // lookup reverse resolve name
     if let Some(domain) = get_name(&address).await? {
@@ -210,7 +208,7 @@ async fn fetch_address_by_domain(
             fetcher: DataFetcher::RelationService,
             updated_at: naive_now(),
         };
-        create_domain_resolve_record(&db, &eth_identity, &sid_identity, &reverse).await?;
+        create_identity_domain_reverse_resolve_record(&cli, &eth, &sid, &reverse).await?;
     }
 
     return Ok(vec![Target::Identity(

@@ -2,24 +2,25 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::edge::Edge;
-use crate::graph::edge::Resolve;
-use crate::graph::edge::{hold::Hold, resolve::DomainNameSystem};
-use crate::graph::vertex::IdentityRecord;
-use crate::graph::vertex::Vertex;
-use crate::graph::{new_db_connection, vertex::Identity};
-use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
-use crate::util::{make_client, naive_now, parse_body, request_with_timeout};
-use aragog::DatabaseConnection;
+use crate::tigergraph::create_identity_domain_resolve_record;
+use crate::tigergraph::create_identity_domain_reverse_resolve_record;
+use crate::tigergraph::create_identity_to_identity_hold_record;
+use crate::tigergraph::edge::Hold;
+use crate::tigergraph::edge::Resolve;
+use crate::tigergraph::vertex::Identity;
+// use crate::graph::{new_db_connection, vertex::Identity};
+use crate::upstream::{
+    DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
+};
+use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};
+// use aragog::DatabaseConnection;
 use async_trait::async_trait;
 use futures::future::join_all;
 use http::uri::InvalidUri;
-use hyper::{Body, Method};
+use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::Deserialize;
 use tracing::{error, warn};
 use uuid::Uuid;
-
-use super::types::target;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct BadResponse {
@@ -227,11 +228,11 @@ async fn fetch_reverse(owner: &str) -> Result<ReverseResponse, Error> {
 }
 
 async fn save_domain(
-    db: &DatabaseConnection,
-    eth_record: &IdentityRecord,
+    client: &Client<HttpConnector>,
+    eth_identity: &Identity,
     item: Item,
 ) -> Result<TargetProcessedList, Error> {
-    let identity: Identity = Identity {
+    let ud: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::UnstoppableDomains,
         identity: item.id.clone(),
@@ -251,8 +252,8 @@ async fn save_domain(
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
     };
-    let domain_record = identity.create_or_update(&db).await?;
-    hold.connect(db, eth_record, &domain_record).await?;
+    // hold record
+    create_identity_to_identity_hold_record(client, eth_identity, &ud, &hold).await?;
 
     let resolve: Resolve = Resolve {
         uuid: Uuid::new_v4(),
@@ -264,12 +265,20 @@ async fn save_domain(
     };
 
     // 'regular' resolution involves mapping from a name to an address.
-    resolve.connect(db, &domain_record, eth_record).await?;
+    create_identity_domain_resolve_record(client, &ud, eth_identity, &resolve).await?;
 
     if item.attributes.meta.reverse {
         // reverse = true
         // 'reverse' resolution maps from an address back to a name.
-        resolve.connect(db, eth_record, &domain_record).await?;
+        let reverse: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::UnstoppableDomains,
+            system: DomainNameSystem::UnstoppableDomains,
+            name: item.id.clone(),
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+        create_identity_domain_reverse_resolve_record(client, eth_identity, &ud, &reverse).await?;
         return Ok(vec![Target::Identity(
             Platform::UnstoppableDomains,
             item.attributes.meta.domain.clone(),
@@ -287,7 +296,7 @@ async fn fetch_domains_by_account(
     let mut next_targets: Vec<Target> = Vec::new();
     while cnt < u32::MAX {
         let result = fetch_domain(identity, &next).await?;
-        let db = new_db_connection().await?;
+        let cli = make_http_client();
         cnt += result.data.len() as u32;
 
         let eth_identity: Identity = Identity {
@@ -301,11 +310,10 @@ async fn fetch_domains_by_account(
             profile_url: None,
             updated_at: naive_now(),
         };
-        let eth_record = eth_identity.create_or_update(&db).await?;
         let futures: Vec<_> = result
             .data
             .into_iter()
-            .map(|item| save_domain(&db, &eth_record, item))
+            .map(|item| save_domain(&cli, &eth_identity, item))
             .collect();
 
         let targets: TargetProcessedList = join_all(futures)
@@ -367,7 +375,7 @@ async fn fetch_account_by_domain(
     _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
-    let db = new_db_connection().await?;
+    let cli = make_http_client();
     let result = fetch_owner(identity).await?;
     if result.meta.owner.is_none() {
         return Ok(vec![]);
@@ -378,7 +386,7 @@ async fn fetch_account_by_domain(
         return Err(Error::NoResult);
     }
 
-    let eth_identity: Identity = Identity {
+    let eth: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: result.meta.owner.clone().unwrap().to_lowercase(),
@@ -390,7 +398,7 @@ async fn fetch_account_by_domain(
         updated_at: naive_now(),
     };
 
-    let identity: Identity = Identity {
+    let ud: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::UnstoppableDomains,
         identity: result.meta.domain.clone(),
@@ -412,9 +420,8 @@ async fn fetch_account_by_domain(
         fetcher: DataFetcher::RelationService,
     };
 
-    let eth_record = eth_identity.create_or_update(&db).await?;
-    let domain_record = identity.create_or_update(&db).await?;
-    hold.connect(&db, &eth_record, &domain_record).await?;
+    // hold record
+    create_identity_to_identity_hold_record(&cli, &eth, &ud, &hold).await?;
 
     let resolve: Resolve = Resolve {
         uuid: Uuid::new_v4(),
@@ -426,12 +433,20 @@ async fn fetch_account_by_domain(
     };
 
     // 'regular' resolution involves mapping from a name to an address.
-    resolve.connect(&db, &domain_record, &eth_record).await?;
+    create_identity_domain_resolve_record(&cli, &ud, &eth, &resolve).await?;
 
     if result.meta.reverse {
         // reverse = true
         // 'reverse' resolution maps from an address back to a name.
-        resolve.connect(&db, &eth_record, &domain_record).await?;
+        let resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::UnstoppableDomains,
+            system: DomainNameSystem::UnstoppableDomains,
+            name: result.meta.domain.clone(),
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+        create_identity_domain_reverse_resolve_record(&cli, &eth, &ud, &resolve).await?;
     }
 
     Ok(vec![Target::Identity(

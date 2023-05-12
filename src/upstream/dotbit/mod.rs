@@ -2,15 +2,17 @@
 mod tests;
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::create_domain_resolve_record;
-use crate::graph::create_identity_to_identity_hold_record;
-use crate::graph::edge::Edge;
-use crate::graph::edge::Resolve;
-use crate::graph::edge::{hold::Hold, resolve::DomainNameSystem};
-use crate::graph::vertex::Vertex;
-use crate::graph::{new_db_connection, vertex::Identity};
-use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
-use crate::util::{make_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive};
+use crate::tigergraph::create_identity_domain_resolve_record;
+use crate::tigergraph::create_identity_domain_reverse_resolve_record;
+use crate::tigergraph::create_identity_to_identity_hold_record;
+use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::vertex::Identity;
+use crate::upstream::{
+    DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
+};
+use crate::util::{
+    make_client, make_http_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive,
+};
 use async_trait::async_trait;
 use hyper::{Body, Method, Request};
 use serde::{Deserialize, Serialize};
@@ -211,8 +213,7 @@ async fn fetch_connections_by_account_info(
         return Err(Error::NoResult);
     }
 
-    // add to db
-    let db = new_db_connection().await?;
+    let cli = make_http_client(); // connect server
     let created_at_naive = timestamp_to_naive(account_info.create_at_unix, 0);
 
     let eth_identity: Identity = Identity {
@@ -259,9 +260,9 @@ async fn fetch_connections_by_account_info(
     };
 
     // hold record
-    create_identity_to_identity_hold_record(&db, &eth_identity, &dotbit_identity, &hold).await?;
+    create_identity_to_identity_hold_record(&cli, &eth_identity, &dotbit_identity, &hold).await?;
     // 'regular' resolution involves mapping from a name to an address.
-    create_domain_resolve_record(&db, &dotbit_identity, &eth_identity, &resolve).await?;
+    create_identity_domain_resolve_record(&cli, &dotbit_identity, &eth_identity, &resolve).await?;
 
     return Ok(vec![Target::Identity(
         Platform::Ethereum,
@@ -313,7 +314,7 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
     }
 
     let result_data = resp.result.data.unwrap();
-    let db = new_db_connection().await?;
+    let cli = make_http_client(); // connect server
     let eth_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
@@ -358,11 +359,12 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
     };
 
     // hold record
-    create_identity_to_identity_hold_record(&db, &eth_identity, &dotbit_identity, &hold).await?;
+    create_identity_to_identity_hold_record(&cli, &eth_identity, &dotbit_identity, &hold).await?;
     // 'regular' resolution involves mapping from a name to an address.
-    create_domain_resolve_record(&db, &dotbit_identity, &eth_identity, &resolve).await?;
+    create_identity_domain_resolve_record(&cli, &dotbit_identity, &eth_identity, &resolve).await?;
     // das_reverseRecord: 'reverse' resolution maps from an address back to a name.
-    create_domain_resolve_record(&db, &eth_identity, &dotbit_identity, &resolve).await?;
+    create_identity_domain_reverse_resolve_record(&cli, &eth_identity, &dotbit_identity, &resolve)
+        .await?;
 
     return Ok(vec![Target::Identity(
         Platform::Dotbit,
@@ -370,6 +372,7 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
     )]);
 }
 
+#[allow(dead_code)]
 async fn fetch_account_list_by_addrs(
     _platform: &Platform,
     identity: &str,
@@ -406,7 +409,7 @@ async fn fetch_account_list_by_addrs(
         return Err(Error::NoResult);
     }
 
-    let db = new_db_connection().await?;
+    let cli = make_http_client(); // connect server
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
@@ -418,7 +421,6 @@ async fn fetch_account_list_by_addrs(
         profile_url: None,
         updated_at: naive_now(),
     };
-    let from_record = from.create_or_update(&db).await?;
 
     for i in resp.result.data.unwrap().account_list.into_iter() {
         let to: Identity = Identity {
@@ -443,8 +445,8 @@ async fn fetch_account_list_by_addrs(
             fetcher: DataFetcher::RelationService,
         };
 
-        let to_record = to.create_or_update(&db).await?;
-        hold.connect(&db, &from_record, &to_record).await?;
+        // hold record
+        create_identity_to_identity_hold_record(&cli, &from, &to, &hold).await?;
     }
 
     Ok(vec![])
