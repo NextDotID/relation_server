@@ -37,7 +37,10 @@ use futures::{future::join_all, StreamExt};
 use tracing::{event, info, warn, Level};
 
 pub(crate) use types::vec_string_to_vec_datasource;
-pub(crate) use types::{DataFetcher, DataSource, Platform, Target, TargetProcessedList};
+pub(crate) use types::{
+    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Platform, ProofLevel,
+    Target, TargetProcessedList,
+};
 
 lazy_static! {
     /// Global processing queue to prevent duplicated query. i.e. multiple same request from frontend.

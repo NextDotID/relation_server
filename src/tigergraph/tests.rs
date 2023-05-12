@@ -4,16 +4,17 @@ mod tests {
 
     use crate::error::Error;
     use crate::tigergraph::{
-        create_contract_to_identity_reverse_resolve_record, create_identity_domain_resolve_record,
-        create_identity_to_contract_hold_record, create_identity_to_identity_hold_record,
-        create_identity_to_identity_proof_two_way_binding,
+        create_contract_to_identity_resolve_record, create_identity_domain_resolve_record,
+        create_identity_to_contract_hold_record,
+        create_identity_to_contract_reverse_resolve_record,
+        create_identity_to_identity_hold_record, create_identity_to_identity_proof_two_way_binding,
     };
     use crate::{
         tigergraph::{
-            edge::{DomainNameSystem, Hold, Level, Proof, Resolve},
-            vertex::{Chain, Contract, ContractCategory, Identity, NeighborsResponse},
+            edge::{Hold, Proof, Resolve},
+            vertex::{Contract, Identity, NeighborsResponse},
         },
-        upstream::{DataSource, Platform},
+        upstream::{Chain, ContractCategory, DataSource, DomainNameSystem, Platform, ProofLevel},
         util::make_http_client,
     };
 
@@ -41,8 +42,8 @@ mod tests {
         proof_backward.source = DataSource::NextID;
         proof_forward.uuid = Uuid::new_v4();
         proof_backward.uuid = Uuid::new_v4();
-        proof_forward.level = Level::VeryConfident;
-        proof_backward.level = Level::VeryConfident;
+        proof_forward.level = ProofLevel::VeryConfident;
+        proof_backward.level = ProofLevel::VeryConfident;
         create_identity_to_identity_proof_two_way_binding(
             &client,
             &from,
@@ -148,8 +149,7 @@ mod tests {
         resolve.system = DomainNameSystem::ENS;
         resolve.name = "maskbook.eth".to_string();
         resolve.source = DataSource::TheGraph;
-        create_contract_to_identity_reverse_resolve_record(&client, &contract, &identity, &resolve)
-            .await?;
+        create_contract_to_identity_resolve_record(&client, &contract, &identity, &resolve).await?;
         Ok(())
     }
 

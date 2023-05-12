@@ -3,7 +3,7 @@ use crate::{
     graph::edge::{Hold, HoldRecord},
     graph::vertex::{Identity, IdentityRecord},
     graph::{ConnectionPool, Edge},
-    upstream::{DataFetcher, DataSource, Platform},
+    upstream::{DataFetcher, DataSource, DomainNameSystem, Platform},
     util::naive_now,
 };
 use aragog::{
@@ -12,74 +12,7 @@ use aragog::{
 };
 use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
-use strum_macros::{Display, EnumIter, EnumString};
 use uuid::Uuid;
-
-#[derive(
-    Default,
-    Clone,
-    Copy,
-    Serialize,
-    Deserialize,
-    Debug,
-    Display,
-    PartialEq,
-    Eq,
-    async_graphql::Enum,
-    EnumString,
-    EnumIter,
-    Hash,
-)]
-pub enum DomainNameSystem {
-    /// ENS name system on the ETH chain.
-    /// https://ens.domains
-    #[strum(serialize = "ENS")]
-    #[serde(rename = "ENS")]
-    #[graphql(name = "ENS")]
-    ENS,
-
-    /// https://www.did.id/
-    #[strum(serialize = "dotbit")]
-    #[serde(rename = "dotbit")]
-    #[graphql(name = "dotbit")]
-    DotBit,
-
-    /// https://api.lens.dev/playground
-    #[strum(serialize = "lens")]
-    #[serde(rename = "lens")]
-    #[graphql(name = "lens")]
-    Lens,
-
-    /// https://unstoppabledomains.com/
-    #[strum(serialize = "unstoppabledomains")]
-    #[serde(rename = "unstoppabledomains")]
-    #[graphql(name = "unstoppabledomains")]
-    UnstoppableDomains,
-
-    /// https://api.prd.space.id/
-    #[strum(serialize = "space_id")]
-    #[serde(rename = "space_id")]
-    #[graphql(name = "space_id")]
-    SpaceId,
-
-    #[default]
-    #[strum(serialize = "unknown")]
-    #[serde(rename = "unknown")]
-    #[graphql(name = "unknown")]
-    Unknown,
-}
-
-impl From<DomainNameSystem> for Platform {
-    fn from(domain: DomainNameSystem) -> Self {
-        match domain {
-            DomainNameSystem::DotBit => Platform::Dotbit,
-            DomainNameSystem::UnstoppableDomains => Platform::UnstoppableDomains,
-            DomainNameSystem::Lens => Platform::Lens,
-            DomainNameSystem::SpaceId => Platform::SpaceId,
-            _ => Platform::Unknown,
-        }
-    }
-}
 
 /// Edge to identify which `Identity(Ethereum)` a `Contract` is resolving to.
 /// Basiclly this is served for `ENS` only.

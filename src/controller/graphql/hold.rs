@@ -3,12 +3,12 @@ use crate::{
     graph::{
         edge::{Hold, HoldRecord},
         vertex::{
-            contract::{Chain, ContractCategory, ContractLoadFn, ContractRecord},
+            contract::{ContractLoadFn, ContractRecord},
             IdentityLoadFn, IdentityRecord,
         },
         ConnectionPool,
     },
-    upstream::{fetch_all, DataFetcher, DataSource, Target},
+    upstream::{fetch_all, Chain, ContractCategory, DataFetcher, DataSource, Target},
 };
 use async_graphql::{Context, Object};
 // use dataloader::cached::Loader;

@@ -4,10 +4,10 @@ use crate::{
     tigergraph::{
         edge::{Edge, EdgeRecord, EdgeWrapper, FromWithParams, Wrapper},
         upsert_graph,
-        vertex::{Chain, Contract, Identity, Vertex},
+        vertex::{Contract, Identity, Vertex},
         Attribute, BaseResponse, Edges, Graph, OpCode, Transfer, UpsertGraph,
     },
-    upstream::{DataFetcher, DataSource},
+    upstream::{Chain, DataFetcher, DataSource},
     util::{
         naive_datetime_from_string, naive_datetime_to_string, naive_now,
         option_naive_datetime_from_string, option_naive_datetime_to_string, parse_body,
@@ -125,6 +125,20 @@ impl std::ops::DerefMut for HoldRecord {
     }
 }
 
+impl std::ops::Deref for EdgeRecord<Hold> {
+    type Target = Hold;
+
+    fn deref(&self) -> &Self::Target {
+        &self.attributes
+    }
+}
+
+impl std::ops::DerefMut for EdgeRecord<Hold> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.attributes
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HoldAttribute(HashMap<String, Attribute>);
 
@@ -231,7 +245,7 @@ impl Edge<Identity, Identity, HoldRecord> for HoldRecord {
         from: &Identity,
         to: &Identity,
     ) -> Result<(), Error> {
-        let hold_identity = self.attributes.wrapper(from, to, HOLD_IDENTITY);
+        let hold_identity = self.wrapper(from, to, HOLD_IDENTITY);
         let edges = Edges(vec![hold_identity]);
         let graph: UpsertGraph = edges.into();
         upsert_graph(client, &graph, Graph::IdentityGraph).await?;
@@ -291,7 +305,7 @@ impl Edge<Identity, Contract, HoldRecord> for HoldRecord {
         from: &Identity,
         to: &Contract,
     ) -> Result<(), Error> {
-        let hold_contract = self.attributes.wrapper(from, to, HOLD_CONTRACT);
+        let hold_contract = self.wrapper(from, to, HOLD_CONTRACT);
         let edges = Edges(vec![hold_contract]);
         let graph: UpsertGraph = edges.into();
         upsert_graph(client, &graph, Graph::AssetGraph).await?;

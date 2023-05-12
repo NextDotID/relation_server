@@ -1,17 +1,13 @@
 use crate::{
     error::{Error, Result},
     graph::{
-        edge::{
-            resolve::{DomainNameSystem, ResolveEdge},
-            Resolve,
-        },
-        vertex::{
-            contract::{Chain, ContractCategory},
-            IdentityRecord,
-        },
+        edge::{resolve::ResolveEdge, Resolve},
+        vertex::IdentityRecord,
         ConnectionPool,
     },
-    upstream::{fetch_all, DataFetcher, DataSource, Target},
+    upstream::{
+        fetch_all, Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Target,
+    },
 };
 use async_graphql::{Context, Object};
 use strum::IntoEnumIterator;

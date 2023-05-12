@@ -1,17 +1,23 @@
 use crate::{
+    config::C,
+    error::Error,
     tigergraph::{
+        upsert_graph,
         vertex::{FromWithParams, Vertex, VertexRecord},
-        Attribute, OpCode, Transfer,
+        Attribute, BaseResponse, Graph, OpCode, Transfer, UpsertGraph, Vertices,
     },
-    util::naive_now,
+    upstream::{Chain, ContractCategory},
+    util::{naive_now, parse_body},
 };
 
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
+use chrono::{Duration, NaiveDateTime};
+use http::uri::InvalidUri;
+use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
-use strum_macros::{Display, EnumIter, EnumString};
+use tracing::error;
 use uuid::Uuid;
 
 pub const VERTEX_NAME: &str = "Contracts";
@@ -52,300 +58,6 @@ impl PartialEq for Contract {
     }
 }
 
-/// List of chains supported by RelationService.
-#[derive(
-    Default,
-    Clone,
-    Copy,
-    Serialize,
-    Deserialize,
-    Debug,
-    Display,
-    PartialEq,
-    Eq,
-    async_graphql::Enum,
-    EnumString,
-    EnumIter,
-    Hash,
-)]
-pub enum Chain {
-    /// The Blockchain.
-    #[serde(rename = "ethereum")]
-    #[strum(serialize = "ethereum")]
-    #[graphql(name = "ethereum")]
-    Ethereum,
-
-    /// Deprecated since `The Merge`.
-    #[serde(rename = "rinkeby")]
-    #[strum(serialize = "rinkeby")]
-    #[graphql(name = "rinkeby")]
-    Rinkeby,
-
-    /// Deprecated since `The Merge`.
-    #[serde(rename = "ropsten")]
-    #[strum(serialize = "ropsten")]
-    #[graphql(name = "ropsten")]
-    Ropsten,
-
-    /// Deprecated since `The Merge`.
-    #[serde(rename = "kovan")]
-    #[strum(serialize = "kovan")]
-    #[graphql(name = "kovan")]
-    Kovan,
-
-    /// A cross-client proof-of-authority testing network for Ethereum.
-    /// https://goerli.net
-    #[serde(rename = "goerli")]
-    #[strum(serialize = "goerli")]
-    #[graphql(name = "goerli")]
-    Goerli,
-
-    /// Sepolia is expected to undergo `The Merge` to proof-of-stake in summer 2022.
-    /// https://sepolia.dev
-    #[serde(rename = "sepolia")]
-    #[strum(serialize = "sepolia")]
-    #[graphql(name = "sepolia")]
-    Sepolia,
-
-    /// BNB Smart Chain (BSC) (Previously Binance Smart Chain) - EVM compatible, consensus layers, and with hubs to multi-chains.
-    /// https://www.binance.com/en/support/announcement/854415cf3d214371a7b60cf01ead0918
-    #[serde(rename = "bsc")]
-    #[strum(serialize = "bsc", serialize = "binance_smart_chain")]
-    #[graphql(name = "bsc")]
-    BNBSmartChain,
-
-    /// Polygon is a decentralised Ethereum scaling platform that enables developers to build scalable user-friendly dApps with low transaction fees without ever sacrificing on security.
-    /// https://polygon.technology
-    #[serde(rename = "polygon")]
-    #[strum(serialize = "polygon")]
-    #[graphql(name = "polygon")]
-    Polygon,
-
-    /// Polygon Testnet
-    /// https://mumbai.polygonscan.com
-    #[serde(rename = "mumbai")]
-    #[strum(serialize = "mumbai")]
-    #[graphql(name = "mumbai")]
-    Mumbai,
-
-    /// Solana is a decentralized blockchain built to enable scalable, user-friendly apps for the world.
-    /// https://solana.com
-    #[serde(rename = "solana")]
-    #[strum(serialize = "solana")]
-    #[graphql(name = "solana")]
-    Solana,
-
-    /// Conflux is a new secure and reliable public blockchain with very high performance and scalability.
-    /// https://developer.confluxnetwork.org
-    #[serde(rename = "conflux")]
-    #[strum(serialize = "conflux")]
-    #[graphql(name = "conflux")]
-    Conflux,
-
-    /// Conflux has a virtual machine that is similar to the EVM.
-    /// https://evm.confluxscan.io
-    /// https://developer.confluxnetwork.org/conflux-doc/docs/EVM-Space/intro_of_evm_space
-    #[serde(rename = "conflux_espace")]
-    #[strum(serialize = "conflux_espace")]
-    #[graphql(name = "conflux_espace")]
-    ConfluxESpace,
-
-    #[serde(rename = "ethereum_classic")]
-    #[strum(serialize = "ethereum_classic")]
-    #[graphql(name = "ethereum_classic")]
-    EthereumClassic,
-
-    /// https://zksync.io
-    #[serde(rename = "zksync")]
-    #[strum(serialize = "zksync")]
-    #[graphql(name = "zksync")]
-    ZKSync,
-
-    #[serde(rename = "xdai")]
-    #[strum(serialize = "xdai")]
-    #[graphql(name = "xdai")]
-    Xdai,
-    /// Gnosis Chain provides stability, scalability and an extendable beacon chain framework.
-    /// Established in 2018 as the xDai Chain, the updated Gnosis Chain gives devs the tools and resources they need to create enhanced user experiences and optimized applications.
-    /// https://developers.gnosischain.com
-    #[serde(rename = "gnosis")]
-    #[strum(serialize = "gnosis")]
-    #[graphql(name = "gnosis")]
-    Gnosis,
-
-    /// Arweave enables you to store documents and applications forever.
-    /// https://www.arweave.org
-    #[serde(rename = "arweave")]
-    #[strum(serialize = "arweave")]
-    #[graphql(name = "arweave")]
-    Arweave,
-
-    /// Arbitrum One
-    /// http://arbiscan.io
-    #[serde(rename = "arbitrum")]
-    #[strum(serialize = "arbitrum")]
-    #[graphql(name = "arbitrum")]
-    Arbitrum,
-
-    /// Optimism is a low-cost and lightning-fast Ethereum L2 blockchain.
-    /// https://www.optimism.io
-    #[serde(rename = "optimism")]
-    #[strum(serialize = "optimism")]
-    #[graphql(name = "optimism")]
-    Optimism,
-
-    #[serde(rename = "crossbell")]
-    #[strum(serialize = "crossbell")]
-    #[graphql(name = "crossbell")]
-    Crossbell,
-
-    /// Avalanche is an open, programmable smart contracts platform for decentralized applications.
-    /// https://www.avax.com/
-    #[serde(rename = "avalanche")]
-    #[strum(serialize = "avalanche")]
-    #[graphql(name = "avalanche")]
-    Avalanche,
-
-    /// Fantom is a highly scalable blockchain platform for DeFi, crypto dApps, and enterprise applications.
-    /// https://fantom.foundation/
-    #[serde(rename = "fantom")]
-    #[strum(serialize = "fantom")]
-    #[graphql(name = "fantom")]
-    Fantom,
-
-    /// Celo is the carbon-negative, mobile-first, EVM-compatible blockchain ecosystem leading a thriving new digital economy for all.
-    /// https://celo.org/
-    #[serde(rename = "celo")]
-    #[strum(serialize = "celo")]
-    #[graphql(name = "celo")]
-    Celo,
-
-    #[default]
-    #[serde(rename = "unknown")]
-    #[strum(serialize = "unknown")]
-    #[graphql(name = "unknown")]
-    Unknown,
-}
-
-/// Internal chain implementation / framework.
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub enum ChainType {
-    /// EVM (with its chain ID)
-    EVM(u128),
-    Solana,
-    /// Seems like an Layer2 of Ethereum?
-    ZKSync,
-    /// Arweave
-    Arweave,
-    /// Basiclly an EVM, but with different address serializer, transaction packaging and genesis contracts.
-    Conflux,
-}
-
-impl Default for ChainType {
-    fn default() -> Self {
-        Chain::default().chain_type()
-    }
-}
-
-impl Chain {
-    /// Returns chain implementation / framework.
-    pub fn chain_type(&self) -> ChainType {
-        use Chain::*;
-
-        match self {
-            Ethereum => ChainType::EVM(1),
-            Rinkeby => ChainType::EVM(4),
-            Ropsten => ChainType::EVM(3),
-            Kovan => ChainType::EVM(42),
-            Goerli => ChainType::EVM(5),
-            Sepolia => ChainType::EVM(11155111),
-            BNBSmartChain => ChainType::EVM(56),
-            Polygon => ChainType::EVM(137),
-            Mumbai => ChainType::EVM(80001),
-            Solana => ChainType::Solana,
-            Conflux => ChainType::Conflux,
-            ConfluxESpace => ChainType::EVM(71),
-            EthereumClassic => ChainType::EVM(61),
-            ZKSync => ChainType::ZKSync,
-            Xdai => ChainType::EVM(100),
-            Gnosis => ChainType::EVM(100),
-            Arweave => ChainType::Arweave,
-            Arbitrum => ChainType::EVM(42161),
-            Optimism => ChainType::EVM(10),
-            Crossbell => ChainType::EVM(3737),
-            Avalanche => ChainType::EVM(43114),
-            Fantom => ChainType::EVM(250),
-            Celo => ChainType::EVM(42220),
-            Unknown => todo!(),
-        }
-    }
-}
-
-#[derive(
-    Default,
-    Clone,
-    Copy,
-    Serialize,
-    Deserialize,
-    EnumString,
-    Display,
-    Debug,
-    EnumIter,
-    PartialEq,
-    Eq,
-    async_graphql::Enum,
-    Hash,
-)]
-pub enum ContractCategory {
-    #[strum(serialize = "ENS")]
-    #[serde(rename = "ENS")]
-    #[graphql(name = "ENS")]
-    ENS,
-
-    #[strum(serialize = "ERC721", serialize = "ERC-721")]
-    #[serde(rename = "ERC721")]
-    #[graphql(name = "ERC721")]
-    ERC721,
-
-    #[strum(serialize = "ERC1155", serialize = "ERC-1155")]
-    #[serde(rename = "ERC1155")]
-    #[graphql(name = "ERC1155")]
-    ERC1155,
-
-    #[strum(serialize = "POAP")]
-    #[serde(rename = "POAP")]
-    #[graphql(name = "POAP")]
-    POAP,
-
-    #[default]
-    #[serde(rename = "unknown")]
-    #[graphql(name = "unknown")]
-    #[strum(serialize = "unknown")]
-    Unknown,
-}
-
-impl ContractCategory {
-    pub fn default_contract_address(&self) -> Option<String> {
-        use ContractCategory::*;
-        match self {
-            // TODO: ENS has a complicated contract structure, which cannot determine the "main" contract easily.
-            ENS => Some("0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85".to_lowercase()),
-            _ => None,
-        }
-    }
-
-    pub fn default_chain(&self) -> Option<Chain> {
-        use ContractCategory::*;
-        match self {
-            ENS => Some(Chain::Ethereum),
-            ERC721 => Some(Chain::Ethereum),
-            ERC1155 => Some(Chain::Ethereum),
-            POAP => Some(Chain::Ethereum),
-            _ => None,
-        }
-    }
-}
-
 // #[typetag::serde]
 #[async_trait]
 impl Vertex for Contract {
@@ -374,6 +86,34 @@ impl FromWithParams<Contract> for ContractRecord {
 impl From<VertexRecord<Contract>> for ContractRecord {
     fn from(record: VertexRecord<Contract>) -> Self {
         ContractRecord(record)
+    }
+}
+
+impl std::ops::Deref for ContractRecord {
+    type Target = VertexRecord<Contract>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for ContractRecord {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl std::ops::Deref for VertexRecord<Contract> {
+    type Target = Contract;
+
+    fn deref(&self) -> &Self::Target {
+        &self.attributes
+    }
+}
+
+impl std::ops::DerefMut for VertexRecord<Contract> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.attributes
     }
 }
 
@@ -437,5 +177,140 @@ impl Transfer for Contract {
         );
 
         attributes_map
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct VertexResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<ContractRecord>>,
+}
+
+impl Contract {
+    fn uuid(&self) -> Option<uuid::Uuid> {
+        Some(self.uuid)
+    }
+
+    /// Outdated in 1 hour
+    fn is_outdated(&self) -> bool {
+        let outdated_in = Duration::hours(1);
+        self.updated_at
+            .checked_add_signed(outdated_in)
+            .unwrap()
+            .lt(&naive_now())
+    }
+
+    /// Do create / update
+    pub async fn create_or_update(&self, client: &Client<HttpConnector>) -> Result<(), Error> {
+        let vertices = Vertices(vec![self.to_owned()]);
+        let graph = UpsertGraph {
+            vertices: vertices.into(),
+            edges: None,
+        };
+        let json_raw = serde_json::to_string(&graph).map_err(|err| Error::JSONParseError(err))?;
+        println!("create_or_update {}", json_raw);
+        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        Ok(())
+    }
+
+    /// Find an Contract by UUID.
+    async fn find_by_uuid(
+        client: &Client<HttpConnector>,
+        uuid: Uuid,
+    ) -> Result<Option<ContractRecord>, Error> {
+        let uri: http::Uri = format!(
+            "{}/graph/{}/vertices/{}?filter=uuid=%22{}%22",
+            C.tdb.host,
+            Graph::AssetGraph.to_string(),
+            VERTEX_NAME,
+            uuid.to_string(),
+        )
+        .parse()
+        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+        let req = hyper::Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .header("Authorization", Graph::AssetGraph.token())
+            .body(Body::empty())
+            .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+        let mut resp = client.request(req).await.map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "query filter error | Fail to request: {:?}",
+                err.to_string()
+            ))
+        })?;
+        match parse_body::<VertexResponse>(&mut resp).await {
+            Ok(r) => {
+                if r.base.error {
+                    let err_message = format!(
+                        "TigerGraph query filter error | Code: {:?}, Message: {:?}",
+                        r.base.code, r.base.message
+                    );
+                    error!(err_message);
+                    return Err(Error::General(err_message, resp.status()));
+                }
+                let result: Option<ContractRecord> = r
+                    .results
+                    .and_then(|results: Vec<ContractRecord>| results.first().cloned());
+                Ok(result)
+            }
+            Err(err) => {
+                let err_message = format!("TigerGraph query filter parse_body error: {:?}", err);
+                error!(err_message);
+                return Err(err);
+            }
+        }
+    }
+
+    /// Find an Contract by `Chain` and `Address`
+    pub async fn find_by_chain_address(
+        client: &Client<HttpConnector>,
+        chain: &Chain,
+        address: &str,
+    ) -> Result<Option<ContractRecord>, Error> {
+        let uri: http::Uri = format!(
+            "{}/graph/{}/vertices/{}?filter=chain=%22{}%22,address=%22{}%22",
+            C.tdb.host,
+            Graph::AssetGraph.to_string(),
+            VERTEX_NAME,
+            chain.to_string(),
+            address.to_string(),
+        )
+        .parse()
+        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+        let req = hyper::Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .header("Authorization", Graph::AssetGraph.token())
+            .body(Body::empty())
+            .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+        let mut resp = client.request(req).await.map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "query filter error | Fail to request: {:?}",
+                err.to_string()
+            ))
+        })?;
+        match parse_body::<VertexResponse>(&mut resp).await {
+            Ok(r) => {
+                if r.base.error {
+                    let err_message = format!(
+                        "TigerGraph query filter error | Code: {:?}, Message: {:?}",
+                        r.base.code, r.base.message
+                    );
+                    error!(err_message);
+                    return Err(Error::General(err_message, resp.status()));
+                }
+                let result: Option<ContractRecord> = r
+                    .results
+                    .and_then(|results: Vec<ContractRecord>| results.first().cloned());
+                Ok(result)
+            }
+            Err(err) => {
+                let err_message = format!("TigerGraph query filter parse_body error: {:?}", err);
+                error!(err_message);
+                return Err(err);
+            }
+        }
     }
 }

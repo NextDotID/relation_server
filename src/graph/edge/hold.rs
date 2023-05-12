@@ -10,10 +10,10 @@ use uuid::Uuid;
 use crate::{
     error::Error,
     graph::{
-        vertex::{contract::Chain, Contract, Identity},
+        vertex::{Contract, Identity},
         ConnectionPool,
     },
-    upstream::{DataFetcher, DataSource},
+    upstream::{Chain, DataFetcher, DataSource},
     util::naive_now,
 };
 

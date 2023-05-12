@@ -8,8 +8,8 @@ use crate::{
     tigergraph::{
         edge::{Edge, Hold, Proof, Resolve, Wrapper},
         edge::{
-            HOLD_CONTRACT, HOLD_IDENTITY, PROOF_EDGE, PROOF_REVERSE_EDGE, RESOLVE, REVERSE_RESOLVE,
-            REVERSE_RESOLVE_CONTRACT,
+            HOLD_CONTRACT, HOLD_IDENTITY, PROOF_EDGE, PROOF_REVERSE_EDGE, RESOLVE,
+            RESOLVE_CONTRACT, REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT,
         },
         vertex::{Contract, Identity, Vertex},
     },
@@ -162,11 +162,14 @@ pub async fn upsert_graph(
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UpsertGraph {
     vertices: HashMap<String, HashMap<String, HashMap<String, Attribute>>>,
-    edges: HashMap<
-        String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    edges: Option<
         HashMap<
             String,
-            HashMap<String, HashMap<String, HashMap<String, HashMap<String, Attribute>>>>,
+            HashMap<
+                String,
+                HashMap<String, HashMap<String, HashMap<String, HashMap<String, Attribute>>>>,
+            >,
         >,
     >,
 }
@@ -204,16 +207,23 @@ struct NotExist {
 pub struct Vertices<T>(Vec<T>);
 
 // Implement the `From` trait for converting `Vertices<T>` into vertices map.
-impl<T: Clone + Vertex> From<Vertices<T>> for HashMap<String, HashMap<String, T>> {
+impl<T: Clone + Vertex> From<Vertices<T>>
+    for HashMap<String, HashMap<String, HashMap<String, Attribute>>>
+where
+    T: Transfer + Vertex,
+{
+    /// Convert each element in the `Vec<T>` into a key-value pair and insert it into the map.
     fn from(vertices: Vertices<T>) -> Self {
-        let mut map = HashMap::new();
-
-        // Convert each element in the `Vec<T>` into a key-value pair and insert it into the map.
+        let mut vertices_map: HashMap<String, HashMap<String, HashMap<String, Attribute>>> =
+            HashMap::new();
         for (_, value) in vertices.0.into_iter().enumerate() {
-            let inner_map = map.entry(value.vertex_type()).or_insert(HashMap::new());
-            inner_map.insert(value.primary_key(), value);
+            let outer_map_key = value.vertex_type().clone();
+            let inner_map_key = value.primary_key().clone();
+
+            let inner_map = vertices_map.entry(outer_map_key).or_insert(HashMap::new());
+            inner_map.insert(inner_map_key, value.to_attributes_map()); // Insert inner data
         }
-        map
+        vertices_map
     }
 }
 
@@ -275,12 +285,10 @@ where
 
         UpsertGraph {
             vertices: vertices_map,
-            edges: edges_map,
+            edges: Some(edges_map),
         }
     }
 }
-
-// pub fn get_upsertgraph_payload()
 
 pub async fn create_identity_to_identity_proof_two_way_binding(
     client: &Client<HttpConnector>,
@@ -329,14 +337,27 @@ pub async fn create_identity_to_contract_hold_record(
     Ok(())
 }
 
-pub async fn create_contract_to_identity_reverse_resolve_record(
+pub async fn create_contract_to_identity_resolve_record(
     client: &Client<HttpConnector>,
     from: &Contract,
     to: &Identity,
     reverse: &Resolve,
 ) -> Result<(), Error> {
-    let reverse_contract = reverse.wrapper(from, to, REVERSE_RESOLVE_CONTRACT);
-    let edges = Edges(vec![reverse_contract]);
+    let resolve_contract = reverse.wrapper(from, to, RESOLVE_CONTRACT);
+    let edges = Edges(vec![resolve_contract]);
+    let graph: UpsertGraph = edges.into();
+    upsert_graph(client, &graph, Graph::AssetGraph).await?;
+    Ok(())
+}
+
+pub async fn create_identity_to_contract_reverse_resolve_record(
+    client: &Client<HttpConnector>,
+    from: &Identity,
+    to: &Contract,
+    reverse: &Resolve,
+) -> Result<(), Error> {
+    let reverse_resolve_contract = reverse.wrapper(from, to, REVERSE_RESOLVE_CONTRACT);
+    let edges = Edges(vec![reverse_resolve_contract]);
     let graph: UpsertGraph = edges.into();
     upsert_graph(client, &graph, Graph::AssetGraph).await?;
     Ok(())

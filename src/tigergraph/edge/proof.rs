@@ -6,56 +6,23 @@ use crate::{
         vertex::{Identity, Vertex},
         Attribute, EdgeWrapper, Edges, Graph, OpCode, Transfer, UpsertGraph,
     },
-    upstream::{DataFetcher, DataSource},
+    upstream::{DataFetcher, DataSource, ProofLevel},
     util::{
         naive_datetime_from_string, naive_datetime_to_string, naive_now,
         option_naive_datetime_from_string, option_naive_datetime_to_string,
     },
 };
 
-use async_graphql::Enum;
 use chrono::{Duration, NaiveDateTime};
 use hyper::{client::HttpConnector, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, to_value};
-use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
-use strum_macros::{Display, EnumIter, EnumString};
 use uuid::Uuid;
 
 pub const EDGE_NAME: &str = "Proof_Forward";
 pub const REVERSE_EDGE_NAME: &str = "Proof_Backward";
 pub const IS_DIRECTED: bool = true;
-
-#[derive(
-    Serialize_repr,
-    Deserialize_repr,
-    Debug,
-    Clone,
-    Display,
-    EnumString,
-    PartialEq,
-    Eq,
-    EnumIter,
-    Enum,
-    Default,
-    Copy,
-)]
-#[repr(i32)]
-pub enum Level {
-    /// "ignore_if_exists" or "~"
-    #[default]
-    /// Low confidence
-    Insecure = 1,
-    /// Moderate-low confidence
-    Cautious = 2,
-    /// Moderate confidence
-    Neutral = 3,
-    /// Moderate-high confidence
-    Confident = 4,
-    /// High confidence
-    VeryConfident = 5,
-}
 
 /// Edge to connect two `Identity`s.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,7 +34,7 @@ pub struct Proof {
     /// Data source (upstream) which provides this connection info.
     pub source: DataSource,
     /// Level which provides this connection confidence level.
-    pub level: Level,
+    pub level: ProofLevel,
     /// ID of this connection in upstream platform to locate (if any).
     pub record_id: Option<String>,
     /// When this connection is recorded in upstream platform (if platform gives such data).
@@ -88,7 +55,7 @@ impl Default for Proof {
         Self {
             uuid: Uuid::new_v4(),
             source: DataSource::default(),
-            level: Level::default(),
+            level: ProofLevel::default(),
             record_id: None,
             created_at: None,
             updated_at: naive_now(),
@@ -140,6 +107,20 @@ impl std::ops::Deref for ProofRecord {
 impl std::ops::DerefMut for ProofRecord {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl std::ops::Deref for EdgeRecord<Proof> {
+    type Target = Proof;
+
+    fn deref(&self) -> &Self::Target {
+        &self.attributes
+    }
+}
+
+impl std::ops::DerefMut for EdgeRecord<Proof> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.attributes
     }
 }
 
@@ -262,7 +243,7 @@ impl Edge<Identity, Identity, ProofRecord> for ProofRecord {
         from: &Identity,
         to: &Identity,
     ) -> Result<(), Error> {
-        let pf = self.attributes.wrapper(from, to, EDGE_NAME);
+        let pf = self.wrapper(from, to, EDGE_NAME);
         let edges = Edges(vec![pf]);
         let graph: UpsertGraph = edges.into();
         upsert_graph(client, &graph, Graph::IdentityGraph).await?;
@@ -276,7 +257,7 @@ impl Edge<Identity, Identity, ProofRecord> for ProofRecord {
         from: &Identity,
         to: &Identity,
     ) -> Result<(), Error> {
-        let pf = self.attributes.wrapper(from, to, REVERSE_EDGE_NAME);
+        let pf = self.wrapper(from, to, REVERSE_EDGE_NAME);
         let edges = Edges(vec![pf]);
         let graph: UpsertGraph = edges.into();
         upsert_graph(client, &graph, Graph::IdentityGraph).await?;

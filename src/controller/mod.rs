@@ -1,8 +1,7 @@
 pub mod graphql;
 pub mod healthz;
 
-use crate::graph::vertex::contract::ContractCategory;
-use crate::upstream::Platform;
+use crate::upstream::{ContractCategory, Platform};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, ops::Deref};

@@ -3,10 +3,10 @@ pub mod proof;
 pub mod resolve;
 pub use hold::{Hold, HoldRecord, HOLD_CONTRACT, HOLD_IDENTITY};
 pub use proof::{
-    Level, Proof, ProofRecord, EDGE_NAME as PROOF_EDGE, REVERSE_EDGE_NAME as PROOF_REVERSE_EDGE,
+    Proof, ProofRecord, EDGE_NAME as PROOF_EDGE, REVERSE_EDGE_NAME as PROOF_REVERSE_EDGE,
 };
 pub use resolve::{
-    DomainNameSystem, Resolve, ResolveRecord, RESOLVE, REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT,
+    Resolve, ResolveRecord, RESOLVE, RESOLVE_CONTRACT, REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT,
 };
 
 use crate::{

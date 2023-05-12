@@ -1,4 +1,5 @@
-use crate::graph::vertex::contract::{Chain, ContractCategory, ContractRecord};
+use crate::graph::vertex::contract::ContractRecord;
+use crate::upstream::{Chain, ContractCategory};
 use async_graphql::Object;
 use uuid::Uuid;
 

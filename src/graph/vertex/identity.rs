@@ -3,11 +3,9 @@ use crate::{
     graph::ConnectionPool,
     graph::{
         edge::{Hold, HoldRecord, IdentityFromToRecord, Proof, ProofRecord},
-        vertex::contract::ContractCategory,
-        vertex::vec_string_to_vec_datasource,
         vertex::Vertex,
     },
-    upstream::{DataSource, Platform},
+    upstream::{vec_string_to_vec_datasource, ContractCategory, DataSource, Platform},
     util::naive_now,
 };
 use aragog::{
@@ -497,7 +495,11 @@ impl IdentityRecord {
                     .push(e.source.to_string());
             }
         }
-        trace!(identity_count = identity_map.len(), sources_count = sources_map.len(), "Identity/Source map arranged.");
+        trace!(
+            identity_count = identity_map.len(),
+            sources_count = sources_map.len(),
+            "Identity/Source map arranged."
+        );
 
         let mut identity_sources: Vec<IdentityWithSource> = Vec::new();
         for (k, v) in &identity_map {
@@ -518,7 +520,10 @@ impl IdentityRecord {
                 None => continue,
             };
         }
-        trace!(idnetity_count = identity_sources.len(), "Ientities with sources arranged.");
+        trace!(
+            idnetity_count = identity_sources.len(),
+            "Ientities with sources arranged."
+        );
         Ok(identity_sources)
     }
 
@@ -665,7 +670,8 @@ impl IdentityRecord {
 #[cfg(test)]
 mod tests {
 
-    use crate::graph::vertex::{contract::ContractCategory, identity::get_identities};
+    use crate::graph::vertex::identity::get_identities;
+    use crate::upstream::ContractCategory;
     use aragog::DatabaseConnection;
     use fake::{Dummy, Fake, Faker};
     use tokio::join;

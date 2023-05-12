@@ -1,7 +1,6 @@
 use crate::controller::vec_string_to_vec_platform;
 use crate::error::{Error, Result};
 use crate::graph::edge::{HoldRecord, IdentityFromToRecord};
-use crate::graph::vertex::contract::ContractCategory;
 use crate::graph::vertex::{Identity, IdentityRecord, IdentityWithSource, Vertex};
 use crate::graph::ConnectionPool;
 use crate::tigergraph::edge::{
@@ -9,7 +8,7 @@ use crate::tigergraph::edge::{
     ProofRecord as ProofRecord2,
 };
 use crate::upstream::DataFetcher;
-use crate::upstream::{fetch_all, DataSource, Platform, Target};
+use crate::upstream::{fetch_all, ContractCategory, DataSource, Platform, Target};
 use async_graphql::{Context, Object, ObjectType, Union};
 use deadpool::managed::Object;
 use strum::IntoEnumIterator;

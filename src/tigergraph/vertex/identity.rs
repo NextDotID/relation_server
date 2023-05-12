@@ -3,10 +3,11 @@ use crate::{
     error::Error,
     tigergraph::{
         edge::{EdgeUnion, HoldRecord},
-        vertex::{ContractCategory, FromWithParams, Vertex, VertexRecord},
-        Attribute, BaseResponse, Graph, OpCode, Transfer,
+        upsert_graph,
+        vertex::{FromWithParams, Vertex, VertexRecord},
+        Attribute, BaseResponse, Graph, OpCode, Transfer, UpsertGraph, Vertices,
     },
-    upstream::{vec_string_to_vec_datasource, DataSource, Platform},
+    upstream::{vec_string_to_vec_datasource, ContractCategory, DataSource, Platform},
     util::{
         naive_datetime_from_string, naive_datetime_to_string, naive_now,
         option_naive_datetime_from_string, option_naive_datetime_to_string, parse_body,
@@ -107,6 +108,20 @@ impl std::ops::Deref for IdentityRecord {
 impl std::ops::DerefMut for IdentityRecord {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl std::ops::Deref for VertexRecord<Identity> {
+    type Target = Identity;
+
+    fn deref(&self) -> &Self::Target {
+        &self.attributes
+    }
+}
+
+impl std::ops::DerefMut for VertexRecord<Identity> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.attributes
     }
 }
 
@@ -362,6 +377,19 @@ impl Identity {
             .checked_add_signed(outdated_in)
             .unwrap()
             .lt(&naive_now())
+    }
+
+    /// Do create / update
+    pub async fn create_or_update(&self, client: &Client<HttpConnector>) -> Result<(), Error> {
+        let vertices = Vertices(vec![self.to_owned()]);
+        let graph = UpsertGraph {
+            vertices: vertices.into(),
+            edges: None,
+        };
+        let json_raw = serde_json::to_string(&graph).map_err(|err| Error::JSONParseError(err))?;
+        println!("create_or_update {}", json_raw);
+        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        Ok(())
     }
 
     /// Find `IdentityRecord` by given UUID.

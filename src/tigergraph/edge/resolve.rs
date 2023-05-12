@@ -7,7 +7,7 @@ use crate::{
         vertex::{Contract, Identity, IdentityRecord, Vertex},
         Attribute, BaseResponse, Edges, Graph, OpCode, Transfer, UpsertGraph,
     },
-    upstream::{DataFetcher, DataSource, Platform},
+    upstream::{DataFetcher, DataSource, DomainNameSystem},
     util::{naive_datetime_from_string, naive_datetime_to_string, naive_now, parse_body},
 };
 
@@ -17,78 +17,12 @@ use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
-use strum_macros::{Display, EnumIter, EnumString};
 use tracing::error;
 use uuid::Uuid;
 
-#[derive(
-    Default,
-    Clone,
-    Copy,
-    Serialize,
-    Deserialize,
-    Debug,
-    Display,
-    PartialEq,
-    Eq,
-    async_graphql::Enum,
-    EnumString,
-    EnumIter,
-    Hash,
-)]
-pub enum DomainNameSystem {
-    /// ENS name system on the ETH chain.
-    /// https://ens.domains
-    #[strum(serialize = "ENS")]
-    #[serde(rename = "ENS")]
-    #[graphql(name = "ENS")]
-    ENS,
-
-    /// https://www.did.id/
-    #[strum(serialize = "dotbit")]
-    #[serde(rename = "dotbit")]
-    #[graphql(name = "dotbit")]
-    DotBit,
-
-    /// https://api.lens.dev/playground
-    #[strum(serialize = "lens")]
-    #[serde(rename = "lens")]
-    #[graphql(name = "lens")]
-    Lens,
-
-    /// https://unstoppabledomains.com/
-    #[strum(serialize = "unstoppabledomains")]
-    #[serde(rename = "unstoppabledomains")]
-    #[graphql(name = "unstoppabledomains")]
-    UnstoppableDomains,
-
-    /// https://api.prd.space.id/
-    #[strum(serialize = "space_id")]
-    #[serde(rename = "space_id")]
-    #[graphql(name = "space_id")]
-    SpaceId,
-
-    #[default]
-    #[strum(serialize = "unknown")]
-    #[serde(rename = "unknown")]
-    #[graphql(name = "unknown")]
-    Unknown,
-}
-
-impl From<DomainNameSystem> for Platform {
-    fn from(domain: DomainNameSystem) -> Self {
-        match domain {
-            DomainNameSystem::DotBit => Platform::Dotbit,
-            DomainNameSystem::UnstoppableDomains => Platform::UnstoppableDomains,
-            DomainNameSystem::Lens => Platform::Lens,
-            DomainNameSystem::SpaceId => Platform::SpaceId,
-            _ => Platform::Unknown,
-        }
-    }
-}
-
 pub const RESOLVE: &str = "Resolve";
 pub const REVERSE_RESOLVE: &str = "Reverse_Resolve";
+pub const RESOLVE_CONTRACT: &str = "Resolve_Contract";
 pub const REVERSE_RESOLVE_CONTRACT: &str = "Reverse_Resolve_Contract";
 pub const IS_DIRECTED: bool = true;
 
@@ -187,6 +121,20 @@ impl std::ops::DerefMut for ResolveRecord {
     }
 }
 
+impl std::ops::Deref for EdgeRecord<Resolve> {
+    type Target = Resolve;
+
+    fn deref(&self) -> &Self::Target {
+        &self.attributes
+    }
+}
+
+impl std::ops::DerefMut for EdgeRecord<Resolve> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.attributes
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ResolveAttribute(HashMap<String, Attribute>);
 
@@ -282,8 +230,8 @@ impl Edge<Contract, Identity, ResolveRecord> for ResolveRecord {
         from: &Contract,
         to: &Identity,
     ) -> Result<(), Error> {
-        let reverse_contract = self.attributes.wrapper(from, to, REVERSE_RESOLVE_CONTRACT);
-        let edges = Edges(vec![reverse_contract]);
+        let resolve_contract = self.wrapper(from, to, RESOLVE_CONTRACT);
+        let edges = Edges(vec![resolve_contract]);
         let graph: UpsertGraph = edges.into();
         upsert_graph(client, &graph, Graph::AssetGraph).await?;
         Ok(())
@@ -295,6 +243,66 @@ impl Edge<Contract, Identity, ResolveRecord> for ResolveRecord {
         _client: &Client<HttpConnector>,
         _from: &Contract,
         _to: &Identity,
+    ) -> Result<(), Error> {
+        todo!()
+    }
+}
+
+impl Wrapper<ResolveRecord, Identity, Contract> for Resolve {
+    fn wrapper(
+        &self,
+        from: &Identity,
+        to: &Contract,
+        name: &str,
+    ) -> EdgeWrapper<ResolveRecord, Identity, Contract> {
+        let resolve = EdgeRecord::from_with_params(
+            name.to_string(),
+            IS_DIRECTED,
+            from.primary_key(),
+            from.vertex_type(),
+            to.primary_key(),
+            to.vertex_type(),
+            self.to_owned(),
+        );
+        EdgeWrapper {
+            edge: ResolveRecord(resolve),
+            source: from.to_owned(),
+            target: to.to_owned(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Edge<Identity, Contract, ResolveRecord> for ResolveRecord {
+    fn e_type(&self) -> String {
+        self.e_type.clone()
+    }
+
+    fn directed(&self) -> bool {
+        // TODO: query from server is the best solution
+        self.directed.clone()
+    }
+
+    /// Connect 2 vertex.
+    async fn connect(
+        &self,
+        client: &Client<HttpConnector>,
+        from: &Identity,
+        to: &Contract,
+    ) -> Result<(), Error> {
+        let resolve_contract = self.wrapper(from, to, REVERSE_RESOLVE_CONTRACT);
+        let edges = Edges(vec![resolve_contract]);
+        let graph: UpsertGraph = edges.into();
+        upsert_graph(client, &graph, Graph::AssetGraph).await?;
+        Ok(())
+    }
+
+    /// notice this function is deprecated
+    async fn connect_reverse(
+        &self,
+        _client: &Client<HttpConnector>,
+        _from: &Identity,
+        _to: &Contract,
     ) -> Result<(), Error> {
         todo!()
     }
@@ -342,7 +350,7 @@ impl Edge<Identity, Identity, ResolveRecord> for ResolveRecord {
         from: &Identity,
         to: &Identity,
     ) -> Result<(), Error> {
-        let resolve_record = self.attributes.wrapper(from, to, RESOLVE);
+        let resolve_record = self.wrapper(from, to, RESOLVE);
         let edges = Edges(vec![resolve_record]);
         let graph: UpsertGraph = edges.into();
         upsert_graph(client, &graph, Graph::AssetGraph).await?;
@@ -356,7 +364,7 @@ impl Edge<Identity, Identity, ResolveRecord> for ResolveRecord {
         from: &Identity,
         to: &Identity,
     ) -> Result<(), Error> {
-        let reverse_record = self.attributes.wrapper(from, to, REVERSE_RESOLVE);
+        let reverse_record = self.wrapper(from, to, REVERSE_RESOLVE);
         let edges = Edges(vec![reverse_record]);
         let graph: UpsertGraph = edges.into();
         upsert_graph(client, &graph, Graph::AssetGraph).await?;
