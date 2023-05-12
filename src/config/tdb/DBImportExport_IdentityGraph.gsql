@@ -73,3 +73,11 @@ CREATE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth=10) FOR GRAPH
   END;
   PRINT ResultSet AS vertices;
 }
+
+
+CREATE QUERY identity_by_source(VERTEX<Identities> p, STRING source) FOR GRAPH IdentityGraph SYNTAX V2 {
+  start = {p};
+  vertices = SELECT v FROM start-((Proof_Forward>|Proof_Backward>):e)-Identities:v
+            WHERE e.source == source;
+  PRINT vertices;
+}

@@ -296,6 +296,18 @@ struct Nfts {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct IdentityBySourceResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<Identities>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct Identities {
+    vertices: Vec<IdentityRecord>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct VertexResponse {
     #[serde(flatten)]
     base: BaseResponse,
@@ -615,6 +627,62 @@ impl IdentityRecord {
         }
     }
 
+    /// Return from, to by query with source tags.
+    pub async fn find_identity_by_source(
+        &self,
+        client: &Client<HttpConnector>,
+        source: &DataSource,
+    ) -> Result<Vec<IdentityRecord>, Error> {
+        let uri: http::Uri = format!(
+            "{}/query/{}/identity_by_source?p={}&source={}",
+            C.tdb.host,
+            Graph::IdentityGraph.to_string(),
+            self.v_id.to_string(),
+            source.to_string()
+        )
+        .parse()
+        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+        let req = hyper::Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .header("Authorization", Graph::IdentityGraph.token())
+            .body(Body::empty())
+            .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+        let mut resp = client.request(req).await.map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "query identity_by_source | Fail to request: {:?}",
+                err.to_string()
+            ))
+        })?; //
+
+        match parse_body::<IdentityBySourceResponse>(&mut resp).await {
+            Ok(r) => {
+                if r.base.error {
+                    let err_message = format!(
+                        "TigerGraph query identity_by_source error | Code: {:?}, Message: {:?}",
+                        r.base.code, r.base.message
+                    );
+                    error!(err_message);
+                    return Err(Error::General(err_message, resp.status()));
+                }
+
+                let result = r
+                    .results
+                    .and_then(|vec_unions| vec_unions.first().cloned())
+                    .map_or(vec![], |union| union.vertices);
+                Ok(result)
+            }
+            Err(err) => {
+                let err_message = format!(
+                    "TigerGraph query identity_by_source parse_body error: {:?}",
+                    err
+                );
+                error!(err_message);
+                return Err(err);
+            }
+        }
+    }
+
     /// Return domain-identity owned by another identity: wallet address.
     pub async fn domain_owned_by(
         &self,
@@ -646,7 +714,7 @@ impl IdentityRecord {
             Ok(r) => {
                 if r.base.error {
                     let err_message = format!(
-                        "TigerGraph query neighbors error | Code: {:?}, Message: {:?}",
+                        "TigerGraph query owned_by error | Code: {:?}, Message: {:?}",
                         r.base.code, r.base.message
                     );
                     error!(err_message);
@@ -726,7 +794,7 @@ impl IdentityRecord {
             Ok(r) => {
                 if r.base.error {
                     let err_message = format!(
-                        "TigerGraph query neighbors error | Code: {:?}, Message: {:?}",
+                        "TigerGraph query nfts error | Code: {:?}, Message: {:?}",
                         r.base.code, r.base.message
                     );
                     error!(err_message);
@@ -740,7 +808,7 @@ impl IdentityRecord {
                 Ok(result)
             }
             Err(err) => {
-                let err_message = format!("TigerGraph query neighbors parse_body error: {:?}", err);
+                let err_message = format!("TigerGraph query nfts parse_body error: {:?}", err);
                 error!(err_message);
                 return Err(err);
             }
