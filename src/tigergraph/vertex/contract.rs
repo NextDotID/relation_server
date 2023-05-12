@@ -1,5 +1,4 @@
 use crate::{
-    error::Error,
     tigergraph::{
         vertex::{FromWithParams, Vertex, VertexRecord},
         Attribute, OpCode, Transfer,
@@ -8,13 +7,11 @@ use crate::{
 };
 
 use async_trait::async_trait;
-use chrono::{Duration, NaiveDateTime};
-use dataloader::BatchFn;
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, value::Value};
+use serde_json::json;
 use std::collections::HashMap;
 use strum_macros::{Display, EnumIter, EnumString};
-use tracing::debug;
 use uuid::Uuid;
 
 pub const VERTEX_NAME: &str = "Contracts";

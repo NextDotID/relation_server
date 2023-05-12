@@ -3,7 +3,6 @@ mod tests {
     use uuid::Uuid;
 
     use crate::error::Error;
-    use crate::graph::vertex::contract;
     use crate::tigergraph::{
         create_contract_to_identity_reverse_resolve_record, create_identity_domain_resolve_record,
         create_identity_to_contract_hold_record, create_identity_to_identity_hold_record,
@@ -12,12 +11,9 @@ mod tests {
     use crate::{
         tigergraph::{
             edge::{DomainNameSystem, Hold, Level, Proof, Resolve},
-            vertex::{
-                Chain, Contract, ContractCategory, ContractRecord, Identity, IdentityRecord,
-                NeighborsResponse,
-            },
+            vertex::{Chain, Contract, ContractCategory, Identity, NeighborsResponse},
         },
-        upstream::{DataFetcher, DataSource, Platform},
+        upstream::{DataSource, Platform},
         util::make_http_client,
     };
 
@@ -29,9 +25,9 @@ mod tests {
         from.uuid = Some(Uuid::new_v4());
         to.uuid = Some(Uuid::new_v4());
 
-        from.identity = "g".to_string();
-        from.display_name = Some("ggbound".to_string());
-        to.identity = "f".to_string();
+        from.identity = "j".to_string();
+        from.display_name = Some("jjjjjkkkk".to_string());
+        to.identity = "k".to_string();
 
         from.platform = Platform::Ethereum;
         to.platform = Platform::NextID;

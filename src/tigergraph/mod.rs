@@ -6,32 +6,21 @@ use crate::{
     config::C,
     error::Error,
     tigergraph::{
-        edge::{
-            Edge, EdgeRecord, FromWithParams, Hold, HoldRecord, Proof, ProofRecord, Resolve,
-            ResolveRecord, Wrapper,
-        },
+        edge::{Edge, Hold, Proof, Resolve, Wrapper},
         edge::{
             HOLD_CONTRACT, HOLD_IDENTITY, PROOF_EDGE, PROOF_REVERSE_EDGE, RESOLVE, REVERSE_RESOLVE,
             REVERSE_RESOLVE_CONTRACT,
         },
-        vertex::{
-            Contract, ContractRecord, FromWithParams as IdentityFromWithParams, Identity,
-            IdentityRecord, Vertex, VertexRecord,
-        },
+        vertex::{Contract, Identity, Vertex},
     },
-    upstream::Target,
-    util::{make_http_client, naive_now, parse_body, request_with_timeout},
+    util::parse_body,
 };
 
-use async_trait::async_trait;
 use http::uri::InvalidUri;
 use hyper::Method;
-use hyper::{client::HttpConnector, Body, Client, Request};
-use hyper_tls::HttpsConnector;
-use serde::de::DeserializeOwned;
+use hyper::{client::HttpConnector, Body, Client};
 use serde::{Deserialize, Serialize};
-use serde_json::{from_value, json, to_value, value::Value};
-use serde_repr::{Deserialize_repr, Serialize_repr};
+use serde_json::value::Value;
 use std::collections::HashMap;
 use strum_macros::{Display, EnumIter, EnumString};
 use tracing::{debug, error};
@@ -164,6 +153,8 @@ pub async fn upsert_graph(
             return Err(Error::General(err_message, resp.status()));
         }
     };
+    // let json_raw = serde_json::to_string(&result).map_err(|err| Error::JSONParseError(err))?;
+    // println!("{}", json_raw);
     debug!("TigerGraph UpsertGraphResponse {:?}", result);
     Ok(())
 }
@@ -304,6 +295,9 @@ pub async fn create_identity_to_identity_proof_two_way_binding(
     // <Proof as Edge<Identity, Identity, Proof>>::directed(&proof_backward),
     let edges = Edges(vec![pf, pb]);
     let graph: UpsertGraph = edges.into();
+
+    let json_raw = serde_json::to_string(&graph).map_err(|err| Error::JSONParseError(err))?;
+    println!("{}", json_raw);
     upsert_graph(client, &graph, Graph::IdentityGraph).await?;
 
     Ok(())

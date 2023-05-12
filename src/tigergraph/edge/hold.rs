@@ -3,8 +3,9 @@ use crate::{
     error::Error,
     tigergraph::{
         edge::{Edge, EdgeRecord, EdgeWrapper, FromWithParams, Wrapper},
+        upsert_graph,
         vertex::{Chain, Contract, Identity, Vertex},
-        Attribute, BaseResponse, Graph, OpCode, Transfer,
+        Attribute, BaseResponse, Edges, Graph, OpCode, Transfer, UpsertGraph,
     },
     upstream::{DataFetcher, DataSource},
     util::{
@@ -13,15 +14,14 @@ use crate::{
     },
 };
 
-use async_graphql::{ObjectType, SimpleObject};
+use async_graphql::SimpleObject;
 use chrono::{Duration, NaiveDateTime};
 use http::uri::InvalidUri;
-use hyper::{client::HttpConnector, Body, Client, Method, Request};
+use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, to_value};
+use serde_json::json;
 use std::collections::HashMap;
-use strum_macros::{Display, EnumIter, EnumString};
-use tracing::{debug, error};
+use tracing::error;
 use uuid::Uuid;
 
 pub const HOLD_IDENTITY: &str = "Hold_Identity";
@@ -231,6 +231,20 @@ impl Edge<Identity, Identity, HoldRecord> for HoldRecord {
         from: &Identity,
         to: &Identity,
     ) -> Result<(), Error> {
+        let hold_identity = self.attributes.wrapper(from, to, HOLD_IDENTITY);
+        let edges = Edges(vec![hold_identity]);
+        let graph: UpsertGraph = edges.into();
+        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        Ok(())
+    }
+
+    /// notice this function is deprecated
+    async fn connect_reverse(
+        &self,
+        _client: &Client<HttpConnector>,
+        _from: &Identity,
+        _to: &Identity,
+    ) -> Result<(), Error> {
         todo!()
     }
 }
@@ -276,6 +290,20 @@ impl Edge<Identity, Contract, HoldRecord> for HoldRecord {
         client: &Client<HttpConnector>,
         from: &Identity,
         to: &Contract,
+    ) -> Result<(), Error> {
+        let hold_contract = self.attributes.wrapper(from, to, HOLD_CONTRACT);
+        let edges = Edges(vec![hold_contract]);
+        let graph: UpsertGraph = edges.into();
+        upsert_graph(client, &graph, Graph::AssetGraph).await?;
+        Ok(())
+    }
+
+    /// notice this function is deprecated
+    async fn connect_reverse(
+        &self,
+        _client: &Client<HttpConnector>,
+        _from: &Identity,
+        _to: &Contract,
     ) -> Result<(), Error> {
         todo!()
     }

@@ -10,24 +10,16 @@ pub use resolve::{
 };
 
 use crate::{
-    config::C,
     error::Error,
-    tigergraph::{
-        vertex::{Identity, IdentityRecord, Vertex},
-        Attribute, EdgeWrapper,
-    },
+    tigergraph::{vertex::Vertex, EdgeWrapper},
 };
 
 use async_graphql::Union;
 use async_trait::async_trait;
-use http::uri::InvalidUri;
-use hyper::Method;
-use hyper::{client::HttpConnector, Body, Client, Request};
-use hyper_tls::HttpsConnector;
+use hyper::{client::HttpConnector, Client};
 use serde::de::DeserializeOwned;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fmt;
 
 // DeserializeOwned + Serialize + Clone
@@ -45,6 +37,13 @@ where
     fn directed(&self) -> bool;
 
     async fn connect(
+        &self,
+        client: &Client<HttpConnector>,
+        from: &Source,
+        to: &Target,
+    ) -> Result<(), Error>;
+
+    async fn connect_reverse(
         &self,
         client: &Client<HttpConnector>,
         from: &Source,

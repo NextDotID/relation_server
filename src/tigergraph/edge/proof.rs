@@ -1,21 +1,21 @@
 use crate::{
     error::Error,
-    graph::vertex::IdentityRecord,
     tigergraph::{
         edge::{Edge, EdgeRecord, FromWithParams, Wrapper},
+        upsert_graph,
         vertex::{Identity, Vertex},
-        Attribute, EdgeWrapper, OpCode, Transfer,
+        Attribute, EdgeWrapper, Edges, Graph, OpCode, Transfer, UpsertGraph,
     },
     upstream::{DataFetcher, DataSource},
     util::{
         naive_datetime_from_string, naive_datetime_to_string, naive_now,
-        option_naive_datetime_from_string, option_naive_datetime_to_string, parse_body,
+        option_naive_datetime_from_string, option_naive_datetime_to_string,
     },
 };
 
-use async_graphql::{Enum, ObjectType, SimpleObject};
+use async_graphql::Enum;
 use chrono::{Duration, NaiveDateTime};
-use hyper::{client::HttpConnector, Body, Client, Request};
+use hyper::{client::HttpConnector, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, to_value};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -262,20 +262,24 @@ impl Edge<Identity, Identity, ProofRecord> for ProofRecord {
         from: &Identity,
         to: &Identity,
     ) -> Result<(), Error> {
-        todo!()
+        let pf = self.attributes.wrapper(from, to, EDGE_NAME);
+        let edges = Edges(vec![pf]);
+        let graph: UpsertGraph = edges.into();
+        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        Ok(())
+    }
+
+    /// Connect 2 vertex. For digraph and has reverse edge.
+    async fn connect_reverse(
+        &self,
+        client: &Client<HttpConnector>,
+        from: &Identity,
+        to: &Identity,
+    ) -> Result<(), Error> {
+        let pf = self.attributes.wrapper(from, to, REVERSE_EDGE_NAME);
+        let edges = Edges(vec![pf]);
+        let graph: UpsertGraph = edges.into();
+        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        Ok(())
     }
 }
-
-// #[derive(Debug, Clone, Deserialize, Serialize)]
-// pub struct ProofWrapper(EdgeWrapper<ProofRecord, Identity, Identity>);
-
-// impl ProofWrapper {
-//     pub fn new(
-//         proof: &impl Wrapper<ProofRecord, Identity, Identity>,
-//         from: &Identity,
-//         to: &Identity,
-//         name: &str,
-//     ) -> Self {
-//         ProofWrapper(proof.wrapper(from, to, name))
-//     }
-// }

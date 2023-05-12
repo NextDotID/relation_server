@@ -2,7 +2,7 @@ use crate::{
     config::C,
     error::Error,
     tigergraph::{
-        edge::{EdgeUnion, FromWithParams as EdgeFromWithParams, HoldRecord, ProofRecord},
+        edge::{EdgeUnion, HoldRecord},
         vertex::{ContractCategory, FromWithParams, Vertex, VertexRecord},
         Attribute, BaseResponse, Graph, OpCode, Transfer,
     },
@@ -14,15 +14,15 @@ use crate::{
 };
 
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use chrono::{Duration, NaiveDateTime};
 use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
-use serde_json::{from_value, json, to_value, Value};
+use serde_json::json;
+use std::collections::HashMap;
 use std::fmt;
-use std::{collections::HashMap, result};
-use tracing::{debug, error};
+use tracing::error;
 use uuid::Uuid;
 
 pub const VERTEX_NAME: &str = "Identities";

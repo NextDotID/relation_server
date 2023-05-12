@@ -3,24 +3,22 @@ use crate::{
     error::Error,
     tigergraph::{
         edge::{Edge, EdgeRecord, EdgeWrapper, FromWithParams, HoldRecord, Wrapper},
+        upsert_graph,
         vertex::{Contract, Identity, IdentityRecord, Vertex},
-        Attribute, BaseResponse, Graph, OpCode, Transfer,
+        Attribute, BaseResponse, Edges, Graph, OpCode, Transfer, UpsertGraph,
     },
     upstream::{DataFetcher, DataSource, Platform},
-    util::{
-        naive_datetime_from_string, naive_datetime_to_string, naive_now,
-        option_naive_datetime_from_string, option_naive_datetime_to_string, parse_body,
-    },
+    util::{naive_datetime_from_string, naive_datetime_to_string, naive_now, parse_body},
 };
 
 use chrono::{Duration, NaiveDateTime};
 use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, to_value};
+use serde_json::json;
 use std::collections::HashMap;
 use strum_macros::{Display, EnumIter, EnumString};
-use tracing::{debug, error};
+use tracing::error;
 use uuid::Uuid;
 
 #[derive(
@@ -284,6 +282,20 @@ impl Edge<Contract, Identity, ResolveRecord> for ResolveRecord {
         from: &Contract,
         to: &Identity,
     ) -> Result<(), Error> {
+        let reverse_contract = self.attributes.wrapper(from, to, REVERSE_RESOLVE_CONTRACT);
+        let edges = Edges(vec![reverse_contract]);
+        let graph: UpsertGraph = edges.into();
+        upsert_graph(client, &graph, Graph::AssetGraph).await?;
+        Ok(())
+    }
+
+    /// notice this function is deprecated
+    async fn connect_reverse(
+        &self,
+        _client: &Client<HttpConnector>,
+        _from: &Contract,
+        _to: &Identity,
+    ) -> Result<(), Error> {
         todo!()
     }
 }
@@ -330,7 +342,25 @@ impl Edge<Identity, Identity, ResolveRecord> for ResolveRecord {
         from: &Identity,
         to: &Identity,
     ) -> Result<(), Error> {
-        todo!()
+        let resolve_record = self.attributes.wrapper(from, to, RESOLVE);
+        let edges = Edges(vec![resolve_record]);
+        let graph: UpsertGraph = edges.into();
+        upsert_graph(client, &graph, Graph::AssetGraph).await?;
+        Ok(())
+    }
+
+    /// Connect 2 vertex. For digraph and has reverse edge.
+    async fn connect_reverse(
+        &self,
+        client: &Client<HttpConnector>,
+        from: &Identity,
+        to: &Identity,
+    ) -> Result<(), Error> {
+        let reverse_record = self.attributes.wrapper(from, to, REVERSE_RESOLVE);
+        let edges = Edges(vec![reverse_record]);
+        let graph: UpsertGraph = edges.into();
+        upsert_graph(client, &graph, Graph::AssetGraph).await?;
+        Ok(())
     }
 }
 
