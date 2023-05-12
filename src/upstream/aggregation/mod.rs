@@ -1,14 +1,15 @@
 #[cfg(test)]
 mod tests;
 
-use super::{DataFetcher, Target};
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::edge::Proof;
-use crate::graph::vertex::Identity;
-use crate::graph::{create_identity_to_identity_record, new_db_connection};
-use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
-use crate::util::{make_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive};
+use crate::tigergraph::create_identity_to_identity_proof_two_way_binding;
+use crate::tigergraph::edge::Proof;
+use crate::tigergraph::vertex::Identity;
+use crate::upstream::{DataSource, Fetcher, Platform, ProofLevel, TargetProcessedList};
+use crate::util::{
+    make_client, make_http_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive,
+};
 use async_trait::async_trait;
 use futures::future::join_all;
 use hyper::{Body, Method};
@@ -16,6 +17,8 @@ use serde::Deserialize;
 use std::str::FromStr;
 use tracing::{debug, error, info};
 use uuid::Uuid;
+
+use super::{DataFetcher, Target};
 
 #[derive(Deserialize, Debug)]
 pub struct Pagination {
@@ -124,7 +127,7 @@ async fn fetch_connections_by_platform_identity(
 }
 
 async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
-    let db = new_db_connection().await?;
+    let client = make_http_client();
     let mut targets = Vec::new();
 
     let from_platform = Platform::from_str(p.sns_platform.as_str()).unwrap_or(Platform::Unknown);
@@ -181,9 +184,15 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         debug!("AggregationService filter source={}", DataSource::Rss3);
         return Ok(vec![]);
     }
+    let level = if source == DataSource::NextID {
+        ProofLevel::VeryConfident
+    } else {
+        ProofLevel::Confident
+    };
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
         source,
+        level: level.clone(),
         record_id: Some(p.id.clone()),
         created_at: Some(timestamp_to_naive(
             p.create_timestamp.parse::<i64>().unwrap() / 1000,
@@ -196,7 +205,23 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         fetcher: DataFetcher::AggregationService,
     };
 
-    let _ = create_identity_to_identity_record(&db, &from, &to, &pf).await;
+    let pb: Proof = Proof {
+        uuid: Uuid::new_v4(),
+        source,
+        level: level.clone(),
+        record_id: Some(p.id.clone()),
+        created_at: Some(timestamp_to_naive(
+            p.create_timestamp.parse::<i64>().unwrap() / 1000,
+            create_ms_time,
+        )),
+        updated_at: timestamp_to_naive(
+            p.modify_timestamp.parse::<i64>().unwrap() / 1000,
+            update_ms_time,
+        ),
+        fetcher: DataFetcher::AggregationService,
+    };
+
+    let _ = create_identity_to_identity_proof_two_way_binding(&client, &from, &to, &pf, &pb).await;
 
     targets.push(Target::Identity(to_platform, web3_addr.clone()));
     Ok(targets)

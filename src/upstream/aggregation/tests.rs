@@ -1,13 +1,9 @@
 use crate::{
     error::Error,
-    graph::new_db_connection,
-    graph::vertex::{
-        contract::{Chain, ContractCategory},
-        Contract, Identity,
-    },
+    tigergraph::vertex::{Contract, Identity},
     upstream::{aggregation::Aggregation, Target},
-    upstream::{Fetcher, Platform},
-    util::timestamp_to_naive,
+    upstream::{Chain, ContractCategory, Fetcher, Platform},
+    util::{make_http_client, timestamp_to_naive},
 };
 
 #[tokio::test]
@@ -15,14 +11,14 @@ async fn test_smoke_aggregation() -> Result<(), Error> {
     let target = Target::Identity(Platform::Twitter, "blake".to_string());
     let _ = Aggregation::fetch(&target).await?;
 
-    let db = new_db_connection().await?;
+    let cli = make_http_client();
 
-    let _ = Identity::find_by_platform_identity(&db, &Platform::Twitter, "blakejamieson")
+    let _ = Identity::find_by_platform_identity(&cli, &Platform::Twitter, "blakejamieson")
         .await?
         .expect("Record not found");
 
     let _ = Contract::find_by_chain_address(
-        &db,
+        &cli,
         &Chain::Ethereum,
         &ContractCategory::ENS.default_contract_address().unwrap(),
     )

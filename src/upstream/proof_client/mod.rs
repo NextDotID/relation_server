@@ -4,16 +4,18 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
-use crate::graph::{Edge, Vertex};
-use crate::upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList};
+use crate::tigergraph::create_identity_to_identity_proof_two_way_binding;
+use crate::tigergraph::edge::Proof;
+use crate::tigergraph::vertex::Identity;
+use crate::upstream::{DataSource, Fetcher, Platform, ProofLevel, Target, TargetProcessedList};
+use crate::util::make_http_client;
 use crate::util::{make_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive};
 
 use async_trait::async_trait;
 use hyper::{Body, Method};
 use serde::Deserialize;
 use std::str::FromStr;
-use tracing::{debug, error, event, span, Level, Instrument};
+use tracing::{debug, error, event, Level};
 use uuid::Uuid;
 
 use super::DataFetcher;
@@ -132,7 +134,7 @@ async fn fetch_connections_by_platform_identity(
 
     let mut next_targets: TargetProcessedList = vec![];
     // let next_id_identity = proofs.avatar;
-    let db = new_db_connection().await?;
+    let cli = make_http_client();
     for id in query_result.ids {
         let ProofPersona { avatar, proofs } = id;
 
@@ -155,7 +157,6 @@ async fn fetch_connections_by_platform_identity(
                 updated_at: naive_now(),
             };
 
-            let from_record = from.create_or_update(&db).await?;
             let to_platform = Platform::from_str(p.platform.as_str()).unwrap_or(Platform::Unknown);
             if to_platform == Platform::Unknown {
                 event!(
@@ -187,13 +188,13 @@ async fn fetch_connections_by_platform_identity(
                 profile_url: None,
                 updated_at: naive_now(),
             };
-            let to_record = to.create_or_update(&db).await?;
 
             next_targets.push(Target::Identity(to_platform, p.identity));
 
             let pf: Proof = Proof {
                 uuid: Uuid::new_v4(),
                 source: DataSource::NextID,
+                level: ProofLevel::VeryConfident,
                 record_id: None,
                 created_at: Some(timestamp_to_naive(
                     p.created_at.to_string().parse().unwrap(),
@@ -202,7 +203,21 @@ async fn fetch_connections_by_platform_identity(
                 updated_at: naive_now(),
                 fetcher: DataFetcher::RelationService,
             };
-            pf.two_way_binding(&db, &from_record, &to_record).await?;
+
+            let pb: Proof = Proof {
+                uuid: Uuid::new_v4(),
+                source: DataSource::NextID,
+                level: ProofLevel::VeryConfident,
+                record_id: None,
+                created_at: Some(timestamp_to_naive(
+                    p.created_at.to_string().parse().unwrap(),
+                    0,
+                )),
+                updated_at: naive_now(),
+                fetcher: DataFetcher::RelationService,
+            };
+            // two-way binding
+            create_identity_to_identity_proof_two_way_binding(&cli, &from, &to, &pf, &pb).await?;
         }
     }
     next_targets.dedup();

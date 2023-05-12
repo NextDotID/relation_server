@@ -3,10 +3,11 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::create_identity_to_identity_two_way_binding;
-use crate::graph::{edge::Proof, new_db_connection, vertex::Identity};
-use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
-use crate::util::{make_client, naive_now, parse_body, request_with_timeout};
+use crate::tigergraph::create_identity_to_identity_proof_two_way_binding;
+use crate::tigergraph::edge::Proof;
+use crate::tigergraph::vertex::Identity;
+use crate::upstream::{DataSource, Fetcher, Platform, ProofLevel, TargetProcessedList};
+use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};
 use async_trait::async_trait;
 use serde::Deserialize;
 
@@ -147,7 +148,7 @@ async fn fetch_connections_by_platform_identity(
     };
     let user_id = person_info.id;
     let user_name = person_info.basics.username;
-    let db = new_db_connection().await?;
+    let cli = make_http_client();
     let mut next_targets: TargetProcessedList = Vec::new();
 
     for p in person_info.proofs_summary.all.into_iter() {
@@ -181,13 +182,24 @@ async fn fetch_connections_by_platform_identity(
         let pf: Proof = Proof {
             uuid: Uuid::new_v4(),
             source: DataSource::Keybase,
+            level: ProofLevel::VeryConfident,
             record_id: Some(p.proof_id.clone()),
             created_at: None,
             updated_at: naive_now(),
             fetcher: DataFetcher::RelationService,
         };
 
-        create_identity_to_identity_two_way_binding(&db, &from, &to, &pf).await?;
+        let pb: Proof = Proof {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Keybase,
+            level: ProofLevel::VeryConfident,
+            record_id: Some(p.proof_id.clone()),
+            created_at: None,
+            updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
+        };
+
+        create_identity_to_identity_proof_two_way_binding(&cli, &from, &to, &pf, &pb).await?;
 
         next_targets.push(Target::Identity(
             Platform::from_str(&p.proof_type).unwrap(),
