@@ -8,8 +8,3 @@ CREATE GLOBAL SCHEMA_CHANGE job update_index {
 END
 
 RUN GLOBAL SCHEMA_CHANGE JOB update_index
-  ALTER EDGE Proof_Forward ADD ATTRIBUTE (level INT);
-
-CREATE GLOBAL SCHEMA_CHANGE job add_level2 {
-  ALTER EDGE Proof_Forward ADD ATTRIBUTE (DISCRIMINATOR(source STRING), created_at DATETIME, uuid STRING, level INT, record_id STRING, updated_at DATETIME, fetcher STRING) WITH REVERSE_EDGE="Proof_Backward";
-}

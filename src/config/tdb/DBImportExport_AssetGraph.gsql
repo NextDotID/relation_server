@@ -1,0 +1,62 @@
+CREATE GRAPH AssetGraph (Identities, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Resolve_Contract, Reverse_Resolve_Contract)
+
+CREATE QUERY identity_owned_by(VERTEX<Identities> p, STRING platform) FOR GRAPH AssetGraph SYNTAX V2 {
+  start = {p};
+  owner = SELECT v FROM start-((<Hold_Identity):e)-Identities:v
+        WHERE e.source == platform;
+  PRINT owner;
+}
+
+CREATE QUERY hold_nft(STRING id, STRING chain, STRING address) FOR GRAPH AssetGraph SYNTAX V2 {
+  SetAccum<EDGE> @@holds;
+  contract = SELECT v FROM Identities:s-((Hold_Contract>):e)-Contracts:v
+        WHERE v.chain == chain AND v.address == address AND e.id == id
+        ACCUM
+          @@holds += e;
+  PRINT @@holds AS holds;
+}
+
+CREATE QUERY nfts(VERTEX<Identities> p, SET<STRING> categories, INT numPerPage = 100, INT pageNum = 0) FOR GRAPH AssetGraph {
+  SetAccum<EDGE> @@edges;
+  start = {p};
+  
+  IF categories.size() > 0 THEN
+    hold = SELECT v FROM start-((Hold_Contract>):e)-Contracts:v
+          WHERE v.category IN categories
+          ACCUM @@edges += e
+          ORDER BY getvid(v)
+          LIMIT numPerPage OFFSET pageNum * numPerPage;
+  ELSE
+    hold = SELECT v FROM start-((Hold_Contract>):e)-Contracts:v
+          ACCUM @@edges += e
+          ORDER BY getvid(v)
+          LIMIT numPerPage OFFSET pageNum * numPerPage;
+  END;
+  PRINT @@edges AS edges;
+}
+
+CREATE QUERY domain(STRING name, STRING system) FOR GRAPH AssetGraph {
+  EDGE record;
+  EDGE hold;
+  IF system == "ENS" THEN
+    resolved = SELECT v FROM Contracts:c-((Resolve_Contract>):e)-Identities:v
+              WHERE e.system == system AND e.name == name
+              ACCUM
+                record = e;
+    owner = SELECT s FROM Identities:s-((Hold_Contract>):e)-Contracts:v
+              WHERE e.id == name
+              ACCUM
+                hold = e;
+    PRINT record, hold, resolved, owner;
+  ELSE
+    resolved = SELECT v FROM Identities:s-((Resolve>):e)-Identities:v
+              WHERE e.system == system AND e.name == name
+              ACCUM
+                record = e;
+    owner = SELECT s FROM Identities:s-((Hold_Identity>):e)-Identities:v
+              WHERE v.platform == system AND v.identity == name
+              ACCUM
+                hold = e;
+    PRINT record, hold, resolved, owner;
+  END;
+}
