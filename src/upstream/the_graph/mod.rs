@@ -1,25 +1,21 @@
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    config::C,
-    error::Error,
-    graph::{
-        create_identity_to_contract_record,
-        edge::{hold::Hold, resolve::DomainNameSystem, Resolve},
-        new_db_connection,
-        vertex::{
-            contract::{Chain, ContractCategory},
-            Contract, ContractRecord, Identity,
-        },
-        Edge, Vertex,
-    },
-    upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList},
-    util::{naive_now, parse_timestamp},
+use crate::config::C;
+use crate::error::Error;
+use crate::tigergraph::create_contract_to_identity_resolve_record;
+use crate::tigergraph::create_identity_to_contract_hold_record;
+use crate::tigergraph::create_identity_to_contract_reverse_resolve_record;
+use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::vertex::{Contract, Identity};
+use crate::upstream::{
+    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target,
+    TargetProcessedList,
 };
-use aragog::DatabaseConnection;
+use crate::util::{make_http_client, naive_now, parse_timestamp};
 use async_trait::async_trait;
-use gql_client::Client;
+use gql_client::Client as GQLClient;
+use hyper::{client::HttpConnector, Client};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
@@ -181,7 +177,7 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
         }
     }
 
-    let client = Client::new(&C.upstream.the_graph.ens);
+    let client = GQLClient::new(&C.upstream.the_graph.ens);
     let vars = QueryVars { target: target_var };
 
     let resp = client.query_with_vars::<QueryResponse, QueryVars>(&query, vars);
@@ -206,7 +202,12 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
         return Ok(vec![]);
     }
     let res = data.unwrap();
-    debug!(?target, wrapped = res.wrapped_domains.len(), domains = res.domains.len(), "Records found.");
+    debug!(
+        ?target,
+        wrapped = res.wrapped_domains.len(),
+        domains = res.domains.len(),
+        "Records found."
+    );
     let mut merged_domains: Vec<Domain> = vec![];
     // Rewrite correct owner info for wrapped domains.
     for wd in res.wrapped_domains.into_iter() {
@@ -217,7 +218,11 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
     }
     for domain in res.domains.into_iter() {
         if merged_domains.iter().any(|md| md.name == domain.name) {
-            debug!(?target, domain = domain.name, "TheGraph: Wrapped ENS found before. Skip this.");
+            debug!(
+                ?target,
+                domain = domain.name,
+                "TheGraph: Wrapped ENS found before. Skip this."
+            );
             continue;
         } else {
             merged_domains.push(domain);
@@ -228,12 +233,12 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
         info!(?target, "TheGraph: No result");
         return Ok(vec![]);
     }
-    let db = new_db_connection().await?;
+    let cli = make_http_client();
     let mut next_targets: TargetProcessedList = vec![];
 
     for domain in merged_domains.into_iter() {
         // Create own record
-        let contract_record = create_or_update_own(&db, &domain).await?;
+        let contract = create_or_update_own(&cli, &domain).await?;
 
         // Deal with resolve target.
         let resolved_address = domain.resolved_address.map(|r| r.id);
@@ -252,9 +257,8 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                         avatar_url: None,
                         profile_url: None,
                         updated_at: naive_now(),
-                    }
-                    .create_or_update(&db)
-                    .await?;
+                    };
+
                     let resolve = Resolve {
                         uuid: Uuid::new_v4(),
                         source: DataSource::TheGraph,
@@ -265,9 +269,13 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                     };
 
                     // 'reverse' resolution
-                    resolve
-                        .connect(&db, &resolve_target, &contract_record)
-                        .await?;
+                    create_identity_to_contract_reverse_resolve_record(
+                        &cli,
+                        &resolve_target,
+                        &contract,
+                        &resolve,
+                    )
+                    .await?;
                 }
             }
             None => {
@@ -301,9 +309,9 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
 
 /// Focus on `Hold` record.
 async fn create_or_update_own(
-    db: &DatabaseConnection,
+    client: &Client<HttpConnector>,
     domain: &Domain,
-) -> Result<ContractRecord, Error> {
+) -> Result<Contract, Error> {
     let creation_tx = domain
         .events
         .first() // TODO: really?
@@ -337,8 +345,8 @@ async fn create_or_update_own(
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
     };
-    let (owner_record, contract_record, _hold_record) =
-        create_identity_to_contract_record(db, &owner, &conrtract, &ownership).await?;
+    // hold record
+    create_identity_to_contract_hold_record(client, &owner, &conrtract, &ownership).await?;
 
     let resolve = Resolve {
         uuid: Uuid::new_v4(),
@@ -349,8 +357,6 @@ async fn create_or_update_own(
         updated_at: naive_now(),
     };
     // As the same time record 'regular' resolution
-    resolve
-        .connect(&db, &contract_record, &owner_record)
-        .await?;
-    Ok(contract_record)
+    create_contract_to_identity_resolve_record(client, &conrtract, &owner, &resolve).await?;
+    Ok(conrtract)
 }

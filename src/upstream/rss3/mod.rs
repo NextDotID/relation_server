@@ -1,17 +1,15 @@
 #[cfg(test)]
 mod tests;
-use crate::{
-    config::C,
-    error::Error,
-    graph::{
-        create_identity_to_contract_record,
-        edge::hold::Hold,
-        new_db_connection,
-        vertex::{contract::Chain, contract::ContractCategory, Contract, Identity},
-    },
-    upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList},
-    util::{make_client, naive_now, parse_body, request_with_timeout},
+
+use crate::config::C;
+use crate::error::Error;
+use crate::tigergraph::create_identity_to_contract_hold_record;
+use crate::tigergraph::edge::Hold;
+use crate::tigergraph::vertex::{Contract, Identity};
+use crate::upstream::{
+    Chain, ContractCategory, DataSource, Fetcher, Platform, Target, TargetProcessedList,
 };
+use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime};
 use futures::future::join_all;
@@ -171,14 +169,14 @@ async fn fetch_nfts_by_account(
 
 async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
     let creataed_at = DateTime::parse_from_rfc3339(&p.timestamp).unwrap();
-    let created_at_naive = NaiveDateTime::from_timestamp(creataed_at.timestamp(), 0);
-    let db = new_db_connection().await?;
+    let created_at_naive = NaiveDateTime::from_timestamp_opt(creataed_at.timestamp(), 0);
+    let cli = make_http_client();
 
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: p.owner.to_lowercase(),
-        created_at: Some(created_at_naive),
+        created_at: created_at_naive,
         // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
         display_name: None,
         added_at: naive_now(),
@@ -247,11 +245,11 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         source: DataSource::Rss3,
         transaction: Some(p.hash),
         id: nft_id.clone(),
-        created_at: Some(created_at_naive),
+        created_at: created_at_naive,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
     };
-    create_identity_to_contract_record(&db, &from, &to, &hold).await?;
+    create_identity_to_contract_hold_record(&cli, &from, &to, &hold).await?;
 
     Ok(vec![Target::NFT(
         chain,

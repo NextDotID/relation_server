@@ -2,15 +2,15 @@
 mod tests;
 
 use crate::config::C;
-use crate::graph::edge::hold::Hold;
-use crate::graph::vertex::{contract::Chain, contract::ContractCategory, Contract};
-
-use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
-use crate::util::naive_now;
-use crate::{
-    error::Error,
-    graph::{create_identity_to_contract_record, new_db_connection, vertex::Identity},
+use crate::error::Error;
+use crate::tigergraph::create_identity_to_contract_hold_record;
+use crate::tigergraph::edge::Hold;
+use crate::tigergraph::vertex::{Contract, Identity};
+use crate::upstream::{
+    Chain, ContractCategory, DataFetcher, DataSource, Fetcher, Platform, Target,
+    TargetProcessedList,
 };
+use crate::util::{make_http_client, naive_now};
 
 use async_trait::async_trait;
 use gql_client::Client;
@@ -119,7 +119,7 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
     }
 
     let ens_vec = res.addrs.first().unwrap();
-    let db = new_db_connection().await?;
+    let cli = make_http_client();
 
     for ens in ens_vec.ens.iter() {
         let from: Identity = Identity {
@@ -151,7 +151,8 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
             updated_at: naive_now(),
             fetcher: DataFetcher::RelationService,
         };
-        create_identity_to_contract_record(&db, &from, &to, &ownership).await?;
+        // hold record
+        create_identity_to_contract_hold_record(&cli, &from, &to, &ownership).await?;
     }
     Ok(ens_vec
         .ens
@@ -240,8 +241,9 @@ async fn fetch_eth_wallet_by_ens(id: &str) -> Result<TargetProcessedList, Error>
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
     };
-    let db = new_db_connection().await?;
-    create_identity_to_contract_record(&db, &from, &to, &hold).await?;
+    // hold record
+    let cli = make_http_client();
+    create_identity_to_contract_hold_record(&cli, &from, &to, &hold).await?;
 
     Ok(vec![Target::Identity(Platform::Ethereum, address)])
 }

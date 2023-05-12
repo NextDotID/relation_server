@@ -1,12 +1,10 @@
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    config::C,
-    error::Error,
-    graph::{new_db_connection, vertex::Identity, Vertex},
-    util::{make_client, parse_body, request_with_timeout},
-};
+use crate::config::C;
+use crate::error::Error;
+use crate::tigergraph::vertex::Identity;
+use crate::util::{make_client, make_http_client, parse_body, request_with_timeout};
 use async_trait::async_trait;
 use hyper::{Body, Method};
 use serde::Deserialize;
@@ -44,8 +42,8 @@ impl Fetcher for ENSReverseLookup {
         identity.platform = Platform::Ethereum;
         identity.identity = wallet.clone();
         identity.display_name = Some(reverse_ens);
-        let db = new_db_connection().await?;
-        identity.create_or_update(&db).await?;
+        let cli = make_http_client();
+        identity.create_or_update(&cli).await?;
 
         Ok(vec![])
     }
