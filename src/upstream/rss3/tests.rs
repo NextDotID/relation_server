@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     error::Error,
     tigergraph::edge::Hold,
@@ -24,14 +26,17 @@ async fn test_smoke_nft_rss3() -> Result<(), Error> {
     let contract = Contract::find_by_chain_address(
         &client,
         &Chain::Ethereum,
-        "0x596cfe8d6709a86d51ff0c18ebf0e66561b08ae3",
+        "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85",
     )
     .await?
     .unwrap();
 
-    let _ = Hold::find_by_from_to_id(&client, &owner, &contract, "87")
-        .await
+    let filters = HashMap::from([("id".to_string(), "maskbook.eth".to_string())]);
+    let record = Hold::find_by_from_to(&client, &owner, &contract, Some(filters))
+        .await?
+        .and_then(|r| r.first().cloned())
         .expect("Record not found");
-
+    let json_raw = serde_json::to_string(&record).map_err(|err| Error::JSONParseError(err))?;
+    println!("found: {}", json_raw);
     Ok(())
 }

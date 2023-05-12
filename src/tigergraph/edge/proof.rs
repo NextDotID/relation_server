@@ -223,6 +223,17 @@ impl Proof {
             .unwrap()
             .lt(&naive_now())
     }
+
+    /// find `EdgeRecord` by source_id and target_id
+    pub async fn find_by_from_to(
+        &self,
+        _client: &Client<HttpConnector>,
+        _from: &Identity,
+        _to: &Identity,
+        _filter: Option<HashMap<String, String>>,
+    ) -> Result<Option<Vec<ProofRecord>>, Error> {
+        todo!()
+    }
 }
 
 #[async_trait::async_trait]

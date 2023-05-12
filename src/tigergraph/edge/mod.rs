@@ -36,6 +36,14 @@ where
     fn e_type(&self) -> String;
     fn directed(&self) -> bool;
 
+    // async fn find_by_from_to(
+    //     &self,
+    //     client: &Client<HttpConnector>,
+    //     from: &Source,
+    //     to: &Target,
+    //     filter: &Option<HashMap<String, String>>,
+    // ) -> Result<Option<Vec<RecordType>>, Error>;
+
     async fn connect(
         &self,
         client: &Client<HttpConnector>,

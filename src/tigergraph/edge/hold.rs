@@ -4,7 +4,7 @@ use crate::{
     tigergraph::{
         edge::{Edge, EdgeRecord, EdgeWrapper, FromWithParams, Wrapper},
         upsert_graph,
-        vertex::{Contract, Identity, Vertex},
+        vertex::{contract::VERTEX_NAME as CONTRACTS, Contract, Identity, Vertex, VertexRecord},
         Attribute, BaseResponse, Edges, Graph, OpCode, Transfer, UpsertGraph,
     },
     upstream::{Chain, DataFetcher, DataSource},
@@ -324,6 +324,13 @@ impl Edge<Identity, Contract, HoldRecord> for HoldRecord {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct EdgeResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<HoldRecord>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NftHolderResponse {
     #[serde(flatten)]
     base: BaseResponse,
@@ -342,6 +349,100 @@ impl Hold {
             .checked_add_signed(outdated_in)
             .unwrap()
             .lt(&naive_now())
+    }
+
+    /// find `EdgeRecord` by source_id and target_id
+    pub async fn find_by_from_to<T: Vertex + std::marker::Sync>(
+        client: &Client<HttpConnector>,
+        from: &VertexRecord<Identity>,
+        to: &VertexRecord<T>,
+        filters: Option<HashMap<String, String>>,
+    ) -> Result<Option<Vec<HoldRecord>>, Error> {
+        // http://host/graph/AssetGraph/edges/
+        // <source_vtype>/<source_vid>/<e_type>/<target_vtype>/<target_vid>?filter=a="b"
+        let e_type = if to.v_type == CONTRACTS {
+            HOLD_CONTRACT
+        } else {
+            HOLD_IDENTITY
+        };
+
+        let uri: http::Uri;
+        match filters {
+            Some(filters) => {
+                let filter_string = filters
+                    .into_iter()
+                    .map(|filter| format!("{}=%22{}%22", filter.0, filter.1))
+                    .collect::<Vec<String>>()
+                    .join(",");
+                tracing::debug!("{}", filter_string);
+                uri = format!(
+                    "{}/graph/{}/edges/{}/{}/{}/{}/{}?filter={}",
+                    C.tdb.host,
+                    Graph::AssetGraph.to_string(),
+                    from.v_type,
+                    from.v_id,
+                    e_type,
+                    to.v_type,
+                    to.v_id,
+                    filter_string,
+                )
+                .parse()
+                .map_err(|_err: InvalidUri| {
+                    Error::ParamError(format!("Uri format Error {}", _err))
+                })?;
+            }
+            None => {
+                uri = format!(
+                    "{}/graph/{}/edges/{}/{}/{}/{}/{}",
+                    C.tdb.host,
+                    Graph::AssetGraph.to_string(),
+                    from.v_type,
+                    from.v_id,
+                    e_type,
+                    to.v_type,
+                    to.v_id,
+                )
+                .parse()
+                .map_err(|_err: InvalidUri| {
+                    Error::ParamError(format!("Uri format Error {}", _err))
+                })?;
+            }
+        }
+
+        let req = hyper::Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .header("Authorization", Graph::AssetGraph.token())
+            .body(Body::empty())
+            .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+        let mut resp = client.request(req).await.map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "query find_by_from_to | Fail to request: {:?}",
+                err.to_string()
+            ))
+        })?;
+
+        match parse_body::<EdgeResponse>(&mut resp).await {
+            Ok(r) => {
+                if r.base.error {
+                    let err_message = format!(
+                        "TigerGraph query find_by_from_to error | Code: {:?}, Message: {:?}",
+                        r.base.code, r.base.message
+                    );
+                    error!(err_message);
+                    return Err(Error::General(err_message, resp.status()));
+                }
+                Ok(r.results)
+            }
+            Err(err) => {
+                let err_message = format!(
+                    "TigerGraph query find_by_from_to parse_body error: {:?}",
+                    err
+                );
+                error!(err_message);
+                return Err(err);
+            }
+        }
     }
 
     /// Find a hold record by Chain, NFT_ID and NFT Address.

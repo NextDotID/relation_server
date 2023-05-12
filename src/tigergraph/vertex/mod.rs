@@ -1,5 +1,5 @@
-mod contract;
-mod identity;
+pub mod contract;
+pub mod identity;
 use async_trait::async_trait;
 pub use contract::{Contract, ContractRecord};
 pub use identity::{Identity, IdentityRecord, NeighborsResponse};

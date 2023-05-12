@@ -197,6 +197,9 @@ mod tests {
             Identity::find_by_platform_identity(&client, &Platform::Ethereum, "d").await?
         {
             println!("found = {:?}", found);
+            let json_raw =
+                serde_json::to_string(&found).map_err(|err| Error::JSONParseError(err))?;
+            println!("found: {}", json_raw);
             let nfts = found
                 .nfts(
                     &client,

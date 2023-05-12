@@ -7,7 +7,7 @@ use crate::{
         Attribute, BaseResponse, Graph, OpCode, Transfer, UpsertGraph, Vertices,
     },
     upstream::{Chain, ContractCategory},
-    util::{naive_now, parse_body},
+    util::{naive_datetime_from_string, naive_datetime_to_string, naive_now, parse_body},
 };
 
 use async_trait::async_trait;
@@ -36,6 +36,8 @@ pub struct Contract {
     /// Token symbol
     pub symbol: Option<String>,
     /// When this data is fetched by RelationService.
+    #[serde(deserialize_with = "naive_datetime_from_string")]
+    #[serde(serialize_with = "naive_datetime_to_string")]
     pub updated_at: NaiveDateTime,
 }
 
