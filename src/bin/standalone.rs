@@ -7,14 +7,11 @@ use dataloader::non_cached::Loader;
 use http::StatusCode;
 use relation_server::{
     config::{self, C},
-    controller::graphql::Query,
+    controller::tigergraphql::Query,
     error::Result,
-    graph::arangopool::new_connection_pool,
-    graph::vertex::contract::ContractLoadFn,
-    graph::vertex::FromToLoadFn,
-    graph::vertex::IdentityLoadFn,
+    tigergraph::vertex::{ContractLoadFn, IdentityLoadFn},
+    util::make_http_client,
 };
-// use aragog::{AuthMode, DatabaseConnection, OperationOptions};
 use std::{convert::Infallible, net::SocketAddr};
 use tracing::{info, warn};
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
@@ -50,33 +47,24 @@ async fn main() -> Result<()> {
         .build()
         .await?;
 
-    // Runtime::Tokio1
-    let pool = new_connection_pool().await?;
+    let client = make_http_client();
     let contract_loader_fn = ContractLoadFn {
-        pool: pool.to_owned(),
+        client: client.to_owned(),
     };
     let identity_loader_fn = IdentityLoadFn {
-        pool: pool.to_owned(),
+        client: client.to_owned(),
     };
-    let from_to_loader_fn = FromToLoadFn {
-        pool: pool.to_owned(),
-    };
-    // HOLD ON: Specify the batch size number
+
     let contract_loader = Loader::new(contract_loader_fn)
-        .with_max_batch_size(100)
-        .with_yield_count(10);
+        .with_max_batch_size(500)
+        .with_yield_count(100);
     let identity_loader = Loader::new(identity_loader_fn)
-        .with_max_batch_size(100)
-        .with_yield_count(10);
-    let from_to_loader = Loader::new(from_to_loader_fn)
-        .with_max_batch_size(100)
-        .with_yield_count(10);
+        .with_max_batch_size(500)
+        .with_yield_count(100);
 
     let schema = Schema::build(Query::default(), EmptyMutation, EmptySubscription)
-        .data(pool)
         .data(contract_loader)
         .data(identity_loader)
-        .data(from_to_loader)
         .finish();
 
     let graphql_post = async_graphql_warp::graphql(schema)
