@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::Value;
 use std::collections::HashMap;
 use strum_macros::{Display, EnumIter, EnumString};
-use tracing::{debug, error};
+use tracing::{error, trace};
 
 #[derive(
     Serialize,
@@ -155,7 +155,7 @@ pub async fn upsert_graph(
     };
     // let json_raw = serde_json::to_string(&result).map_err(|err| Error::JSONParseError(err))?;
     // println!("{}", json_raw);
-    debug!("TigerGraph UpsertGraphResponse {:?}", result);
+    trace!("TigerGraph UpsertGraph ...");
     Ok(())
 }
 
@@ -303,9 +303,6 @@ pub async fn create_identity_to_identity_proof_two_way_binding(
     // <Proof as Edge<Identity, Identity, Proof>>::directed(&proof_backward),
     let edges = Edges(vec![pf, pb]);
     let graph: UpsertGraph = edges.into();
-
-    let json_raw = serde_json::to_string(&graph).map_err(|err| Error::JSONParseError(err))?;
-    println!("{}", json_raw);
     upsert_graph(client, &graph, Graph::IdentityGraph).await?;
 
     Ok(())

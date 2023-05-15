@@ -56,7 +56,7 @@ impl HoldRecord {
     async fn category(&self, ctx: &Context<'_>) -> Result<ContractCategory> {
         let loader: &Loader<String, Option<ContractRecord>, ContractLoadFn> =
             ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        match loader.load(self.id.clone()).await {
+        match loader.load(self.to_id.clone()).await {
             Some(contract) => Ok(contract.category),
             None => Err(Error::GraphQLError("contract no found.".to_string())),
         }
@@ -67,7 +67,7 @@ impl HoldRecord {
     async fn chain(&self, ctx: &Context<'_>) -> Result<Chain> {
         let loader: &Loader<String, Option<ContractRecord>, ContractLoadFn> =
             ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        match loader.load(self.id.clone()).await {
+        match loader.load(self.to_id.clone()).await {
             Some(contract) => Ok(contract.chain),
             None => Err(Error::GraphQLError("contract no found.".to_string())),
             // None => Ok(Chain::Unknown),
@@ -78,7 +78,7 @@ impl HoldRecord {
     async fn address(&self, ctx: &Context<'_>) -> Result<String> {
         let loader: &Loader<String, Option<ContractRecord>, ContractLoadFn> =
             ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        match loader.load(self.id.clone()).await {
+        match loader.load(self.to_id.clone()).await {
             Some(contract) => Ok(contract.address.clone()),
             None => Err(Error::GraphQLError("contract no found.".to_string())),
         }
@@ -88,7 +88,7 @@ impl HoldRecord {
     async fn symbol(&self, ctx: &Context<'_>) -> Result<Option<String>> {
         let loader: &Loader<String, Option<ContractRecord>, ContractLoadFn> =
             ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        match loader.load(self.id.clone()).await {
+        match loader.load(self.to_id.clone()).await {
             Some(contract) => Ok(contract.symbol.clone()),
             None => Err(Error::GraphQLError("contract no found.".to_string())),
         }
@@ -98,7 +98,7 @@ impl HoldRecord {
     async fn owner(&self, ctx: &Context<'_>) -> Result<IdentityRecord> {
         let loader: &Loader<String, Option<IdentityRecord>, IdentityLoadFn> =
             ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        match loader.load(self.id.clone()).await {
+        match loader.load(self.from_id.clone()).await {
             Some(identity) => Ok(identity),
             None => Err(Error::GraphQLError("record no found.".to_string())),
         }
@@ -108,6 +108,26 @@ impl HoldRecord {
     /// It works as a "data cleansing" or "proxy" between `source`s and us.
     async fn fetcher(&self) -> DataFetcher {
         self.fetcher
+    }
+
+    /// Which `IdentityRecord` does this connection starts at.
+    async fn from(&self, ctx: &Context<'_>) -> Result<IdentityRecord> {
+        let loader: &Loader<String, Option<IdentityRecord>, IdentityLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        match loader.load(self.from_id.clone()).await {
+            Some(value) => Ok(value),
+            None => Err(Error::GraphQLError("record from no found.".to_string())),
+        }
+    }
+
+    /// Which `IdentityRecord` does this connection ends at.
+    async fn to(&self, ctx: &Context<'_>) -> Result<IdentityRecord> {
+        let loader: &Loader<String, Option<IdentityRecord>, IdentityLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        match loader.load(self.to_id.clone()).await {
+            Some(value) => Ok(value),
+            None => Err(Error::GraphQLError("record to no found.".to_string())),
+        }
     }
 }
 

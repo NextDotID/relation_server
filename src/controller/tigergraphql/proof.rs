@@ -4,7 +4,7 @@ use crate::{
         edge::{Edge, ProofRecord},
         vertex::{IdentityLoadFn, IdentityRecord},
     },
-    upstream::DataFetcher,
+    upstream::{DataFetcher, DataSource},
     util::make_http_client,
 };
 
@@ -22,8 +22,8 @@ impl ProofRecord {
     }
 
     /// Data source (upstream) which provides this connection info.
-    async fn source(&self) -> String {
-        self.source.to_string()
+    async fn source(&self) -> DataSource {
+        self.source
     }
 
     /// ID of this connection in upstream platform to locate (if any).
