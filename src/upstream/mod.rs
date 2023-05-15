@@ -17,11 +17,6 @@ mod tests;
 mod the_graph;
 mod types;
 
-use std::{
-    collections::HashSet,
-    sync::{Arc, Mutex},
-};
-
 use crate::{
     error::Error,
     upstream::{
@@ -34,6 +29,8 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::{future::join_all, StreamExt};
+use std::{collections::HashSet, sync::Arc};
+use tokio::sync::Mutex;
 use tracing::{event, info, warn, Level};
 
 pub(crate) use types::vec_string_to_vec_datasource;
@@ -62,12 +59,12 @@ pub trait Fetcher {
 pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
     let mut round: u16 = 0;
     const CONCURRENT: usize = 5;
-    if FETCHING.lock().unwrap().contains(&initial_target) {
+    if FETCHING.lock().await.contains(&initial_target) {
         event!(Level::INFO, ?initial_target, "Fetching. Skipped.");
         return Ok(());
     }
 
-    FETCHING.lock().unwrap().insert(initial_target.clone());
+    FETCHING.lock().await.insert(initial_target.clone());
     // queues of this session.
     let mut up_next = HashSet::from([initial_target.clone()]);
     let mut processed: HashSet<Target> = HashSet::new();
@@ -117,7 +114,7 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
         up_next = HashSet::from_iter(result.into_iter());
     }
 
-    FETCHING.lock().unwrap().remove(&initial_target);
+    FETCHING.lock().await.remove(&initial_target);
     event!(
         Level::INFO,
         round,
@@ -158,6 +155,15 @@ pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
     })
     .collect();
     up_next.dedup();
+    // Filter zero address
+    up_next = up_next.into_iter().filter(|target| match target {
+        Target::Identity(Platform::Ethereum, address) => {
+            // Filter zero address (without last 4 digits)
+            return !address.starts_with("0x000000000000000000000000000000000000");
+        },
+        Target::Identity(_, _) => true,
+        Target::NFT(_, _, _, _) => true,
+    }).collect();
 
     Ok(up_next)
 }
@@ -169,53 +175,3 @@ pub async fn prefetch() -> Result<(), Error> {
     info!("Prefetch completed.");
     Ok(())
 }
-
-// Start an upstream fetching worker.
-// NOTE: how about represent worker as a `struct`?
-// pub fn start_fetch_worker<'a>(
-//     up_next_queue: &mut HashSet<Target>,
-//     processed: &mut HashSet<Target>,
-//     worker_name: String,
-// ) {
-//     const SLEEP_DURATION: core::time::Duration = Duration::from_millis(300);
-//     info!("Upstream worker {}: started.", worker_name);
-//     tokio::spawn(async move {
-//         loop {
-//             match fetch_one(up_next_queue, processed).await {
-//                 Ok(0) => {
-//                     debug!("Upstream worker {}: nothing fetched.", worker_name);
-//                     sleep(SLEEP_DURATION).await
-//                 }
-//                 Ok(up_next_len) => {
-//                     debug!("Upstream worker {}: {} fetched.", worker_name, up_next_len);
-//                     // Start next fetch process immediately.
-//                 }
-//                 Err(err) => {
-//                     debug!(
-//                         "Upstream worker {}: error when fetching upstreams: {}",
-//                         worker_name, err
-//                     );
-//                     sleep(SLEEP_DURATION).await;
-//                 }
-//             }
-//         }
-//     });
-//     // FIXME: Do we need to make a new thread for this?
-//     // Pros: multi-core CPU support(?), fault-tolerant
-//     // Cons: none?
-//     // thread::Builder::new()
-//     //     .name(worker_name.clone())
-//     //     .spawn(move || {
-//     //     });
-// }
-
-// Start a batch of upstream fetching workers.
-// pub fn start_fetch_workers(
-//     up_next_queue: &mut HashSet<Target>,
-//     processed: &mut HashSet<Target>,
-//     count: usize,
-// ) {
-//     for i in 0..count {
-//         start_fetch_worker(up_next_queue, processed, format!("{}", i));
-//     }
-// }

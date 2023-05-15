@@ -244,7 +244,8 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
         let resolved_address = domain.resolved_address.map(|r| r.id);
         match resolved_address.clone() {
             Some(address) => {
-                if address != "0x0000000000000000000000000000000000000000".to_string() {
+                // Filter zero address (without last 4 digits)
+                if !address.starts_with("0x000000000000000000000000000000000000") {
                     // Create resolve record
                     debug!(?target, address, domain = domain.name, "TheGraph: Resolved");
                     let resolve_target = Identity {
