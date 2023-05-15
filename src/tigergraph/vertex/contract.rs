@@ -12,12 +12,13 @@ use crate::{
 
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDateTime};
+use dataloader::BatchFn;
 use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
-use tracing::error;
+use tracing::{error, trace};
 use uuid::Uuid;
 
 pub const VERTEX_NAME: &str = "Contracts";
@@ -190,11 +191,13 @@ pub struct VertexResponse {
 }
 
 impl Contract {
+    #[allow(dead_code)]
     fn uuid(&self) -> Option<uuid::Uuid> {
         Some(self.uuid)
     }
 
     /// Outdated in 1 hour
+    #[allow(dead_code)]
     fn is_outdated(&self) -> bool {
         let outdated_in = Duration::hours(1);
         self.updated_at
@@ -203,15 +206,13 @@ impl Contract {
             .lt(&naive_now())
     }
 
-    /// Do create / update
+    /// Create or update a vertex.
     pub async fn create_or_update(&self, client: &Client<HttpConnector>) -> Result<(), Error> {
         let vertices = Vertices(vec![self.to_owned()]);
         let graph = UpsertGraph {
             vertices: vertices.into(),
             edges: None,
         };
-        let json_raw = serde_json::to_string(&graph).map_err(|err| Error::JSONParseError(err))?;
-        println!("create_or_update {}", json_raw);
         upsert_graph(client, &graph, Graph::IdentityGraph).await?;
         Ok(())
     }
@@ -313,6 +314,93 @@ impl Contract {
                 error!(err_message);
                 return Err(err);
             }
+        }
+    }
+}
+
+pub struct ContractLoadFn {
+    pub client: Client<HttpConnector>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct VertexIds {
+    ids: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct VertexIdsResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<VertexIdsResult>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct VertexIdsResult {
+    vertices: Vec<ContractRecord>,
+}
+
+#[async_trait::async_trait]
+impl BatchFn<String, Option<ContractRecord>> for ContractLoadFn {
+    async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<ContractRecord>> {
+        trace!(ids = ids.len(), "Loading Contract id");
+        let records = get_contracts_by_ids(&self.client, ids.to_vec()).await;
+        match records {
+            Ok(records) => records,
+            // HOLD ON: Not sure if `Err` need to return
+            Err(_) => ids.iter().map(|k| (k.to_owned(), None)).collect(),
+        }
+    }
+}
+
+async fn get_contracts_by_ids(
+    client: &Client<HttpConnector>,
+    ids: Vec<String>,
+) -> Result<HashMap<String, Option<ContractRecord>>, Error> {
+    let uri: http::Uri = format!(
+        "{}/query/{}/contracts_by_ids",
+        C.tdb.host,
+        Graph::AssetGraph.to_string()
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+    let payload = VertexIds { ids };
+    let json_params = serde_json::to_string(&payload).map_err(|err| Error::JSONParseError(err))?;
+    let req = hyper::Request::builder()
+        .method(Method::POST)
+        .uri(uri)
+        .header("Authorization", Graph::AssetGraph.token())
+        .body(Body::from(json_params))
+        .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+    let mut resp = client.request(req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!(
+            "TigerGraph | Fail to request contracts_by_ids graph: {:?}",
+            err.to_string()
+        ))
+    })?;
+    match parse_body::<VertexIdsResponse>(&mut resp).await {
+        Ok(r) => {
+            if r.base.error {
+                let err_message = format!(
+                    "TigerGraph contracts_by_ids error | Code: {:?}, Message: {:?}",
+                    r.base.code, r.base.message
+                );
+                error!(err_message);
+                return Err(Error::General(err_message, resp.status()));
+            }
+
+            let result = r
+                .results
+                .and_then(|results| results.first().cloned())
+                .map_or(vec![], |res| res.vertices)
+                .into_iter()
+                .map(|content| (content.v_id.clone(), Some(content)))
+                .collect();
+            Ok(result)
+        }
+        Err(err) => {
+            let err_message = format!("TigerGraph contracts_by_ids parse_body error: {:?}", err);
+            error!(err_message);
+            return Err(err);
         }
     }
 }

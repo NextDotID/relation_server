@@ -3,13 +3,13 @@ use crate::{
     tigergraph::{
         edge::{Edge, EdgeRecord, FromWithParams, Wrapper},
         upsert_graph,
-        vertex::{Identity, Vertex},
-        Attribute, EdgeWrapper, Edges, Graph, OpCode, Transfer, UpsertGraph,
+        vertex::{Identity, Vertex, VertexRecord},
+        Attribute, BaseResponse, EdgeWrapper, Edges, Graph, OpCode, Transfer, UpsertGraph,
     },
     upstream::{DataFetcher, DataSource, ProofLevel},
     util::{
         naive_datetime_from_string, naive_datetime_to_string, naive_now,
-        option_naive_datetime_from_string, option_naive_datetime_to_string,
+        option_naive_datetime_from_string, option_naive_datetime_to_string, parse_body,
     },
 };
 
@@ -223,17 +223,13 @@ impl Proof {
             .unwrap()
             .lt(&naive_now())
     }
+}
 
-    /// find `EdgeRecord` by source_id and target_id
-    pub async fn find_by_from_to(
-        &self,
-        _client: &Client<HttpConnector>,
-        _from: &Identity,
-        _to: &Identity,
-        _filter: Option<HashMap<String, String>>,
-    ) -> Result<Option<Vec<ProofRecord>>, Error> {
-        todo!()
-    }
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct EdgeResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<ProofRecord>>,
 }
 
 #[async_trait::async_trait]
@@ -245,6 +241,25 @@ impl Edge<Identity, Identity, ProofRecord> for ProofRecord {
     fn directed(&self) -> bool {
         // TODO: query from server is the best solution
         self.directed.clone()
+    }
+
+    /// Find an edge by UUID.
+    async fn find_by_uuid(
+        client: &Client<HttpConnector>,
+        uuid: &Uuid,
+    ) -> Result<Option<ProofRecord>, Error> {
+        todo!()
+    }
+
+    /// Find `EdgeRecord` by source and target
+    async fn find_by_from_to(
+        &self,
+        client: &Client<HttpConnector>,
+        from: &VertexRecord<Identity>,
+        to: &VertexRecord<Identity>,
+        filter: Option<HashMap<String, String>>,
+    ) -> Result<Option<Vec<ProofRecord>>, Error> {
+        todo!()
     }
 
     /// Connect 2 vertex.

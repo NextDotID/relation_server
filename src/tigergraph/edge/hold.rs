@@ -238,6 +238,25 @@ impl Edge<Identity, Identity, HoldRecord> for HoldRecord {
         self.directed.clone()
     }
 
+    /// Find an edge by UUID.
+    async fn find_by_uuid(
+        client: &Client<HttpConnector>,
+        uuid: &Uuid,
+    ) -> Result<Option<HoldRecord>, Error> {
+        todo!()
+    }
+
+    /// Find `EdgeRecord` by source and target
+    async fn find_by_from_to(
+        &self,
+        client: &Client<HttpConnector>,
+        from: &VertexRecord<Identity>,
+        to: &VertexRecord<Identity>,
+        filter: Option<HashMap<String, String>>,
+    ) -> Result<Option<Vec<HoldRecord>>, Error> {
+        todo!()
+    }
+
     /// Connect 2 vertex.
     async fn connect(
         &self,
@@ -296,6 +315,25 @@ impl Edge<Identity, Contract, HoldRecord> for HoldRecord {
     fn directed(&self) -> bool {
         // TODO: query from server is the best solution
         self.directed.clone()
+    }
+
+    /// Find an edge by UUID.
+    async fn find_by_uuid(
+        client: &Client<HttpConnector>,
+        uuid: &Uuid,
+    ) -> Result<Option<HoldRecord>, Error> {
+        todo!()
+    }
+
+    /// Find `EdgeRecord` by source and target
+    async fn find_by_from_to(
+        &self,
+        client: &Client<HttpConnector>,
+        from: &VertexRecord<Identity>,
+        to: &VertexRecord<Contract>,
+        filter: Option<HashMap<String, String>>,
+    ) -> Result<Option<Vec<HoldRecord>>, Error> {
+        todo!()
     }
 
     /// Connect 2 vertex.

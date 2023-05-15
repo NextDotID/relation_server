@@ -6,12 +6,16 @@ pub use proof::{
     Proof, ProofRecord, EDGE_NAME as PROOF_EDGE, REVERSE_EDGE_NAME as PROOF_REVERSE_EDGE,
 };
 pub use resolve::{
-    Resolve, ResolveRecord, RESOLVE, RESOLVE_CONTRACT, REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT,
+    Resolve, ResolveEdge, ResolveRecord, RESOLVE, RESOLVE_CONTRACT, REVERSE_RESOLVE,
+    REVERSE_RESOLVE_CONTRACT,
 };
 
 use crate::{
     error::Error,
-    tigergraph::{vertex::Vertex, EdgeWrapper},
+    tigergraph::{
+        vertex::{Vertex, VertexRecord},
+        EdgeWrapper,
+    },
 };
 
 use async_graphql::Union;
@@ -20,7 +24,9 @@ use hyper::{client::HttpConnector, Client};
 use serde::de::DeserializeOwned;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt;
+use uuid::Uuid;
 
 // DeserializeOwned + Serialize + Clone
 /// All `Edge` records.
@@ -36,13 +42,18 @@ where
     fn e_type(&self) -> String;
     fn directed(&self) -> bool;
 
-    // async fn find_by_from_to(
-    //     &self,
-    //     client: &Client<HttpConnector>,
-    //     from: &Source,
-    //     to: &Target,
-    //     filter: &Option<HashMap<String, String>>,
-    // ) -> Result<Option<Vec<RecordType>>, Error>;
+    async fn find_by_from_to(
+        &self,
+        client: &Client<HttpConnector>,
+        from: &VertexRecord<Source>,
+        to: &VertexRecord<Target>,
+        filter: Option<HashMap<String, String>>,
+    ) -> Result<Option<Vec<RecordType>>, Error>;
+
+    async fn find_by_uuid(
+        client: &Client<HttpConnector>,
+        uuid: &Uuid,
+    ) -> Result<Option<RecordType>, Error>;
 
     async fn connect(
         &self,

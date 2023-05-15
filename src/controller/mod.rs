@@ -1,5 +1,6 @@
 pub mod graphql;
 pub mod healthz;
+pub mod tigergraphql;
 
 use crate::upstream::{ContractCategory, Platform};
 use http::StatusCode;

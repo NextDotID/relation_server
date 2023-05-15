@@ -60,3 +60,13 @@ CREATE QUERY domain(STRING name, STRING system) FOR GRAPH AssetGraph {
     PRINT record, hold, resolved, owner;
   END;
 }
+
+CREATE QUERY contracts_by_ids(SET<STRING> ids) FOR GRAPH AssetGraph SYNTAX V2 {
+  vertices = SELECT s FROM Contracts:s WHERE s.id IN ids;
+  PRINT vertices;
+}
+
+CREATE QUERY owners_by_ids(SET<STRING> ids) FOR GRAPH AssetGraph SYNTAX V2 {
+  vertices = SELECT s FROM Identities:s WHERE s.id IN ids;
+  PRINT vertices;
+}

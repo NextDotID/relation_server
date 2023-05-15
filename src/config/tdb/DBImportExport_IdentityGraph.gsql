@@ -81,3 +81,9 @@ CREATE QUERY identity_by_source(VERTEX<Identities> p, STRING source) FOR GRAPH I
             WHERE e.source == source;
   PRINT vertices;
 }
+
+
+CREATE QUERY identities_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2 {
+  vertices = SELECT s FROM Identities:s WHERE s.id IN ids;
+  PRINT vertices;
+}

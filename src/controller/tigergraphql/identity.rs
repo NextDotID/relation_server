@@ -1,13 +1,16 @@
-use crate::controller::vec_string_to_vec_platform;
-use crate::error::{Error, Result};
-use crate::graph::edge::{HoldRecord, IdentityFromToRecord};
-use crate::graph::vertex::{Identity, IdentityRecord, IdentityWithSource, Vertex};
-use crate::graph::ConnectionPool;
-use crate::upstream::{fetch_all, ContractCategory, DataSource, Platform, Target};
+use crate::{
+    error::Result,
+    tigergraph::{
+        edge::{EdgeUnion, HoldRecord},
+        vertex::{Identity, IdentityRecord, IdentityWithSource},
+    },
+    upstream::{fetch_all, ContractCategory, DataSource, Platform, Target},
+    util::make_http_client,
+};
+
 use async_graphql::{Context, Object};
-use deadpool::managed::Object;
 use strum::IntoEnumIterator;
-use tracing::{debug, event, Level};
+use tracing::{event, Level};
 
 /// Status for a record in RelationService DB
 #[derive(Default, Copy, Clone, PartialEq, Eq, async_graphql::Enum)]
@@ -45,7 +48,7 @@ impl IdentityRecord {
     async fn status(&self) -> Vec<DataStatus> {
         use DataStatus::*;
         let mut current: Vec<DataStatus> = vec![];
-        if !self.key().is_empty() {
+        if !self.v_id().is_empty() {
             current.push(Cached);
             if self.is_outdated() {
                 current.push(Outdated);
@@ -120,50 +123,42 @@ impl IdentityRecord {
     // FIXME: <2023-04-23 SUN> broken of high CPU / bandwidth consumption. Maybe something is wrong with SQL.
     async fn neighbor(
         &self,
-        ctx: &Context<'_>,
+        _ctx: &Context<'_>,
         // #[graphql(
         //     desc = "Upstream source of this connection. Will search all upstreams if omitted."
         // )]
         // upstream: Option<String>,
         #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
     ) -> Result<Vec<IdentityWithSource>> {
-        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
-        debug!("Connection pool status: {:?}", pool.status());
-
-        self.neighbors(
-            pool,
-            depth.unwrap_or(1),
-            // upstream.map(|u| DataSource::from_str(&u).unwrap_or(DataSource::Unknown))
-            None,
-        )
-        .await
+        let client = make_http_client();
+        self.neighbors(&client, depth.unwrap_or(1)).await
     }
 
     async fn neighbor_with_traversal(
         &self,
-        ctx: &Context<'_>,
+        _ctx: &Context<'_>,
         #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
-    ) -> Result<Vec<IdentityFromToRecord>> {
-        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
-        debug!("Connection pool status: {:?}", pool.status());
-        self.neighbors_with_traversal(pool, depth.unwrap_or(1))
+    ) -> Result<Vec<EdgeUnion>> {
+        let client = make_http_client();
+        self.neighbors_with_traversal(&client, depth.unwrap_or(1))
             .await
     }
 
     /// there's only `platform: lens` identity `ownedBy` is not null
-    async fn owned_by(&self, ctx: &Context<'_>) -> Result<Option<IdentityRecord>> {
+    async fn owned_by(&self, _ctx: &Context<'_>) -> Result<Option<IdentityRecord>> {
         if vec![
             Platform::Lens,
             Platform::Dotbit,
             Platform::UnstoppableDomains,
+            Platform::Farcaster,
+            Platform::SpaceId,
         ]
         .contains(&self.platform)
         {
             return Ok(None);
         }
-        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
-        debug!("Connection pool status: {:?}", pool.status());
-        self.domain_owned_by(pool).await
+        let client = make_http_client();
+        self.domain_owned_by(&client).await
     }
 
     /// NFTs owned by this identity.
@@ -171,15 +166,23 @@ impl IdentityRecord {
     /// If `category` is provided, only NFTs of that category will be returned.
     async fn nft(
         &self,
-        ctx: &Context<'_>,
+        _ctx: &Context<'_>,
         #[graphql(
             desc = "Filter condition for ContractCategory. If not provided or empty array, all category NFTs will be returned."
         )]
         category: Option<Vec<ContractCategory>>,
+        #[graphql(
+            desc = "`limit` used to control the maximum number of records returned by query. It defaults to 100"
+        )]
+        limit: Option<u16>,
+        #[graphql(
+            desc = "`offset` determines the starting position from which the records are retrieved in query. It defaults to 0."
+        )]
+        offset: Option<u16>,
     ) -> Result<Vec<HoldRecord>> {
-        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
-        debug!("Connection pool status: {:?}", pool.status());
-        self.nfts(pool, category).await
+        let client = make_http_client();
+        self.nfts(&client, category, limit.unwrap_or(100), offset.unwrap_or(0))
+            .await
     }
 }
 
@@ -199,27 +202,19 @@ impl IdentityQuery {
     }
 
     /// Query an `identity` by given `platform` and `identity`.
-    #[tracing::instrument(level = "trace", skip(self, ctx))]
+    #[tracing::instrument(level = "trace", skip(self, _ctx))]
     async fn identity(
         &self,
-        ctx: &Context<'_>,
+        _ctx: &Context<'_>,
         #[graphql(desc = "Platform to query")] platform: String,
         #[graphql(desc = "Identity on target Platform")] identity: String,
     ) -> Result<Option<IdentityRecord>> {
-        // let db: &DatabaseConnection = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::PoolError(err.message))?;
-        debug!("Connection pool status: {:?}", pool.status());
-
-        let conn = pool
-            .get()
-            .await
-            .map_err(|err| Error::PoolError(err.to_string()))?;
-        let db = Object::take(conn);
+        let client = make_http_client();
 
         let platform: Platform = platform.parse()?;
         let target = Target::Identity(platform, identity.clone());
         // FIXME: Still kinda dirty. Should be in an background queue/worker-like shape.
-        match Identity::find_by_platform_identity(&db, &platform, &identity).await? {
+        match Identity::find_by_platform_identity(&client, &platform, &identity).await? {
             None => {
                 let fetch_result = fetch_all(target).await;
                 if fetch_result.is_err() {
@@ -231,7 +226,7 @@ impl IdentityQuery {
                         "Failed to fetch"
                     );
                 }
-                Ok(Identity::find_by_platform_identity(&db, &platform, &identity).await?)
+                Ok(Identity::find_by_platform_identity(&client, &platform, &identity).await?)
             }
             Some(found) => {
                 if found.is_outdated() {
@@ -240,36 +235,6 @@ impl IdentityQuery {
                 }
                 Ok(Some(found))
             }
-        }
-    }
-
-    async fn identities(
-        &self,
-        ctx: &Context<'_>,
-        #[graphql(desc = "Platform array to query")] platforms: Vec<String>,
-        #[graphql(desc = "Identity on target Platform")] identity: String,
-    ) -> Result<Vec<IdentityRecord>> {
-        let pool: &ConnectionPool = ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        debug!("Connection pool status: {:?}", pool.status());
-
-        let platform_list = vec_string_to_vec_platform(platforms)?;
-        let record: Vec<IdentityRecord> =
-            Identity::find_by_platforms_identity(&pool, &platform_list, identity.as_str()).await?;
-        if record.len() == 0 {
-            for platform in &platform_list {
-                let target = Target::Identity(platform.clone(), identity.clone());
-                let _ = fetch_all(target).await;
-            }
-            Identity::find_by_platforms_identity(&pool, &platform_list, identity.as_str()).await
-        } else {
-            record.iter().filter(|r| r.is_outdated()).for_each(|r| {
-                // Refetch in the background
-                tokio::spawn(fetch_all(Target::Identity(
-                    r.platform.clone(),
-                    r.identity.clone(),
-                )));
-            });
-            Ok(record)
         }
     }
 }

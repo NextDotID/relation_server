@@ -4,7 +4,7 @@ use crate::{
     tigergraph::{
         edge::{Edge, EdgeRecord, EdgeWrapper, FromWithParams, HoldRecord, Wrapper},
         upsert_graph,
-        vertex::{Contract, Identity, IdentityRecord, Vertex},
+        vertex::{Contract, Identity, IdentityRecord, Vertex, VertexRecord},
         Attribute, BaseResponse, Edges, Graph, OpCode, Transfer, UpsertGraph,
     },
     upstream::{DataFetcher, DataSource, DomainNameSystem},
@@ -223,6 +223,25 @@ impl Edge<Contract, Identity, ResolveRecord> for ResolveRecord {
         self.directed.clone()
     }
 
+    /// Find an edge by UUID.
+    async fn find_by_uuid(
+        client: &Client<HttpConnector>,
+        uuid: &Uuid,
+    ) -> Result<Option<ResolveRecord>, Error> {
+        todo!()
+    }
+
+    /// Find `EdgeRecord` by source and target
+    async fn find_by_from_to(
+        &self,
+        client: &Client<HttpConnector>,
+        from: &VertexRecord<Contract>,
+        to: &VertexRecord<Identity>,
+        filter: Option<HashMap<String, String>>,
+    ) -> Result<Option<Vec<ResolveRecord>>, Error> {
+        todo!()
+    }
+
     /// Connect 2 vertex.
     async fn connect(
         &self,
@@ -283,6 +302,25 @@ impl Edge<Identity, Contract, ResolveRecord> for ResolveRecord {
         self.directed.clone()
     }
 
+    /// Find an edge by UUID.
+    async fn find_by_uuid(
+        client: &Client<HttpConnector>,
+        uuid: &Uuid,
+    ) -> Result<Option<ResolveRecord>, Error> {
+        todo!()
+    }
+
+    /// Find `EdgeRecord` by source and target
+    async fn find_by_from_to(
+        &self,
+        client: &Client<HttpConnector>,
+        from: &VertexRecord<Identity>,
+        to: &VertexRecord<Contract>,
+        filter: Option<HashMap<String, String>>,
+    ) -> Result<Option<Vec<ResolveRecord>>, Error> {
+        todo!()
+    }
+
     /// Connect 2 vertex.
     async fn connect(
         &self,
@@ -341,6 +379,25 @@ impl Edge<Identity, Identity, ResolveRecord> for ResolveRecord {
     fn directed(&self) -> bool {
         // TODO: query from server is the best solution
         self.directed.clone()
+    }
+
+    /// Find an edge by UUID.
+    async fn find_by_uuid(
+        client: &Client<HttpConnector>,
+        uuid: &Uuid,
+    ) -> Result<Option<ResolveRecord>, Error> {
+        todo!()
+    }
+
+    /// Find `EdgeRecord` by source and target
+    async fn find_by_from_to(
+        &self,
+        client: &Client<HttpConnector>,
+        from: &VertexRecord<Identity>,
+        to: &VertexRecord<Identity>,
+        filter: Option<HashMap<String, String>>,
+    ) -> Result<Option<Vec<ResolveRecord>>, Error> {
+        todo!()
     }
 
     /// Connect 2 vertex.
