@@ -51,75 +51,103 @@ pub trait Fetcher {
 }
 
 /// Find all available (platform, identity) in all `Upstream`s.
-#[tracing::instrument(name = "fetch_all", level = "trace")]
-pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
+/// `depth` controls how many fetch layers should `fetch_all` blocks.
+/// The rest `up_next` will be fetched asynchronously.  `None` means
+/// fetch till exhausted.
+// #[tracing::instrument(name = "fetch_all", level = "trace")]
+#[async_recursion::async_recursion]
+pub async fn fetch_all(targets: TargetProcessedList, depth: Option<u16>) -> Result<(), Error> {
     let mut round: u16 = 0;
-    const CONCURRENT: usize = 5;
-    if FETCHING.lock().await.contains(&initial_target) {
-        event!(Level::INFO, ?initial_target, "Fetching. Skipped.");
-        return Ok(());
-    }
 
-    FETCHING.lock().await.insert(initial_target.clone());
-    // queues of this session.
-    let mut up_next = HashSet::from([initial_target.clone()]);
+    let mut fetching = FETCHING.lock().await;
+    let mut up_next: HashSet<Target> = HashSet::from_iter(
+        targets.clone()
+            .into_iter()
+            .filter(|target| !fetching.contains(target)),
+    );
+    up_next.iter().for_each(|target| {
+        fetching.insert(target.clone());
+        ()
+    });
+    drop(fetching);
     let mut processed: HashSet<Target> = HashSet::new();
+
+    // FETCHING.lock().await.insert(initial_target.clone());
+    // queues of this session.
+    // let mut up_next = HashSet::from([initial_target.clone()]);
+    // let mut processed: HashSet<Target> = HashSet::new();
 
     while up_next.len() > 0 {
         round += 1;
-        let futures: Vec<_> = up_next
-            .iter()
-            .filter(|target| !processed.contains(target))
-            .map(|target| fetch_one(target))
-            .collect();
-        // Limit concurrent tasks to 5.
-        event!(
-            Level::DEBUG,
-            round,
-            to_be_fetched = futures.len(),
-            "Fetching"
-        );
-        let futures_stream = futures::stream::iter(futures).buffer_unordered(CONCURRENT);
-
-        let mut result: Vec<Target> = futures_stream
-            .collect::<Vec<Result<Vec<Target>, Error>>>()
-            .await
-            .into_iter()
-            .flat_map(|handle_result| -> Vec<Target> {
-                match handle_result {
-                    Ok(result) => {
-                        event!(
-                            Level::DEBUG,
-                            round,
-                            fetched_length = result.len(),
-                            "Round completed."
-                        );
-                        result
-                    }
-                    Err(err) => {
-                        event!(Level::WARN, round, %err, "Error happened in fetching task");
-                        vec![]
-                    }
-                }
-            })
-            .collect();
-        result.dedup();
+        let result = fetch_many(
+            up_next
+                .clone()
+                .into_iter()
+                .filter(|target| !processed.contains(target))
+                .collect(),
+            Some(round),
+        )
+        .await?;
+        if depth.is_some() && depth.unwrap() <= round {
+            // Fork as background job to continue fetching.
+            tokio::spawn(fetch_all(up_next.into_iter().collect(), None));
+            break;
+        }
 
         // Add previous up_next into processed, and replace with new up_next
         hashset_append(&mut processed, up_next.into_iter().collect());
         up_next = HashSet::from_iter(result.into_iter());
     }
 
-    FETCHING.lock().await.remove(&initial_target);
+    let mut fetching = FETCHING.lock().await;
+    targets.iter().for_each(|target| {
+        fetching.remove(&target);
+        ()
+    });
+    drop(fetching);
+
     event!(
         Level::INFO,
         round,
+        ?depth,
         processed = processed.len(),
         "Fetch completed."
     );
     Ok(())
 }
 
+/// Fetch targets in parallel of 5.
+/// `round` is only for log purpose.
+pub async fn fetch_many(targets: Vec<Target>, round: Option<u16>) -> Result<Vec<Target>, Error> {
+    const CONCURRENT: usize = 5;
+    let futures: Vec<_> = targets.iter().map(|target| fetch_one(target)).collect();
+    let futures_stream = futures::stream::iter(futures).buffer_unordered(CONCURRENT);
+
+    let mut result: TargetProcessedList = futures_stream
+        .collect::<Vec<Result<Vec<Target>, Error>>>()
+        .await
+        .into_iter()
+        .flat_map(|handle_result| -> Vec<Target> {
+            match handle_result {
+                Ok(result) => {
+                    event!(
+                        Level::DEBUG,
+                        ?round,
+                        fetched_length = result.len(),
+                        "Round completed."
+                    );
+                    result
+                }
+                Err(err) => {
+                    event!(Level::WARN, ?round, %err, "Error happened in fetching task");
+                    vec![]
+                }
+            }
+        })
+        .collect();
+    result.dedup();
+    Ok(result)
+}
 /// Find one (platform, identity) pair in all upstreams.
 /// Returns amount of identities just fetched for next iter.
 pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
@@ -152,14 +180,17 @@ pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
     .collect();
     up_next.dedup();
     // Filter zero address
-    up_next = up_next.into_iter().filter(|target| match target {
-        Target::Identity(Platform::Ethereum, address) => {
-            // Filter zero address (without last 4 digits)
-            return !address.starts_with("0x000000000000000000000000000000000000");
-        },
-        Target::Identity(_, _) => true,
-        Target::NFT(_, _, _, _) => true,
-    }).collect();
+    up_next = up_next
+        .into_iter()
+        .filter(|target| match target {
+            Target::Identity(Platform::Ethereum, address) => {
+                // Filter zero address (without last 4 digits)
+                return !address.starts_with("0x000000000000000000000000000000000000");
+            }
+            Target::Identity(_, _) => true,
+            Target::NFT(_, _, _, _) => true,
+        })
+        .collect();
 
     Ok(up_next)
 }

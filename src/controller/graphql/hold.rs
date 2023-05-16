@@ -161,13 +161,13 @@ impl HoldQuery {
             Some(hold) => {
                 if hold.is_outdated() {
                     // Refetch in the background
-                    tokio::spawn(fetch_all(target));
+                    tokio::spawn(fetch_all(vec![target], None));
                 }
                 Ok(Some(hold))
             }
 
             None => {
-                let _ = fetch_all(target).await;
+                let _ = fetch_all(vec![target], Some(3)).await;
                 Hold::find_by_id_chain_address_merge(pool, &id, &chain, &contract_address).await
             }
         }

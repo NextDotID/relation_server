@@ -222,7 +222,7 @@ impl IdentityQuery {
         // FIXME: Still kinda dirty. Should be in an background queue/worker-like shape.
         match Identity::find_by_platform_identity(&db, &platform, &identity).await? {
             None => {
-                let fetch_result = fetch_all(target).await;
+                let fetch_result = fetch_all(vec![target], Some(3)).await;
                 if fetch_result.is_err() {
                     event!(Level::WARN, ?platform, identity, err = fetch_result.unwrap_err().to_string(),  "Failed to fetch");
                 }
@@ -230,12 +230,8 @@ impl IdentityQuery {
             }
             Some(found) => {
                 if found.is_outdated() {
-                    event!(
-                        Level::DEBUG,
-                        ?platform, identity,
-                        "Outdated. Refetching."
-                    );
-                    tokio::spawn(fetch_all(target)); // Fetch in the background
+                    event!(Level::DEBUG, ?platform, identity, "Outdated. Refetching.");
+                    tokio::spawn(fetch_all(vec![target], None)); // Fetch in the background
                 }
                 Ok(Some(found))
             }
@@ -257,16 +253,16 @@ impl IdentityQuery {
         if record.len() == 0 {
             for platform in &platform_list {
                 let target = Target::Identity(platform.clone(), identity.clone());
-                let _ = fetch_all(target).await;
+                let _ = fetch_all(vec![target], Some(3)).await;
             }
             Identity::find_by_platforms_identity(&pool, &platform_list, identity.as_str()).await
         } else {
             record.iter().filter(|r| r.is_outdated()).for_each(|r| {
                 // Refetch in the background
-                tokio::spawn(fetch_all(Target::Identity(
-                    r.platform.clone(),
-                    r.identity.clone(),
-                )));
+                tokio::spawn(fetch_all(
+                    vec![Target::Identity(r.platform.clone(), r.identity.clone())],
+                    None,
+                ));
             });
             Ok(record)
         }
