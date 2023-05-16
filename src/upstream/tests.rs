@@ -11,7 +11,7 @@ async fn test_fetch_one_result() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_fetch_all() -> Result<(), Error> {
-    fetch_all(Target::Identity(Platform::Twitter, "yeiwb".into())).await?;
+    fetch_all(vec![Target::Identity(Platform::Twitter, "yeiwb".into())], Some(1)).await?;
 
     Ok(())
 }

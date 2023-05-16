@@ -98,12 +98,12 @@ impl ResolveQuery {
                 );
                 match Resolve::find_by_ens_name(&pool, &name).await? {
                     None => {
-                        let _ = fetch_all(target).await;
+                        let _ = fetch_all(vec![target], Some(3)).await;
                         Resolve::find_by_ens_name(&pool, &name).await
                     }
                     Some(resolve) => {
                         if resolve.is_outdated() {
-                            tokio::spawn(fetch_all(target));
+                            tokio::spawn(fetch_all(vec![target], Some(3)));
                         }
                         Ok(Some(resolve))
                     }
@@ -119,7 +119,7 @@ impl ResolveQuery {
                     .await?
                 {
                     None => {
-                        let _ = fetch_all(target).await;
+                        let _ = fetch_all(vec![target], Some(3)).await;
                         Resolve::find_by_domain_platform_name(
                             &pool,
                             &name,
@@ -130,7 +130,7 @@ impl ResolveQuery {
                     }
                     Some(resolve) => {
                         if resolve.is_outdated() {
-                            tokio::spawn(fetch_all(target));
+                            tokio::spawn(fetch_all(vec![target], Some(3)));
                         }
                         Ok(Some(resolve))
                     }
