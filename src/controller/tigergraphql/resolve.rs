@@ -95,12 +95,12 @@ impl ResolveQuery {
                 );
                 match Resolve::find_by_name_system(&client, &name, &domain_system).await? {
                     None => {
-                        let _ = fetch_all(target).await;
+                        let _ = fetch_all(vec![target], Some(3)).await;
                         Resolve::find_by_name_system(&client, &name, &domain_system).await
                     }
                     Some(resolve) => {
                         if resolve.is_outdated() {
-                            tokio::spawn(fetch_all(target));
+                            tokio::spawn(fetch_all(vec![target], Some(3)));
                         }
                         Ok(Some(resolve))
                     }
@@ -114,12 +114,12 @@ impl ResolveQuery {
                 let target = Target::Identity(platform, name.clone());
                 match Resolve::find_by_name_system(&client, &name, &domain_system).await? {
                     None => {
-                        let _ = fetch_all(target).await;
+                        let _ = fetch_all(vec![target], Some(3)).await;
                         Resolve::find_by_name_system(&client, &name, &domain_system).await
                     }
                     Some(resolve) => {
                         if resolve.is_outdated() {
-                            tokio::spawn(fetch_all(target));
+                            tokio::spawn(fetch_all(vec![target], Some(3)));
                         }
                         Ok(Some(resolve))
                     }

@@ -216,7 +216,7 @@ impl IdentityQuery {
         // FIXME: Still kinda dirty. Should be in an background queue/worker-like shape.
         match Identity::find_by_platform_identity(&client, &platform, &identity).await? {
             None => {
-                let fetch_result = fetch_all(target).await;
+                let fetch_result = fetch_all(vec![target], Some(3)).await;
                 if fetch_result.is_err() {
                     event!(
                         Level::WARN,
@@ -231,7 +231,7 @@ impl IdentityQuery {
             Some(found) => {
                 if found.is_outdated() {
                     event!(Level::DEBUG, ?platform, identity, "Outdated. Refetching.");
-                    tokio::spawn(fetch_all(target)); // Fetch in the background
+                    tokio::spawn(fetch_all(vec![target], Some(3))); // Fetch in the background
                 }
                 Ok(Some(found))
             }
