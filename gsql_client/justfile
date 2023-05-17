@@ -17,7 +17,6 @@ gsql ARGS="":
 
 # Environment preparation.
 prepare:
-	@if [ ! -f .env ]; then cp .env.example .env; fi
 	@if [ ! -f gsql_server_ip_config ]; then printf "$DB_SERVER_IP" > gsql_server_ip_config; fi
 
 # Do database migration.
