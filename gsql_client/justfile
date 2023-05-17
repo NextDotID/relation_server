@@ -24,7 +24,7 @@ migrate:
 	@just gsql $DB_MIGRATIONS/global.gsql
 	@just gsql $DB_MIGRATIONS/SCHEMA_CHANGE.gsql
 	@just gsql $DB_MIGRATIONS/DBImportExport_IdentityGraph.gsql
-	@just gsql $DB_MIGRATIONS/DBImportExport_IdentityGraph.gsql
+	@just gsql $DB_MIGRATIONS/DBImportExport_AssetGraph.gsql
 	@just gsql $DB_MIGRATIONS/DBImportExport_SocialGraph.gsql
 
 # Create token for GraphName
