@@ -3,7 +3,7 @@
 # End:
 
 ### You need install `jq` (https://stedolan.github.io/jq/download/)
-### sudo apt-get install jq / brew install jq 
+### sudo apt-get install jq / brew install jq
 
 set dotenv-load
 set export
@@ -12,9 +12,11 @@ set export
 SECRET_FILE := "secret.toml"
 RESTPP_HOST := "http://$DB_HOST:9000/requesttoken"
 
-# gsql recipe
-gsql ARGS="":
-	java -jar gsql_client.jar {{ARGS}}
+# Commands
+gsql := 'java -jar gsql_client.jar'
+
+default:
+	just --list
 
 # Environment preparation.
 prepare:
@@ -22,11 +24,11 @@ prepare:
 
 # Do database migration.
 migrate:
-	@just gsql $DB_MIGRATIONS/global.gsql
-	@just gsql $DB_MIGRATIONS/SCHEMA_CHANGE.gsql
-	@just gsql $DB_MIGRATIONS/DBImportExport_IdentityGraph.gsql
-	@just gsql $DB_MIGRATIONS/DBImportExport_AssetGraph.gsql
-	@just gsql $DB_MIGRATIONS/DBImportExport_SocialGraph.gsql
+	{{gsql}} $DB_MIGRATIONS/global.gsql
+	{{gsql}} $DB_MIGRATIONS/SCHEMA_CHANGE.gsql
+	{{gsql}} $DB_MIGRATIONS/DBImportExport_IdentityGraph.gsql
+	{{gsql}} $DB_MIGRATIONS/DBImportExport_AssetGraph.gsql
+	{{gsql}} $DB_MIGRATIONS/DBImportExport_SocialGraph.gsql
 
 # Create token for GraphName
 create-token SECRET="secret" GRAPH="graph":
@@ -52,13 +54,12 @@ generate-secrets:
 	[tdb.token]\nidentity_graph_token = \"$identity_token\"\nasset_graph_token = \"$asset_token\"\nsocial_graph_token = \"$social_token\"" > $DB_AUTH/{{SECRET_FILE}}
 
 auth:
-	@just gsql "ALTER PASSWORD"
+	{{gsql}} "ALTER PASSWORD"
 
 # Clearing and Initializing the Graph Store
 clean:
-	@just gsql "CLEAR GRAPH STORE -HARD"
+	{{gsql}} "CLEAR GRAPH STORE -HARD"
 
 # Delete all the database data, schema, related definitions
 drop-all:
-	@just gsql "DROP ALL"
-
+	{{gsql}} "DROP ALL"
