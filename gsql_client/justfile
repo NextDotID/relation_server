@@ -1,0 +1,56 @@
+# Local Variables:
+# mode: justfile
+# End:
+
+### You need install `jq` (https://stedolan.github.io/jq/download/)
+### sudo apt-get install jq / brew install jq 
+
+set dotenv-load
+set export
+
+# Path to your TOML file
+SECRET_FILE := "secret.toml"
+
+# gsql recipe
+gsql ARGS="":
+	java -jar gsql_client.jar {{ARGS}}
+
+# Environment preparation.
+prepare:
+	@if [ ! -f .env ]; then cp .env.example .env; fi
+	@if [ ! -f gsql_server_ip_config ]; then printf "$DB_SERVER_IP" > gsql_server_ip_config; fi
+
+# Do database migration.
+migrate:
+	@just gsql $DB_MIGRATIONS/global.gsql
+	@just gsql $DB_MIGRATIONS/SCHEMA_CHANGE.gsql
+	@just gsql $DB_MIGRATIONS/DBImportExport_IdentityGraph.gsql
+	@just gsql $DB_MIGRATIONS/DBImportExport_IdentityGraph.gsql
+	@just gsql $DB_MIGRATIONS/DBImportExport_SocialGraph.gsql
+
+# Create token for GraphName
+create-token SECRET="secret" GRAPH="graph":
+	curl -s -X POST $DB_HOST/requesttoken -d '{"secret":"{{SECRET}}", "graph":"{{GRAPH}}", "lifetime":"315360000"}' | jq -r '.token'
+
+# Generate secrets and update TOML file
+generate-secrets:
+	identity_secret=`just gsql "BEGIN USE GRAPH IdentityGraph \ CREATE SECRET END" | grep -E -o "(\w{32})"` && \
+	identity_token=`just create-token $identity_secret IdentityGraph` && \
+	asset_secret=`just gsql "BEGIN USE GRAPH AssetGraph \ CREATE SECRET END" | grep -E -o "(\w{32})"` && \
+	asset_token=`just create-token $asset_secret AssetGraph` && \
+	social_secret=`just gsql "BEGIN USE GRAPH SocialGraph \ CREATE SECRET END" | grep -E -o "(\w{32})"` && \
+	social_token=`just create-token $social_secret SocialGraph` && \
+	echo "[tdb.secret]\nidentity_graph_secret = \"$identity_secret\"\nasset_graph_secret = \"$asset_secret\"\nsocial_graph_secret = \"$social_secret\"\n\n\
+	[tdb.token]\nidentity_graph_token = \"$identity_token\"\nasset_graph_token = \"$asset_token\"\nsocial_graph_token = \"$social_token\"" > $DB_AUTH/{{SECRET_FILE}}
+
+auth:
+	@just gsql "ALTER PASSWORD"
+
+# Clearing and Initializing the Graph Store
+clean:
+	@just gsql "CLEAR GRAPH STORE -HARD"
+
+# Delete all the database data, schema, related definitions
+drop-all:
+	@just gsql "DROP ALL"
+

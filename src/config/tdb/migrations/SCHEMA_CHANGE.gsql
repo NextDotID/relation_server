@@ -1,10 +1,10 @@
-BEGIN
 CREATE GLOBAL SCHEMA_CHANGE job update_index {
   ALTER VERTEX Identities ADD INDEX identity_index ON (identity);
   ALTER VERTEX Identities ADD INDEX platform_index ON (platform);
   ALTER VERTEX Contracts ADD INDEX address_index ON (address);
   ALTER VERTEX Contracts ADD INDEX chain_index ON (chain);
+  ALTER VERTEX Identities ADD INDEX identity_uuid ON (uuid);
+  ALTER VERTEX Contracts ADD INDEX contract_uuid ON (uuid);
 }
-END
 
 RUN GLOBAL SCHEMA_CHANGE JOB update_index

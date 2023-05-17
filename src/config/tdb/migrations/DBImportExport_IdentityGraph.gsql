@@ -87,3 +87,5 @@ CREATE QUERY identities_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V
   vertices = SELECT s FROM Identities:s WHERE s.id IN ids;
   PRINT vertices;
 }
+
+INSTALL QUERY ALL
