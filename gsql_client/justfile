@@ -18,6 +18,10 @@ gsql := 'java -jar gsql_client.jar'
 default:
 	just --list
 
+# gsql recipe
+gsql ARGS="":
+	{{gsql}} {{ARGS}}
+
 # Environment preparation.
 prepare:
 	@if [ ! -f gsql_server_ip_config ]; then printf "$DB_HOST" > gsql_server_ip_config; fi
