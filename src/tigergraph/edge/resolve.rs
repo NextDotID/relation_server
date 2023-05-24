@@ -252,7 +252,7 @@ impl Edge<Contract, Identity, ResolveRecord> for ResolveRecord {
         let resolve_contract = self.wrapper(from, to, RESOLVE_CONTRACT);
         let edges = Edges(vec![resolve_contract]);
         let graph: UpsertGraph = edges.into();
-        upsert_graph(client, &graph, Graph::AssetGraph).await?;
+        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
         Ok(())
     }
 
@@ -331,7 +331,7 @@ impl Edge<Identity, Contract, ResolveRecord> for ResolveRecord {
         let resolve_contract = self.wrapper(from, to, REVERSE_RESOLVE_CONTRACT);
         let edges = Edges(vec![resolve_contract]);
         let graph: UpsertGraph = edges.into();
-        upsert_graph(client, &graph, Graph::AssetGraph).await?;
+        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
         Ok(())
     }
 
@@ -410,7 +410,7 @@ impl Edge<Identity, Identity, ResolveRecord> for ResolveRecord {
         let resolve_record = self.wrapper(from, to, RESOLVE);
         let edges = Edges(vec![resolve_record]);
         let graph: UpsertGraph = edges.into();
-        upsert_graph(client, &graph, Graph::AssetGraph).await?;
+        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
         Ok(())
     }
 
@@ -424,7 +424,7 @@ impl Edge<Identity, Identity, ResolveRecord> for ResolveRecord {
         let reverse_record = self.wrapper(from, to, REVERSE_RESOLVE);
         let edges = Edges(vec![reverse_record]);
         let graph: UpsertGraph = edges.into();
-        upsert_graph(client, &graph, Graph::AssetGraph).await?;
+        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
         Ok(())
     }
 }
@@ -504,7 +504,7 @@ impl Resolve {
         let uri: http::Uri = format!(
             "{}/query/{}/domain?name={}&system={}",
             C.tdb.host,
-            Graph::AssetGraph.to_string(),
+            Graph::IdentityGraph.to_string(),
             name.to_string(),
             domain_system.to_string(),
         )
@@ -513,7 +513,7 @@ impl Resolve {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::AssetGraph.token())
+            .header("Authorization", Graph::IdentityGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {

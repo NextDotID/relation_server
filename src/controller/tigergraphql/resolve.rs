@@ -1,6 +1,7 @@
 use crate::{
     error::{Error, Result},
     tigergraph::{
+        delete_vertex_and_edge,
         edge::{Resolve, ResolveEdge},
         vertex::IdentityRecord,
     },
@@ -119,6 +120,13 @@ impl ResolveQuery {
                     }
                     Some(resolve) => {
                         if resolve.is_outdated() {
+                            let v_id: String = resolve
+                                .clone()
+                                .owner
+                                .and_then(|f| Some(f.v_id.clone()))
+                                .unwrap_or("".to_string());
+                            // Delete and Refetch in the background
+                            delete_vertex_and_edge(&client, v_id).await?;
                             tokio::spawn(fetch_all(vec![target], Some(3)));
                         }
                         Ok(Some(resolve))

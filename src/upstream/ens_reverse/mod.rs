@@ -3,12 +3,16 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::vertex::Identity;
-use crate::util::{make_client, make_http_client, parse_body, request_with_timeout};
+use crate::tigergraph::create_identity_to_contract_reverse_resolve_record;
+use crate::tigergraph::edge::Resolve;
+use crate::tigergraph::vertex::{Contract, Identity};
+use crate::upstream::{Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem};
+use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};
 use async_trait::async_trait;
 use hyper::{Body, Method};
 use serde::Deserialize;
 use tracing::info;
+use uuid::Uuid;
 
 use super::{Fetcher, Platform, Target, TargetProcessedList};
 
@@ -41,9 +45,30 @@ impl Fetcher for ENSReverseLookup {
         let mut identity = Identity::default();
         identity.platform = Platform::Ethereum;
         identity.identity = wallet.clone();
-        identity.display_name = Some(reverse_ens);
+        identity.display_name = Some(reverse_ens.clone());
         let cli = make_http_client();
         identity.create_or_update(&cli).await?;
+
+        let contract = Contract {
+            uuid: Uuid::new_v4(),
+            category: ContractCategory::ENS,
+            address: ContractCategory::ENS.default_contract_address().unwrap(),
+            chain: Chain::Ethereum,
+            symbol: None,
+            updated_at: naive_now(),
+        };
+
+        let resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::TheGraph,
+            system: DomainNameSystem::ENS,
+            name: reverse_ens.clone(),
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+        // reverse resolve record
+        create_identity_to_contract_reverse_resolve_record(&cli, &identity, &contract, &resolve)
+            .await?;
 
         Ok(vec![])
     }

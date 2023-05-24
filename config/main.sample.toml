@@ -10,7 +10,6 @@ host = "http://ec2-44-229-226-27.us-west-2.compute.amazonaws.com:9000"
 username = "tigergraph"
 password = "examplepassword123456"
 identity_graph_token = "01234567abcdefgh01234567abcdefgh"
-asset_graph_token = "01234567abcdefgh01234567abcdefgh"
 social_graph_token = "01234567abcdefgh01234567abcdefgh"
 
 [web]

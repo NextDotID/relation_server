@@ -1,6 +1,7 @@
 use crate::{
     error::{Error, Result},
     tigergraph::{
+        delete_vertex_and_edge,
         edge::{Hold, HoldRecord},
         vertex::{ContractLoadFn, ContractRecord, IdentityLoadFn, IdentityRecord},
     },
@@ -175,7 +176,8 @@ impl HoldQuery {
         match Hold::find_by_id_chain_address(&client, &id, &chain, &contract_address).await? {
             Some(hold) => {
                 if hold.is_outdated() {
-                    // Refetch in the background
+                    // Delete and Refetch in the background
+                    delete_vertex_and_edge(&client, hold.from_id.clone()).await?;
                     tokio::spawn(fetch_all(vec![target], Some(3)));
                 }
                 Ok(Some(hold))

@@ -1,6 +1,7 @@
 use crate::{
     error::Result,
     tigergraph::{
+        delete_vertex_and_edge,
         edge::{EdgeUnion, HoldRecord},
         vertex::{Identity, IdentityRecord, IdentityWithSource},
     },
@@ -230,8 +231,15 @@ impl IdentityQuery {
                 Ok(Identity::find_by_platform_identity(&client, &platform, &identity).await?)
             }
             Some(found) => {
-                if found.is_outdated() {
-                    event!(Level::DEBUG, ?platform, identity, "Outdated. Refetching.");
+                // if found.is_outdated() {
+                if true {
+                    event!(
+                        Level::DEBUG,
+                        ?platform,
+                        identity,
+                        "Outdated. Delete and Refetching."
+                    );
+                    delete_vertex_and_edge(&client, found.v_id.clone()).await?;
                     tokio::spawn(fetch_all(vec![target], Some(3))); // Fetch in the background
                 }
                 Ok(Some(found))

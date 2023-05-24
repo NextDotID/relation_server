@@ -1,28 +1,63 @@
-CREATE GRAPH IdentityGraph (Identities, Proof_Forward, Proof_Backward, Hold_Identity)
+CREATE GRAPH IdentityGraph (Identities, Proof_Forward, Proof_Backward, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Resolve_Contract, Reverse_Resolve_Contract)
 
-CREATE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph { 
+CREATE OR REPLACE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph { 
   SetAccum<EDGE> @@edges;
   SetAccum<VERTEX> @@vertices;
   OrAccum @visited = FALSE;
   OrAccum @visited2 = FALSE;
 
-  seed = {p};
+  seed (Identities) = {p};
   FOREACH i in RANGE[1, depth] DO
     SetAccum<VERTEX> @@pool;
     proof = SELECT v FROM seed-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:v-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed
            WHERE v.@visited == FALSE
            ACCUM @@edges += pf, @@edges += pw, @@vertices += v, v.@visited = TRUE
            POST-ACCUM @@pool += v;
-    hold = SELECT v FROM seed-((Hold_Identity>):e)-Identities:v
+    hold = SELECT v FROM seed-((Hold_Identity>|<Hold_Identity):e)-Identities:v
            WHERE v.@visited2 == FALSE
            ACCUM @@edges += e, @@vertices += v, v.@visited2 = TRUE
            POST-ACCUM @@pool += v;
-    seed = {@@pool};
+    seed (Identities) = {@@pool};
   END;
   PRINT @@vertices AS vertices, @@edges AS edges;
 }
 
-CREATE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth=10) FOR GRAPH IdentityGraph SYNTAX V2 { 
+CREATE OR REPLACE QUERY delete_vertex_and_edge(VERTEX<Identities> p, INT depth=10) FOR GRAPH IdentityGraph SYNTAX v2 {
+  SetAccum<EDGE> @@edges;
+  SetAccum<VERTEX> @@vertices;
+  OrAccum @visited = FALSE;
+  OrAccum @visited2 = FALSE;
+
+  seed (Identities) = {p};
+  WHILE(seed.size()>0) LIMIT depth DO
+    SetAccum<VERTEX> @@pool;
+    proof = SELECT v FROM seed-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:v-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed
+           WHERE v.@visited == FALSE
+           ACCUM @@edges += pf, @@edges += pw, @@vertices += v, v.@visited = TRUE
+           POST-ACCUM @@pool += v;
+    hold = SELECT v FROM seed-((Hold_Identity>|<Hold_Identity):e)-Identities:v
+           WHERE v.@visited2 == FALSE
+           ACCUM @@edges += e, @@vertices += v, v.@visited2 = TRUE
+           POST-ACCUM @@pool += v;
+    seed (Identities) = {@@pool};
+    PRINT seed;
+  END;
+
+  PRINT @@vertices;
+  vertex2delete (Identities) = {@@vertices};
+
+  contracts = SELECT v FROM vertex2delete-((Reverse_Resolve_Contract>|<Resolve_Contract):e)-Contracts:v ACCUM DELETE(e);
+  contracts = SELECT v FROM vertex2delete-((Hold_Contract>):e)-Contracts:v ACCUM DELETE(e);
+  resolved = SELECT v FROM vertex2delete-((Resolve>|<Reverse_Resolve):e)-Identities:v ACCUM DELETE(e);
+
+  FOREACH v IN @@vertices DO DELETE v;
+  END;
+  PRINT @@edges;
+  FOREACH e IN @@edges DO DELETE e;
+  END;
+}
+
+CREATE OR REPLACE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth=10) FOR GRAPH IdentityGraph SYNTAX V2 { 
   MinAccum<INT> @min_dis;
   OrAccum @or_visited = false;
   OrAccum @or_visited2 = false;
@@ -31,7 +66,7 @@ CREATE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth=10) FOR GRAPH
   SetAccum<EDGE> @@edge_set;
 
   ##### Initialization  #####
-  seed = {p};
+  seed (Identities) = {p};
   seed = SELECT s
            FROM seed:s
      ACCUM s.@or_visited += true,
@@ -57,7 +92,7 @@ CREATE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth=10) FOR GRAPH
     ResultSet = ResultSet UNION proof;
 
     hold = SELECT v
-      FROM seed:s-((Hold_Identity>):e)-Identities:v
+      FROM seed:s-((Hold_Identity>|<Hold_Identity):e)-Identities:v
         WHERE v.@or_visited2 == false
         ACCUM
           v.@min_dis += s.@min_dis + 1,
@@ -69,14 +104,14 @@ CREATE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth=10) FOR GRAPH
       ORDER BY getvid(v);
     ResultSet = ResultSet UNION hold;
 
-    seed = {@@pool};
+    seed (Identities) = {@@pool};
   END;
   PRINT ResultSet AS vertices;
 }
 
 
 CREATE QUERY identity_by_source(VERTEX<Identities> p, STRING source) FOR GRAPH IdentityGraph SYNTAX V2 {
-  start = {p};
+  start (Identities) = {p};
   vertices = SELECT v FROM start-((Proof_Forward>|Proof_Backward>):e)-Identities:v
             WHERE e.source == source;
   PRINT vertices;
@@ -84,6 +119,77 @@ CREATE QUERY identity_by_source(VERTEX<Identities> p, STRING source) FOR GRAPH I
 
 
 CREATE QUERY identities_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2 {
+  vertices = SELECT s FROM Identities:s WHERE s.id IN ids;
+  PRINT vertices;
+}
+
+CREATE QUERY identity_owned_by(VERTEX<Identities> p, STRING platform) FOR GRAPH IdentityGraph SYNTAX V2 {
+  start (Identities) = {p};
+  owner = SELECT v FROM start-((<Hold_Identity):e)-Identities:v
+        WHERE e.source == platform;
+  PRINT owner;
+}
+
+CREATE QUERY hold_nft(STRING id, STRING chain, STRING address) FOR GRAPH IdentityGraph SYNTAX V2 {
+  SetAccum<EDGE> @@holds;
+  contract = SELECT v FROM Identities:s-((Hold_Contract>):e)-Contracts:v
+        WHERE v.chain == chain AND v.address == address AND e.id == id
+        ACCUM
+          @@holds += e;
+  PRINT @@holds AS holds;
+}
+
+CREATE QUERY nfts(VERTEX<Identities> p, SET<STRING> categories, INT numPerPage = 100, INT pageNum = 0) FOR GRAPH IdentityGraph {
+  SetAccum<EDGE> @@edges;
+  start (Identities) = {p};
+  
+  IF categories.size() > 0 THEN
+    hold = SELECT v FROM start-((Hold_Contract>):e)-Contracts:v
+          WHERE v.category IN categories
+          ACCUM @@edges += e
+          ORDER BY getvid(v)
+          LIMIT numPerPage OFFSET pageNum * numPerPage;
+  ELSE
+    hold = SELECT v FROM start-((Hold_Contract>):e)-Contracts:v
+          ACCUM @@edges += e
+          ORDER BY getvid(v)
+          LIMIT numPerPage OFFSET pageNum * numPerPage;
+  END;
+  PRINT @@edges AS edges;
+}
+
+CREATE QUERY domain(STRING name, STRING system) FOR GRAPH IdentityGraph {
+  EDGE record;
+  EDGE hold;
+  IF system == "ENS" THEN
+    resolved = SELECT v FROM Contracts:c-((Resolve_Contract>):e)-Identities:v
+              WHERE e.system == system AND e.name == name
+              ACCUM
+                record = e;
+    owner = SELECT s FROM Identities:s-((Hold_Contract>):e)-Contracts:v
+              WHERE e.id == name
+              ACCUM
+                hold = e;
+    PRINT record, hold, resolved, owner;
+  ELSE
+    resolved = SELECT v FROM Identities:s-((Resolve>):e)-Identities:v
+              WHERE e.system == system AND e.name == name
+              ACCUM
+                record = e;
+    owner = SELECT s FROM Identities:s-((Hold_Identity>):e)-Identities:v
+              WHERE v.platform == system AND v.identity == name
+              ACCUM
+                hold = e;
+    PRINT record, hold, resolved, owner;
+  END;
+}
+
+CREATE QUERY contracts_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2 {
+  vertices = SELECT s FROM Contracts:s WHERE s.id IN ids;
+  PRINT vertices;
+}
+
+CREATE QUERY owners_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2 {
   vertices = SELECT s FROM Identities:s WHERE s.id IN ids;
   PRINT vertices;
 }

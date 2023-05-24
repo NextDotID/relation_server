@@ -225,7 +225,7 @@ impl Contract {
         let uri: http::Uri = format!(
             "{}/graph/{}/vertices/{}?filter=uuid=%22{}%22",
             C.tdb.host,
-            Graph::AssetGraph.to_string(),
+            Graph::IdentityGraph.to_string(),
             VERTEX_NAME,
             uuid.to_string(),
         )
@@ -234,7 +234,7 @@ impl Contract {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::AssetGraph.token())
+            .header("Authorization", Graph::IdentityGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {
@@ -275,7 +275,7 @@ impl Contract {
         let uri: http::Uri = format!(
             "{}/graph/{}/vertices/{}?filter=chain=%22{}%22,address=%22{}%22",
             C.tdb.host,
-            Graph::AssetGraph.to_string(),
+            Graph::IdentityGraph.to_string(),
             VERTEX_NAME,
             chain.to_string(),
             address.to_string(),
@@ -285,7 +285,7 @@ impl Contract {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::AssetGraph.token())
+            .header("Authorization", Graph::IdentityGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {
@@ -359,7 +359,7 @@ async fn get_contracts_by_ids(
     let uri: http::Uri = format!(
         "{}/query/{}/contracts_by_ids",
         C.tdb.host,
-        Graph::AssetGraph.to_string()
+        Graph::IdentityGraph.to_string()
     )
     .parse()
     .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
@@ -368,7 +368,7 @@ async fn get_contracts_by_ids(
     let req = hyper::Request::builder()
         .method(Method::POST)
         .uri(uri)
-        .header("Authorization", Graph::AssetGraph.token())
+        .header("Authorization", Graph::IdentityGraph.token())
         .body(Body::from(json_params))
         .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
     let mut resp = client.request(req).await.map_err(|err| {

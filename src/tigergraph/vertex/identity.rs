@@ -597,6 +597,7 @@ impl IdentityRecord {
         )
         .parse()
         .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+        tracing::trace!("query neighbors Url {:?}", uri);
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
@@ -699,7 +700,7 @@ impl IdentityRecord {
         let uri: http::Uri = format!(
             "{}/query/{}/identity_owned_by?p={}&platform={}",
             C.tdb.host,
-            Graph::AssetGraph.to_string(),
+            Graph::IdentityGraph.to_string(),
             self.v_id.to_string(),
             self.attributes.platform.to_string(),
         )
@@ -708,7 +709,7 @@ impl IdentityRecord {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::AssetGraph.token())
+            .header("Authorization", Graph::IdentityGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {
@@ -759,7 +760,7 @@ impl IdentityRecord {
             uri = format!(
                 "{}/query/{}/nfts?p={}&numPerPage={}&pageNum={}",
                 C.tdb.host,
-                Graph::AssetGraph.to_string(),
+                Graph::IdentityGraph.to_string(),
                 self.v_id.to_string(),
                 limit,
                 offset
@@ -776,7 +777,7 @@ impl IdentityRecord {
             uri = format!(
                 "{}/query/{}/nfts?p={}&{}&numPerPage={}&pageNum={}",
                 C.tdb.host,
-                Graph::AssetGraph.to_string(),
+                Graph::IdentityGraph.to_string(),
                 self.v_id.to_string(),
                 combined,
                 limit,
@@ -788,7 +789,7 @@ impl IdentityRecord {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::AssetGraph.token())
+            .header("Authorization", Graph::IdentityGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {

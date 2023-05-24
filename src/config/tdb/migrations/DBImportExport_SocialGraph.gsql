@@ -1,1 +1,1 @@
-CREATE GRAPH SocialGraph(Identities, Relation_Unique_TX, Relation_TX)
+CREATE GRAPH SocialGraph(Identities, Contracts, Relation_Unique_TX, Relation_TX)

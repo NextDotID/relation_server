@@ -31,7 +31,6 @@ migrate:
 	{{gsql}} $DB_MIGRATIONS/global.gsql
 	{{gsql}} $DB_MIGRATIONS/SCHEMA_CHANGE.gsql
 	{{gsql}} $DB_MIGRATIONS/DBImportExport_IdentityGraph.gsql
-	{{gsql}} $DB_MIGRATIONS/DBImportExport_AssetGraph.gsql
 	{{gsql}} $DB_MIGRATIONS/DBImportExport_SocialGraph.gsql
 
 # Create token for GraphName
@@ -46,16 +45,13 @@ create-secret-and-token GRAPH="graph":
 # Generate secrets and update TOML file
 generate-secrets:
 	identity_results=`just create-secret-and-token IdentityGraph` && \
-	asset_results=`just create-secret-and-token AssetGraph` && \
 	social_results=`just create-secret-and-token SocialGraph` && \
 	identity_secret=`echo $identity_results | awk '{print $1}'` && \
 	identity_token=`echo $identity_results | awk '{print $2}'` && \
-	asset_secret=`echo $asset_results | awk '{print $1}'` && \
-	asset_token=`echo $asset_results | awk '{print $2}'` && \
 	social_secret=`echo $social_results | awk '{print $1}'` && \
 	social_token=`echo $social_results | awk '{print $2}'` && \
-	echo "[tdb.secret]\nidentity_graph_secret = \"$identity_secret\"\nasset_graph_secret = \"$asset_secret\"\nsocial_graph_secret = \"$social_secret\"\n\n\
-	[tdb.token]\nidentity_graph_token = \"$identity_token\"\nasset_graph_token = \"$asset_token\"\nsocial_graph_token = \"$social_token\"" > $DB_AUTH/{{SECRET_FILE}}
+	echo "[tdb.secret]\nidentity_graph_secret = \"$identity_secret\"\nsocial_graph_secret = \"$social_secret\"\n\n\
+	[tdb.token]\nidentity_graph_token = \"$identity_token\"\nsocial_graph_token = \"$social_token\"" > $DB_AUTH/{{SECRET_FILE}}
 
 auth:
 	{{gsql}} "ALTER PASSWORD"

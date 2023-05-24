@@ -5,7 +5,6 @@ use crate::config::C;
 use crate::error::Error;
 use crate::tigergraph::create_contract_to_identity_resolve_record;
 use crate::tigergraph::create_identity_to_contract_hold_record;
-use crate::tigergraph::create_identity_to_contract_reverse_resolve_record;
 use crate::tigergraph::edge::{Hold, Resolve};
 use crate::tigergraph::vertex::{Contract, Identity};
 use crate::upstream::{
@@ -269,11 +268,11 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                         updated_at: naive_now(),
                     };
 
-                    // 'reverse' resolution
-                    create_identity_to_contract_reverse_resolve_record(
+                    // regular resolved address
+                    create_contract_to_identity_resolve_record(
                         &cli,
-                        &resolve_target,
                         &contract,
+                        &resolve_target,
                         &resolve,
                     )
                     .await?;
@@ -348,16 +347,5 @@ async fn create_or_update_own(
     };
     // hold record
     create_identity_to_contract_hold_record(client, &owner, &conrtract, &ownership).await?;
-
-    let resolve = Resolve {
-        uuid: Uuid::new_v4(),
-        source: DataSource::TheGraph,
-        system: DomainNameSystem::ENS,
-        name: domain.name.clone(),
-        fetcher: DataFetcher::RelationService,
-        updated_at: naive_now(),
-    };
-    // As the same time record 'regular' resolution
-    create_contract_to_identity_resolve_record(client, &conrtract, &owner, &resolve).await?;
     Ok(conrtract)
 }

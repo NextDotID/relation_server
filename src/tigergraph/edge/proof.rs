@@ -9,7 +9,7 @@ use crate::{
     upstream::{DataFetcher, DataSource, ProofLevel},
     util::{
         naive_datetime_from_string, naive_datetime_to_string, naive_now,
-        option_naive_datetime_from_string, option_naive_datetime_to_string, parse_body,
+        option_naive_datetime_from_string, option_naive_datetime_to_string,
     },
 };
 
