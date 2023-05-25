@@ -40,10 +40,8 @@ CREATE OR REPLACE QUERY delete_vertex_and_edge(VERTEX<Identities> p, INT depth=1
            ACCUM @@edges += e, @@vertices += v, v.@visited2 = TRUE
            POST-ACCUM @@pool += v;
     seed (Identities) = {@@pool};
-    PRINT seed;
   END;
 
-  PRINT @@vertices;
   vertex2delete (Identities) = {@@vertices};
 
   contracts = SELECT v FROM vertex2delete-((Reverse_Resolve_Contract>|<Resolve_Contract):e)-Contracts:v ACCUM DELETE(e);
@@ -52,7 +50,6 @@ CREATE OR REPLACE QUERY delete_vertex_and_edge(VERTEX<Identities> p, INT depth=1
 
   FOREACH v IN @@vertices DO DELETE v;
   END;
-  PRINT @@edges;
   FOREACH e IN @@edges DO DELETE e;
   END;
 }

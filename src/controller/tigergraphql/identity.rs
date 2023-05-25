@@ -142,7 +142,6 @@ impl IdentityRecord {
         _ctx: &Context<'_>,
         #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
     ) -> Result<Vec<EdgeUnion>> {
-        tracing::debug!("run neighbor_with_traversal...");
         let client = make_http_client();
         self.neighbors_with_traversal(&client, depth.unwrap_or(1))
             .await
