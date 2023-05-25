@@ -1,5 +1,5 @@
 use crate::{
-    error::Result,
+    error::{Error, Result},
     tigergraph::{
         delete_vertex_and_edge,
         edge::{EdgeUnion, HoldRecord},
@@ -11,6 +11,7 @@ use crate::{
 
 use async_graphql::{Context, Object};
 use strum::IntoEnumIterator;
+use tokio::time::{sleep, Duration};
 use tracing::{event, Level};
 use uuid::Uuid;
 
@@ -141,6 +142,7 @@ impl IdentityRecord {
         _ctx: &Context<'_>,
         #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
     ) -> Result<Vec<EdgeUnion>> {
+        tracing::debug!("run neighbor_with_traversal...");
         let client = make_http_client();
         self.neighbors_with_traversal(&client, depth.unwrap_or(1))
             .await
@@ -231,16 +233,21 @@ impl IdentityQuery {
                 Ok(Identity::find_by_platform_identity(&client, &platform, &identity).await?)
             }
             Some(found) => {
-                // if found.is_outdated() {
-                if true {
+                if found.is_outdated() {
                     event!(
                         Level::DEBUG,
                         ?platform,
                         identity,
                         "Outdated. Delete and Refetching."
                     );
-                    delete_vertex_and_edge(&client, found.v_id.clone()).await?;
-                    tokio::spawn(fetch_all(vec![target], Some(3))); // Fetch in the background
+                    let v_id = found.v_id.clone();
+                    tokio::spawn(async move {
+                        // Delete and Refetch in the background
+                        sleep(Duration::from_secs(10)).await;
+                        delete_vertex_and_edge(&client, v_id).await?;
+                        fetch_all(vec![target], Some(3)).await?;
+                        Ok::<_, Error>(())
+                    });
                 }
                 Ok(Some(found))
             }

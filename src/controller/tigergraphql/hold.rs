@@ -12,6 +12,7 @@ use crate::{
 use async_graphql::{Context, Object};
 use dataloader::non_cached::Loader;
 use strum::IntoEnumIterator;
+use tokio::time::{sleep, Duration};
 use uuid::Uuid;
 
 #[Object]
@@ -148,6 +149,7 @@ impl HoldQuery {
     }
 
     /// Search an NFT.
+    #[tracing::instrument(level = "trace", skip(self, _ctx))]
     async fn nft(
         &self,
         _ctx: &Context<'_>,
@@ -175,10 +177,15 @@ impl HoldQuery {
         let target = Target::NFT(chain, category, contract_address.clone(), id.clone());
         match Hold::find_by_id_chain_address(&client, &id, &chain, &contract_address).await? {
             Some(hold) => {
+                let v_id = hold.from_id.clone();
                 if hold.is_outdated() {
-                    // Delete and Refetch in the background
-                    delete_vertex_and_edge(&client, hold.from_id.clone()).await?;
-                    tokio::spawn(fetch_all(vec![target], Some(3)));
+                    tokio::spawn(async move {
+                        // Delete and Refetch in the background
+                        sleep(Duration::from_secs(10)).await;
+                        delete_vertex_and_edge(&client, v_id).await?;
+                        fetch_all(vec![target], Some(3)).await?;
+                        Ok::<_, Error>(())
+                    });
                 }
                 Ok(Some(hold))
             }
