@@ -127,7 +127,7 @@ pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
 /// Returns amount of identities just fetched for next iter.
 pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
     let mut up_next: TargetProcessedList = join_all(vec![
-        Aggregation::fetch(target),
+        // Aggregation::fetch(target),
         SybilList::fetch(target),
         Keybase::fetch(target),
         ProofClient::fetch(target),
