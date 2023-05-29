@@ -43,6 +43,7 @@ impl Fetcher for ENSReverseLookup {
         info!("ENS Reverse record: {} => {}", wallet, reverse_ens);
 
         let mut identity = Identity::default();
+        identity.uuid = Some(Uuid::new_v4());
         identity.platform = Platform::Ethereum;
         identity.identity = wallet.clone();
         identity.display_name = Some(reverse_ens.clone());
