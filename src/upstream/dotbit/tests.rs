@@ -1,7 +1,7 @@
 use crate::upstream::Target;
 use crate::{error::Error, upstream::dotbit::DotBit, upstream::Fetcher};
 use crate::{
-    graph::new_db_connection, graph::vertex::Identity, upstream::Platform, util::naive_now,
+    util::make_http_client, tigergraph::vertex::Identity, upstream::Platform, util::naive_now,
 };
 
 #[tokio::test]
@@ -10,8 +10,8 @@ async fn test_smoke_dotbit_by_dotbit_identity() -> Result<(), Error> {
 
     DotBit::fetch(&target).await?;
 
-    let db = new_db_connection().await?;
-    let found = Identity::find_by_platform_identity(&db, &target.platform()?, &target.identity()?)
+    let client = make_http_client();
+    let found = Identity::find_by_platform_identity(&client, &target.platform()?, &target.identity()?)
         .await?
         .expect("Record not found");
     tracing::debug!("found {:?}", found);
@@ -35,23 +35,23 @@ async fn test_smoke_dotbit_reverse_record() -> Result<(), Error> {
         "0X9176ACD39A3A9AE99DCB3922757F8AF4F94CDF3C".into(),
     );
     DotBit::fetch(&target2).await?;
-    let db = new_db_connection().await?;
+    let client = make_http_client();
 
     assert_eq!(
-        Identity::find_by_platform_identity(&db, &target2.platform()?, &target2.identity()?)
+        Identity::find_by_platform_identity(&client, &target2.platform()?, &target2.identity()?)
             .await?
             .is_none(),
         true
     );
     Identity::find_by_platform_identity(
-        &db,
+        &client,
         &target2.platform()?,
         &target2.identity()?.to_ascii_lowercase(),
     )
     .await?
     .expect("Record not found");
 
-    Identity::find_by_platform_identity(&db, &Platform::Dotbit, "justing.bit")
+    Identity::find_by_platform_identity(&client, &Platform::Dotbit, "justing.bit")
         .await?
         .expect("Record not found");
 

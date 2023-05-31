@@ -24,8 +24,7 @@ lazy_static! {
 
 #[derive(Clone, Deserialize, Default)]
 pub struct KVConfig {
-    pub db: ConfigDB,
-    pub tdb: TigerGDB,
+    pub tdb: ConfigTigerGraph,
     pub web: ConfigWeb,
     pub upstream: Upstream,
 }
@@ -48,16 +47,7 @@ pub struct Upstream {
 }
 
 #[derive(Clone, Deserialize, Default)]
-pub struct ConfigDB {
-    pub host: String,
-    pub username: String,
-    pub password: String,
-    pub db: String,
-    pub schema_path: String,
-}
-
-#[derive(Clone, Deserialize, Default)]
-pub struct TigerGDB {
+pub struct ConfigTigerGraph {
     pub host: String,
     pub username: String,
     pub password: String,

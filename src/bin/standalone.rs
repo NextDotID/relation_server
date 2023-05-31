@@ -6,7 +6,7 @@ use async_graphql_warp::{GraphQLBadRequest, GraphQLResponse};
 use dataloader::non_cached::Loader;
 use http::StatusCode;
 use relation_server::{
-    config::{self, C},
+    config::C,
     controller::tigergraphql::Query,
     error::Result,
     tigergraph::vertex::{ContractLoadFn, IdentityLoadFn},
@@ -36,16 +36,6 @@ async fn main() -> Result<()> {
         .allow_any_origin() // : maybe more strict CORS in production?
         .allow_methods(vec!["GET", "POST"])
         .allow_headers(vec!["Accept", "Content-Type", "Length"]);
-
-    // Performing DB migration
-    let _db = aragog::DatabaseConnection::builder()
-        .with_credentials(&C.db.host, &C.db.db, &C.db.username, &C.db.password)
-        .with_auth_mode(aragog::AuthMode::Basic)
-        .with_operation_options(aragog::OperationOptions::default())
-        .with_schema_path(&C.db.schema_path)
-        .apply_schema() // Only apply database migration here.
-        .build()
-        .await?;
 
     let client = make_http_client();
     let contract_loader_fn = ContractLoadFn {
@@ -108,7 +98,7 @@ async fn main() -> Result<()> {
             ))
         });
 
-    let address = SocketAddr::new(config::C.web.listen.parse().unwrap(), config::C.web.port);
+    let address = SocketAddr::new(C.web.listen.parse().unwrap(), C.web.port);
     info!("Playground: http://{}", address);
 
     warp::serve(routes).run(address).await;

@@ -1,4 +1,3 @@
-pub mod graphql;
 pub mod healthz;
 pub mod tigergraphql;
 

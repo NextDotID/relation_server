@@ -29,10 +29,6 @@ pub enum Error {
     ManualHttpClientError(String),
     #[error("UUID parse error: {0}")]
     UuidError(#[from] uuid::Error),
-    #[error("ArangoDB error: {0}")]
-    ArangoDBError(#[from] aragog::Error),
-    #[error("ArangoLiteDB error: {0}")]
-    ArangoLiteDBError(#[from] arangors_lite::ClientError),
     #[error("Parse error: {0}")]
     EnumParseError(#[from] strum::ParseError),
     #[error("Parse Int error: {0}")]
@@ -41,8 +37,6 @@ pub enum Error {
     GraphQLError(String),
     #[error("PoolError error: {0}")]
     PoolError(String),
-    #[error("ArangoConfigError error: {0}")]
-    ArangoConfigError(#[from] crate::graph::arangopool::ArangoConfigError),
     #[error("IsahcError error: {0}")]
     IsahcError(#[from] isahc::error::Error),
 }
@@ -61,14 +55,11 @@ impl Error {
             Error::HttpClientError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::ManualHttpClientError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::SignatureValidationError(_) => StatusCode::BAD_REQUEST,
-            Error::ArangoDBError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::EnumParseError(_) => StatusCode::BAD_REQUEST,
             Error::GraphQLError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::ParseIntError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::UuidError(_) => StatusCode::BAD_REQUEST,
-            Error::ArangoLiteDBError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::PoolError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Error::ArangoConfigError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::IsahcError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
