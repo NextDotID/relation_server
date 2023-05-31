@@ -240,8 +240,8 @@ impl Edge<Identity, Identity, HoldRecord> for HoldRecord {
 
     /// Find an edge by UUID.
     async fn find_by_uuid(
-        client: &Client<HttpConnector>,
-        uuid: &Uuid,
+        _client: &Client<HttpConnector>,
+        _uuid: &Uuid,
     ) -> Result<Option<HoldRecord>, Error> {
         todo!()
     }
@@ -249,10 +249,10 @@ impl Edge<Identity, Identity, HoldRecord> for HoldRecord {
     /// Find `EdgeRecord` by source and target
     async fn find_by_from_to(
         &self,
-        client: &Client<HttpConnector>,
-        from: &VertexRecord<Identity>,
-        to: &VertexRecord<Identity>,
-        filter: Option<HashMap<String, String>>,
+        _client: &Client<HttpConnector>,
+        _from: &VertexRecord<Identity>,
+        _to: &VertexRecord<Identity>,
+        _filter: Option<HashMap<String, String>>,
     ) -> Result<Option<Vec<HoldRecord>>, Error> {
         todo!()
     }
@@ -319,8 +319,8 @@ impl Edge<Identity, Contract, HoldRecord> for HoldRecord {
 
     /// Find an edge by UUID.
     async fn find_by_uuid(
-        client: &Client<HttpConnector>,
-        uuid: &Uuid,
+        _client: &Client<HttpConnector>,
+        _uuid: &Uuid,
     ) -> Result<Option<HoldRecord>, Error> {
         todo!()
     }
@@ -328,10 +328,10 @@ impl Edge<Identity, Contract, HoldRecord> for HoldRecord {
     /// Find `EdgeRecord` by source and target
     async fn find_by_from_to(
         &self,
-        client: &Client<HttpConnector>,
-        from: &VertexRecord<Identity>,
-        to: &VertexRecord<Contract>,
-        filter: Option<HashMap<String, String>>,
+        _client: &Client<HttpConnector>,
+        _from: &VertexRecord<Identity>,
+        _to: &VertexRecord<Contract>,
+        _filter: Option<HashMap<String, String>>,
     ) -> Result<Option<Vec<HoldRecord>>, Error> {
         todo!()
     }

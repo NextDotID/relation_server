@@ -218,6 +218,7 @@ impl Contract {
     }
 
     /// Find an Contract by UUID.
+    #[allow(dead_code)]
     async fn find_by_uuid(
         client: &Client<HttpConnector>,
         uuid: Uuid,

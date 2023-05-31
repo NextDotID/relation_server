@@ -25,12 +25,17 @@ pub fn naive_now() -> NaiveDateTime {
 /// Parse `String` type, second-based timestamp to NaiveDateTime
 pub fn parse_timestamp(timestamp: &str) -> Result<NaiveDateTime, Error> {
     let timestamp: i64 = timestamp.parse()?;
-    Ok(timestamp_to_naive(timestamp, 0))
+    timestamp_to_naive(timestamp, 0).ok_or_else(|| {
+        Error::General(
+            format!("Invalid timestamp: {}", timestamp),
+            lambda_http::http::StatusCode::BAD_REQUEST,
+        )
+    })
 }
 
 /// Convert timestamp into NaiveDateTime struct.
-pub fn timestamp_to_naive(ts: i64, ms: u32) -> NaiveDateTime {
-    NaiveDateTime::from_timestamp(ts, ms * 1000000)
+pub fn timestamp_to_naive(ts: i64, ms: u32) -> Option<NaiveDateTime> {
+    NaiveDateTime::from_timestamp_opt(ts, ms * 1_000_000)
 }
 
 pub fn make_client() -> Client<HttpsConnector<HttpConnector>> {

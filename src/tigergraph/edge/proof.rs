@@ -245,8 +245,8 @@ impl Edge<Identity, Identity, ProofRecord> for ProofRecord {
 
     /// Find an edge by UUID.
     async fn find_by_uuid(
-        client: &Client<HttpConnector>,
-        uuid: &Uuid,
+        _client: &Client<HttpConnector>,
+        _uuid: &Uuid,
     ) -> Result<Option<ProofRecord>, Error> {
         todo!()
     }
@@ -254,10 +254,10 @@ impl Edge<Identity, Identity, ProofRecord> for ProofRecord {
     /// Find `EdgeRecord` by source and target
     async fn find_by_from_to(
         &self,
-        client: &Client<HttpConnector>,
-        from: &VertexRecord<Identity>,
-        to: &VertexRecord<Identity>,
-        filter: Option<HashMap<String, String>>,
+        _client: &Client<HttpConnector>,
+        _from: &VertexRecord<Identity>,
+        _to: &VertexRecord<Identity>,
+        _filter: Option<HashMap<String, String>>,
     ) -> Result<Option<Vec<ProofRecord>>, Error> {
         todo!()
     }

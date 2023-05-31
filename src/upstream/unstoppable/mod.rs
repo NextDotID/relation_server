@@ -186,6 +186,7 @@ async fn fetch_domain(owners: &str, page: &str) -> Result<RecordsForOwnerRespons
 }
 
 /// Temporarily do not use `reverse` query
+#[allow(dead_code)]
 async fn fetch_reverse(owner: &str) -> Result<ReverseResponse, Error> {
     let client = make_client();
     let reverse_uri: http::Uri = format!("{}/reverse/{}", C.upstream.unstoppable_api.url, owner)

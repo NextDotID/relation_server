@@ -88,10 +88,10 @@ async fn save_item(
         source: DataSource::SybilList,
         level: ProofLevel::VeryConfident,
         record_id: Some(item.twitter.tweet_id.clone()),
-        created_at: Some(timestamp_to_naive(
+        created_at: timestamp_to_naive(
             item.twitter.timestamp / 1000,
             create_ms_time,
-        )), // millisecond
+        ),
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
     };
@@ -101,10 +101,10 @@ async fn save_item(
         source: DataSource::SybilList,
         level: ProofLevel::VeryConfident,
         record_id: Some(item.twitter.tweet_id.clone()),
-        created_at: Some(timestamp_to_naive(
+        created_at: timestamp_to_naive(
             item.twitter.timestamp / 1000,
             create_ms_time,
-        )), // millisecond
+        ),
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
     };

@@ -194,14 +194,14 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         source,
         level: level.clone(),
         record_id: Some(p.id.clone()),
-        created_at: Some(timestamp_to_naive(
+        created_at: timestamp_to_naive(
             p.create_timestamp.parse::<i64>().unwrap() / 1000,
             create_ms_time,
-        )),
+        ),
         updated_at: timestamp_to_naive(
             p.modify_timestamp.parse::<i64>().unwrap() / 1000,
             update_ms_time,
-        ),
+        ).unwrap(),
         fetcher: DataFetcher::AggregationService,
     };
 
@@ -210,14 +210,14 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         source,
         level: level.clone(),
         record_id: Some(p.id.clone()),
-        created_at: Some(timestamp_to_naive(
+        created_at: timestamp_to_naive(
             p.create_timestamp.parse::<i64>().unwrap() / 1000,
             create_ms_time,
-        )),
+        ),
         updated_at: timestamp_to_naive(
             p.modify_timestamp.parse::<i64>().unwrap() / 1000,
             update_ms_time,
-        ),
+        ).unwrap(),
         fetcher: DataFetcher::AggregationService,
     };
 
