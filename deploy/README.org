@@ -4,9 +4,17 @@
 :ID:       9f4a97c5-f701-4b84-8b8a-c6b822527ef9
 :END:
 
-1. Generate a strong password using =pwgen 16= and replace all
-   =CHANGE_ME= in
-   - =config/main.toml=
-   - =docker-compose.yaml=
-2. =docker-compose up -d arangodb=, wait for ~1min.
-3. =docker-compose up -d server=.
+** Deploy
+:PROPERTIES:
+:ID:       d4dff751-59cd-42e4-aad2-d2eeb84d8354
+:END:
+
+1. =docker-compose up -d tigergraph=, wait for ~5min.
+2. =docker-compose up -d server=.
+
+** Create graph token
+:PROPERTIES:
+:ID:       c0680805-2466-432f-a9de-b92eea9baaf8
+:END:
+
+=TODO=
