@@ -491,11 +491,12 @@ impl Hold {
         chain: &Chain,
         address: &str,
     ) -> Result<Option<HoldRecord>, Error> {
+        let encoded_id = urlencoding::encode(id);
         let uri: http::Uri = format!(
             "{}/query/{}/hold_nft?id={}&chain={}&address={}",
             C.tdb.host,
             Graph::IdentityGraph.to_string(),
-            id.to_string(),
+            encoded_id,
             chain.to_string(),
             address.to_string(),
         )

@@ -501,11 +501,12 @@ impl Resolve {
         name: &str,
         domain_system: &DomainNameSystem,
     ) -> Result<Option<ResolveEdge>, Error> {
+        let encoded_name = urlencoding::encode(name);
         let uri: http::Uri = format!(
             "{}/query/{}/domain?name={}&system={}",
             C.tdb.host,
             Graph::IdentityGraph.to_string(),
-            name.to_string(),
+            encoded_name,
             domain_system.to_string(),
         )
         .parse()
