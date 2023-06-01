@@ -98,6 +98,26 @@ pub enum DataSource {
     #[graphql(name = "space_id")]
     SpaceId,
 
+    /// opensea
+    /// https://opensea.io
+    #[strum(serialize = "opensea")]
+    #[serde(rename = "opensea")]
+    #[graphql(name = "opensea")]
+    OpenSea,
+
+    // twitter_hexagon
+    #[strum(serialize = "twitter_hexagon")]
+    #[serde(rename = "twitter_hexagon")]
+    #[graphql(name = "twitter_hexagon")]
+    TwitterHexagon,
+
+    /// Uniswap
+    /// https://uniswap.org/
+    #[strum(serialize = "uniswap")]
+    #[serde(rename = "uniswap")]
+    #[graphql(name = "uniswap")]
+    Uniswap,
+
     /// Unknown
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
