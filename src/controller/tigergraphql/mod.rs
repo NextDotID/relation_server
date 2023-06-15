@@ -2,6 +2,7 @@ mod contract;
 mod hold;
 mod identity;
 mod proof;
+mod relation;
 mod resolve;
 
 use self::{hold::HoldQuery, identity::IdentityQuery, proof::ProofQuery, resolve::ResolveQuery};
