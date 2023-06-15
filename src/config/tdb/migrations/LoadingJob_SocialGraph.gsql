@@ -1,0 +1,15 @@
+USE GRAPH SocialGraph
+
+BEGIN
+CREATE LOADING JOB load_tx_relation FOR GRAPH SocialGraph {
+  DEFINE FILENAME relation_file;
+  LOAD relation_file TO EDGE Relation_Unique_TX VALUES ($0, $1, REDUCE(add($2)), REDUCE(add($3)), REDUCE(max($4)), REDUCE(min($5)), now()) USING header="true", separator="\t";
+}
+END
+
+BEGIN
+CREATE LOADING JOB load_tx_identity FOR GRAPH SocialGraph {
+  DEFINE FILENAME identity_file;
+  LOAD identity_file TO VERTEX Identities VALUES ($0, $0, REDUCE(ignore_if_exists($1)), $2, $3, _, _, _, _, now(), now()) USING header="true", separator="\t";
+}
+END
