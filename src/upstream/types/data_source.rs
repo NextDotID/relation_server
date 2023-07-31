@@ -69,17 +69,26 @@ pub enum DataSource {
     /// https://ethleaderboard.xyz/
     /// Twitter <-> Ethereum
     /// Cannot be verified. Based on twitter `display_name` and followers.
-    #[strum(serialize = "ethLeaderboard", serialize = "web ens data", serialize = "ens")]
+    #[strum(serialize = "ethLeaderboard", serialize = "web ens data")]
     #[serde(rename = "ethLeaderboard")]
     #[graphql(name = "ethLeaderboard")]
     EthLeaderboard,
+
+    /// Twitter <-> Ethereum
+    /// ENS data fetched from twitter user's `screen_name`.
+    /// (i.e., user changed their name as `seems-to-be-like-a.eth`)
+    /// Pretty much unreliable.
+    #[strum(serialize = "ens")]
+    #[serde(rename = "ens")]
+    #[graphql(name = "ens")]
+    ENS,
 
     #[strum(serialize = "the_graph")]
     #[serde(rename = "the_graph")]
     #[graphql(name = "the_graph")]
     TheGraph,
 
-    /// Data directly fetched from blockchain's RPC server.
+    /// Data directly fetched from blockchain's RPC server, by calling contract's `public view` function.
     #[strum(serialize = "rpc_server")]
     #[serde(rename = "rpc_server")]
     #[graphql(name = "rpc_server")]
@@ -118,8 +127,8 @@ pub enum DataSource {
     /// https://opensea.io
     /// Twitter <-> Ethereum
     /// Kinda not that trustable. In the old time, user can
-    /// set their Twitter account in Opensea without any validation method.
-    /// Currently we cannot tell if a record is validated or not by OpenSea.
+    /// set their Twitter account in Opensea without any validation.
+    /// Currently we cannot tell if a record has been validated by OpenSea.
     #[strum(serialize = "opensea")]
     #[serde(rename = "opensea")]
     #[graphql(name = "opensea")]
