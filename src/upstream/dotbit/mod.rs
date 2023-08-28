@@ -80,7 +80,7 @@ pub struct AccountInfoData {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountInfoResult {
     pub errno: Option<i32>,
-    pub errmsg: String,
+    pub errmsg: Option<String>,
     pub data: Option<AccountInfoData>,
 }
 
@@ -122,7 +122,7 @@ pub struct AccountItem {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ReverseResult {
     pub errno: Option<i32>,
-    pub errmsg: String,
+    pub errmsg: Option<String>,
     pub data: Option<AccountItem>,
 }
 
@@ -141,7 +141,7 @@ pub struct AccountListData {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountListResult {
     pub errno: Option<i32>,
-    pub errmsg: String,
+    pub errmsg: Option<String>,
     pub data: Option<AccountListData>,
 }
 
@@ -197,7 +197,7 @@ async fn fetch_connections_by_account_info(
         })?;
 
     let resp: AccountInfoResponse = parse_body(&mut result).await?;
-    if resp.result.errno.unwrap() != 0 {
+    if resp.result.errno.map_or(false, |e| e != 0) {
         warn!("fail to fetch the result from .bit, resp {:?}", resp);
         return Err(Error::NoResult);
     }
@@ -305,7 +305,7 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
         })?;
 
     let resp: ReverseResponse = parse_body(&mut result).await?;
-    if resp.result.errno.unwrap() != 0 {
+    if resp.result.errno.map_or(false, |e| e != 0) {
         warn!("fail to fetch the result from .bit, resp {:?}", resp);
         return Err(Error::NoResult);
     }
@@ -404,7 +404,11 @@ async fn fetch_account_list_by_addrs(
         })?;
 
     let resp: AccountListResponse = parse_body(&mut result).await?;
-    if resp.result.errno.unwrap() != 0 || resp.result.data.is_none() {
+    if resp.result.errno.map_or(false, |e| e != 0) {
+        warn!("fail to fetch the result from .bit, resp {:?}", resp);
+        return Err(Error::NoResult);
+    }
+    if resp.result.data.is_none() {
         warn!("fail to fetch the result from .bit, resp {:?}", resp);
         return Err(Error::NoResult);
     }

@@ -1,7 +1,7 @@
 use crate::upstream::Target;
 use crate::{error::Error, upstream::dotbit::DotBit, upstream::Fetcher};
 use crate::{
-    util::make_http_client, tigergraph::vertex::Identity, upstream::Platform, util::naive_now,
+    tigergraph::vertex::Identity, upstream::Platform, util::make_http_client, util::naive_now,
 };
 
 #[tokio::test]
@@ -11,9 +11,10 @@ async fn test_smoke_dotbit_by_dotbit_identity() -> Result<(), Error> {
     DotBit::fetch(&target).await?;
 
     let client = make_http_client();
-    let found = Identity::find_by_platform_identity(&client, &target.platform()?, &target.identity()?)
-        .await?
-        .expect("Record not found");
+    let found =
+        Identity::find_by_platform_identity(&client, &target.platform()?, &target.identity()?)
+            .await?
+            .expect("Record not found");
     tracing::debug!("found {:?}", found);
     assert_eq!(found.updated_at.timestamp(), naive_now().timestamp());
 
