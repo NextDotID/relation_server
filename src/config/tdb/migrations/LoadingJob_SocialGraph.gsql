@@ -3,7 +3,7 @@ USE GRAPH SocialGraph
 BEGIN
 CREATE LOADING JOB load_tx_relation FOR GRAPH SocialGraph {
   DEFINE FILENAME relation_file;
-  LOAD relation_file TO EDGE Relation_Unique_TX VALUES ($0, $1, REDUCE(add($2)), REDUCE(add($3)), REDUCE(max($4)), REDUCE(min($5)), now()) USING header="true", separator="\t";
+  LOAD relation_file TO EDGE Relation_Unique_TX VALUES ($0, $1, REDUCE(add($2)), REDUCE(add($3)), REDUCE(max($4)), REDUCE(min($5)), now()) WHERE to_int($3) > 0 USING header="true", separator="\t";
 }
 END
 
