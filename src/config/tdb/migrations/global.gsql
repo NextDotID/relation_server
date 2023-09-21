@@ -8,3 +8,4 @@ CREATE DIRECTED EDGE Resolve_Contract(FROM Contracts, TO Identities, DISCRIMINAT
 CREATE DIRECTED EDGE Reverse_Resolve_Contract(FROM Identities, TO Contracts, DISCRIMINATOR(source STRING, system STRING, name STRING), uuid STRING, updated_at DATETIME, fetcher STRING)
 CREATE DIRECTED EDGE Relation_Unique_TX(FROM Identities, TO Identities, tx_count INT, tx_sum INT, tx_max INT, tx_min INT, updated_at DATETIME)
 CREATE DIRECTED EDGE Relation_TX(FROM Identities, TO Identities, DISCRIMINATOR(transaction_hash STRING), transaction_index INT, tx_type INT, tx_status INT, block_hash INT, block_number UINT, block_timestamp DATETIME, from_address STRING, to_address STRING, tx_value UINT, contract_address STRING, updated_at DATETIME)
+CREATE DIRECTED EDGE Social_Feed(FROM Identities, TO Identities, source STRING, action STRING, action_count INT, updated_at DATETIME)
