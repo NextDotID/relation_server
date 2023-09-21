@@ -1,4 +1,34 @@
-CREATE GRAPH IdentityGraph (Identities, Proof_Forward, Proof_Backward, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Resolve_Contract, Reverse_Resolve_Contract)
+CREATE GRAPH IdentityGraph (Identities, Proof_Forward, Proof_Backward, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Resolve_Contract, Reverse_Resolve_Contract, Relation_Unique_TX, Relation_TX, Social_Feed)
+
+USE GRAPH IdentityGraph
+
+CREATE OR REPLACE QUERY delete_vertex_and_edge(VERTEX<Identities> p, INT depth=10) FOR GRAPH IdentityGraph SYNTAX v2 {
+  SetAccum<EDGE> @@edges;
+  SetAccum<VERTEX> @@vertices;
+  OrAccum @visited = FALSE;
+  OrAccum @visited2 = FALSE;
+
+  seed (Identities) = {p};
+  WHILE(seed.size()>0) LIMIT depth DO
+    SetAccum<VERTEX> @@pool;
+    proof = SELECT v FROM seed:s1-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:v-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed:s2
+           WHERE v.@visited == FALSE AND s1 == s2
+           ACCUM @@edges += pf, @@edges += pw, @@vertices += v, v.@visited = TRUE
+           POST-ACCUM @@pool += v;
+    hold = SELECT v FROM seed-((Hold_Identity>|<Hold_Identity):e)-Identities:v
+           WHERE v.@visited2 == FALSE
+           ACCUM @@edges += e, @@vertices += v, v.@visited2 = TRUE
+           POST-ACCUM @@pool += v;
+    seed (Identities) = {@@pool};
+  END;
+
+  vertex2delete (Identities) = {@@vertices};
+  contracts = SELECT v FROM vertex2delete-((Reverse_Resolve_Contract>|<Resolve_Contract):e)-Contracts:v ACCUM DELETE(e);
+  contracts = SELECT v FROM vertex2delete-((Hold_Contract>):e)-Contracts:v ACCUM DELETE(e);
+  resolved = SELECT v FROM vertex2delete-((Resolve>|<Reverse_Resolve):e)-Identities:v ACCUM DELETE(e);
+  proof2delete = SELECT v FROM vertex2delete-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward|Hold_Identity>|<Hold_Identity):e)-Identities:v ACCUM DELETE(e);
+  result = SELECT v FROM vertex2delete:v POST-ACCUM DELETE(v);
+}
 
 CREATE OR REPLACE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph { 
   SetAccum<EDGE> @@edges;
@@ -20,38 +50,6 @@ CREATE OR REPLACE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH Ide
     seed (Identities) = {@@pool};
   END;
   PRINT @@vertices AS vertices, @@edges AS edges;
-}
-
-CREATE OR REPLACE QUERY delete_vertex_and_edge(VERTEX<Identities> p, INT depth=10) FOR GRAPH IdentityGraph SYNTAX v2 {
-  SetAccum<EDGE> @@edges;
-  SetAccum<VERTEX> @@vertices;
-  OrAccum @visited = FALSE;
-  OrAccum @visited2 = FALSE;
-
-  seed (Identities) = {p};
-  WHILE(seed.size()>0) LIMIT depth DO
-    SetAccum<VERTEX> @@pool;
-    proof = SELECT v FROM seed-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:v-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed
-           WHERE v.@visited == FALSE
-           ACCUM @@edges += pf, @@edges += pw, @@vertices += v, v.@visited = TRUE
-           POST-ACCUM @@pool += v;
-    hold = SELECT v FROM seed-((Hold_Identity>|<Hold_Identity):e)-Identities:v
-           WHERE v.@visited2 == FALSE
-           ACCUM @@edges += e, @@vertices += v, v.@visited2 = TRUE
-           POST-ACCUM @@pool += v;
-    seed (Identities) = {@@pool};
-  END;
-
-  vertex2delete (Identities) = {@@vertices};
-
-  contracts = SELECT v FROM vertex2delete-((Reverse_Resolve_Contract>|<Resolve_Contract):e)-Contracts:v ACCUM DELETE(e);
-  contracts = SELECT v FROM vertex2delete-((Hold_Contract>):e)-Contracts:v ACCUM DELETE(e);
-  resolved = SELECT v FROM vertex2delete-((Resolve>|<Reverse_Resolve):e)-Identities:v ACCUM DELETE(e);
-
-  FOREACH v IN @@vertices DO DELETE v;
-  END;
-  FOREACH e IN @@edges DO DELETE e;
-  END;
 }
 
 CREATE OR REPLACE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth=10) FOR GRAPH IdentityGraph SYNTAX V2 { 
@@ -189,6 +187,58 @@ CREATE QUERY contracts_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2
 CREATE QUERY owners_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2 {
   vertices = SELECT s FROM Identities:s WHERE s.id IN ids;
   PRINT vertices;
+}
+
+CREATE OR REPLACE QUERY expand(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph { 
+  SetAccum<EDGE> @@edges;
+  OrAccum @visited = FALSE;
+
+  seed (Identities) = {p};
+  FOREACH i in RANGE[1, depth] DO
+    seed = SELECT v FROM seed-((Relation_Unique_TX>|<Relation_Unique_TX|Social_Feed>|<Social_Feed|Relation_TX>|<Relation_TX):e)-Identities:v
+           WHERE v.@visited == FALSE
+           ACCUM @@edges += e, v.@visited = TRUE;
+  END;
+  PRINT @@edges AS relations;
+}
+
+CREATE OR REPLACE QUERY relation_single_pair(VERTEX<Identities> v_source, VERTEX<Identities> target_v, INT depth = 10) FOR GRAPH IdentityGraph {
+  ListAccum<ListAccum<VERTEX>> @path_list; 
+  ListAccum<ListAccum<VERTEX>> @new_list;
+  OrAccum @end_point;
+  ListAccum<ListAccum<VERTEX>> @@total_path_list; // all vertex as List
+  SetAccum<EDGE> @@total_edge_list; // all edge as Set
+
+  endset = {target_v};
+  endset = SELECT s
+          From endset:s
+          ACCUM s.@end_point = true;
+  
+  Source = {v_source};
+  Source = SELECT s 
+           FROM Source:s
+           ACCUM s.@path_list = [s];
+  
+  WHILE Source.size() > 0 LIMIT depth DO 
+       Source = SELECT t 
+                 FROM Source:s-((Relation_Unique_TX>|<Relation_Unique_TX|Social_Feed>|<Social_Feed|Relation_TX>|<Relation_TX):e)-Identities:t
+                 ACCUM @@total_edge_list += e,
+                 FOREACH sequence IN s.@path_list DO 
+                   IF t.@end_point == true THEN
+                     @@total_path_list += [sequence + [t]]
+                   ELSE IF sequence.contains(t) == FALSE THEN
+                     t.@new_list += [sequence + [t]]  
+                   END
+                 END
+        POST-ACCUM s.@path_list.clear();
+  
+      Source = SELECT t 
+                FROM Source:t    
+                POST-ACCUM t.@path_list = t.@new_list,
+                           t.@new_list.clear()
+                HAVING t.@path_list.size() > 0;
+  END;
+  PRINT @@total_path_list as path, @@total_edge_list as relations;
 }
 
 INSTALL QUERY ALL
