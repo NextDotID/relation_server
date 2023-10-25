@@ -123,6 +123,11 @@ pub enum DataSource {
     #[graphql(name = "space_id")]
     SpaceId,
 
+    #[strum(serialize = "crossbell")]
+    #[serde(rename = "crossbell")]
+    #[graphql(name = "crossbell")]
+    Crossbell,
+
     /// opensea
     /// https://opensea.io
     /// Twitter <-> Ethereum

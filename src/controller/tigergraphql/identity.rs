@@ -2,7 +2,7 @@ use crate::{
     error::{Error, Result},
     tigergraph::{
         delete_vertex_and_edge,
-        edge::{EdgeUnion, HoldRecord},
+        edge::{resolve::ResolveReverse, EdgeUnion, HoldRecord},
         vertex::{Identity, IdentityRecord, IdentityWithSource},
     },
     upstream::{fetch_all, ContractCategory, DataSource, Platform, Target},
@@ -123,7 +123,6 @@ impl IdentityRecord {
     }
 
     /// Neighbor identity from current. Flattened.
-    // FIXME: <2023-04-23 SUN> broken of high CPU / bandwidth consumption. Maybe something is wrong with SQL.
     async fn neighbor(
         &self,
         _ctx: &Context<'_>,
@@ -137,6 +136,7 @@ impl IdentityRecord {
         self.neighbors(&client, depth.unwrap_or(1)).await
     }
 
+    /// Neighbor identity from current. The entire topology can be restored by return records.
     async fn neighbor_with_traversal(
         &self,
         _ctx: &Context<'_>,
@@ -147,9 +147,15 @@ impl IdentityRecord {
             .await
     }
 
-    /// there's only `platform: lens` identity `ownedBy` is not null
+    /// Return primary domain names where they would typically only show addresses.
+    async fn reverse_domains(&self, _ctx: &Context<'_>) -> Result<Vec<ResolveReverse>> {
+        let client = make_http_client();
+        self.resolve_reverse_domains(&client).await
+    }
+
+    /// there's only `platform: lens, dotbit, unstoppabledomains, farcaster, space_id` identity `ownedBy` is not null
     async fn owned_by(&self, _ctx: &Context<'_>) -> Result<Option<IdentityRecord>> {
-        if vec![
+        if !vec![
             Platform::Lens,
             Platform::Dotbit,
             Platform::UnstoppableDomains,

@@ -169,6 +169,14 @@ pub enum Chain {
     #[graphql(name = "celo")]
     Celo,
 
+    /// Base is an easy way for decentralized apps to leverage Coinbase's products and distribution.
+    /// https://base.org/
+    /// https://basescan.org/
+    #[serde(rename = "base")]
+    #[strum(serialize = "base")]
+    #[graphql(name = "base")]
+    Base,
+
     #[default]
     #[serde(rename = "unknown")]
     #[strum(serialize = "unknown")]
@@ -225,6 +233,7 @@ impl Chain {
             Avalanche => ChainType::EVM(43114),
             Fantom => ChainType::EVM(250),
             Celo => ChainType::EVM(42220),
+            Base => ChainType::EVM(8453),
             Unknown => todo!(),
         }
     }

@@ -3,7 +3,8 @@ CREATE VERTEX Contracts(PRIMARY_ID id STRING, id STRING, uuid STRING, category S
 CREATE DIRECTED EDGE Proof_Forward(FROM Identities, TO Identities, DISCRIMINATOR(source STRING), created_at DATETIME, uuid STRING, level INT, record_id STRING, updated_at DATETIME, fetcher STRING) WITH REVERSE_EDGE="Proof_Backward"
 CREATE DIRECTED EDGE Hold_Identity(FROM Identities, TO Identities, DISCRIMINATOR(source STRING), uuid STRING, transaction STRING, id STRING, created_at DATETIME, updated_at DATETIME, fetcher STRING)
 CREATE DIRECTED EDGE Hold_Contract(FROM Identities, TO Contracts, DISCRIMINATOR(source STRING, transaction STRING, id STRING), uuid STRING, created_at DATETIME, updated_at DATETIME, fetcher STRING)
-CREATE DIRECTED EDGE Resolve(FROM Identities, TO Identities, DISCRIMINATOR(source STRING, system STRING, name STRING), uuid STRING, updated_at DATETIME, fetcher STRING) WITH REVERSE_EDGE="Reverse_Resolve"
+CREATE DIRECTED EDGE Resolve(FROM Identities, TO Identities, DISCRIMINATOR(source STRING, system STRING, name STRING), uuid STRING, updated_at DATETIME, fetcher STRING)
+CREATE DIRECTED EDGE Reverse_Resolve(FROM Identities, TO Identities, DISCRIMINATOR(source STRING, system STRING, name STRING), uuid STRING, updated_at DATETIME, fetcher STRING)
 CREATE DIRECTED EDGE Resolve_Contract(FROM Contracts, TO Identities, DISCRIMINATOR(source STRING, system STRING, name STRING), uuid STRING, updated_at DATETIME, fetcher STRING)
 CREATE DIRECTED EDGE Reverse_Resolve_Contract(FROM Identities, TO Contracts, DISCRIMINATOR(source STRING, system STRING, name STRING), uuid STRING, updated_at DATETIME, fetcher STRING)
 CREATE DIRECTED EDGE Relation_Unique_TX(FROM Identities, TO Identities, tx_count INT, tx_sum INT, tx_max INT, tx_min INT, updated_at DATETIME)

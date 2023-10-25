@@ -97,6 +97,12 @@ pub enum Platform {
     #[graphql(name = "space_id")]
     SpaceId,
 
+    /// Crossbell
+    #[strum(serialize = "crossbell")]
+    #[serde(rename = "crossbell")]
+    #[graphql(name = "crossbell")]
+    Crossbell,
+
     /// Unknown
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]

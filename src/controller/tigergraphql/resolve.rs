@@ -2,7 +2,7 @@ use crate::{
     error::{Error, Result},
     tigergraph::{
         delete_vertex_and_edge,
-        edge::{Resolve, ResolveEdge},
+        edge::{resolve::ResolveReverse, Resolve, ResolveEdge},
         vertex::IdentityRecord,
     },
     upstream::{
@@ -14,6 +14,46 @@ use async_graphql::{Context, Object};
 use strum::IntoEnumIterator;
 use tokio::time::{sleep, Duration};
 use uuid::Uuid;
+
+#[Object]
+impl ResolveReverse {
+    /// UUID of this record.
+    async fn uuid(&self) -> Uuid {
+        // self.uuid
+        self.record.uuid
+    }
+
+    /// Data source (upstream) which provides this info.
+    async fn source(&self) -> DataSource {
+        self.source
+    }
+
+    /// Domain Name system
+    async fn system(&self) -> DomainNameSystem {
+        self.system
+    }
+
+    /// Name of domain (e.g., `vitalik.eth`, `dotbit.bit`)
+    async fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    /// Who collects this data.
+    /// It works as a "data cleansing" or "proxy" between `source`s and us.
+    async fn fetcher(&self) -> DataFetcher {
+        self.fetcher
+    }
+
+    /// When this connection is fetched by us RelationService.
+    async fn updated_at(&self) -> i64 {
+        self.updated_at.timestamp()
+    }
+
+    /// `reverse`: Return `True` or `False`. Show domain is primary domain or not.
+    async fn reverse(&self) -> bool {
+        self.reverse.clone()
+    }
+}
 
 #[Object]
 impl ResolveEdge {
@@ -60,6 +100,16 @@ impl ResolveEdge {
             None => Err(Error::GraphQLError("owner no found.".to_string())),
             Some(owner) => Ok(owner),
         }
+    }
+
+    /// `reverse`: Return `True` or `False`. Show domain is primary domain or not.
+    async fn reverse(&self) -> bool {
+        self.reverse.clone()
+    }
+
+    /// `reverseRecord`: Only have one primary domain linked to an address.
+    async fn reverse_record(&self) -> Option<IdentityRecord> {
+        self.reverse_record.clone()
     }
 }
 

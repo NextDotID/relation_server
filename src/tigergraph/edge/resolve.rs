@@ -442,6 +442,8 @@ pub struct Domain {
     hold: Option<HoldRecordObject>,
     resolved: Option<Vec<IdentityRecord>>,
     owner: Vec<IdentityRecord>,
+    reverse: bool,
+    reverse_record: Option<Vec<IdentityRecord>>,
 }
 
 #[derive(Clone, Deserialize, Serialize, Debug)]
@@ -459,14 +461,44 @@ pub enum HoldRecordObject {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct ResolveEdge {
+pub struct ResolveReverse {
     pub record: Resolve,
+    pub reverse: bool,
+}
+
+impl std::ops::Deref for ResolveReverse {
+    type Target = Resolve;
+
+    fn deref(&self) -> &Self::Target {
+        &self.record
+    }
+}
+
+impl std::ops::DerefMut for ResolveReverse {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.record
+    }
+}
+
+impl From<Resolve> for ResolveReverse {
+    fn from(record: Resolve) -> Self {
+        ResolveReverse {
+            record,
+            reverse: false,
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ResolveEdge {
+    pub record: ResolveReverse,
+    pub reverse_record: Option<IdentityRecord>,
     pub resolved: Option<IdentityRecord>,
     pub owner: Option<IdentityRecord>,
 }
 
 impl std::ops::Deref for ResolveEdge {
-    type Target = Resolve;
+    type Target = ResolveReverse;
 
     fn deref(&self) -> &Self::Target {
         &self.record
@@ -477,10 +509,11 @@ impl std::ops::DerefMut for ResolveEdge {
         &mut self.record
     }
 }
-impl From<Resolve> for ResolveEdge {
-    fn from(record: Resolve) -> Self {
+impl From<ResolveReverse> for ResolveEdge {
+    fn from(record: ResolveReverse) -> Self {
         ResolveEdge {
             record,
+            reverse_record: None,
             resolved: None,
             owner: None,
         }
@@ -503,7 +536,7 @@ impl Resolve {
     ) -> Result<Option<ResolveEdge>, Error> {
         let encoded_name = urlencoding::encode(name);
         let uri: http::Uri = format!(
-            "{}/query/{}/domain?name={}&system={}",
+            "{}/query/{}/domain2?name={}&system={}",
             C.tdb.host,
             Graph::IdentityGraph.to_string(),
             encoded_name,
@@ -545,34 +578,44 @@ impl Resolve {
                                     use ResolveRecordObject::*;
                                     let resolve_edge = match domain.record {
                                         Some(Empty {}) | None => {
-                                            let mut resolve_edge = ResolveEdge::from(Resolve {
-                                                uuid: hold.attributes.uuid,
-                                                source: hold.attributes.source,
-                                                system: domain_system.clone(),
-                                                name: domain
-                                                    .owner
-                                                    .first()
-                                                    .unwrap()
-                                                    .to_owned()
-                                                    .attributes
-                                                    .identity
-                                                    .clone(),
-                                                fetcher: hold.attributes.fetcher,
-                                                updated_at: hold.attributes.updated_at,
-                                            });
+                                            let mut resolve_edge: ResolveEdge =
+                                                ResolveEdge::from(ResolveReverse::from(Resolve {
+                                                    uuid: hold.attributes.uuid,
+                                                    source: hold.attributes.source,
+                                                    system: domain_system.clone(),
+                                                    name: domain
+                                                        .owner
+                                                        .first()
+                                                        .unwrap()
+                                                        .to_owned()
+                                                        .attributes
+                                                        .identity
+                                                        .clone(),
+                                                    fetcher: hold.attributes.fetcher,
+                                                    updated_at: hold.attributes.updated_at,
+                                                }));
+
+                                            resolve_edge.reverse = domain.reverse;
+                                            resolve_edge.reverse_record = None;
                                             resolve_edge.owner = domain.owner.first().cloned();
                                             resolve_edge.resolved = None;
                                             resolve_edge
                                         }
                                         Some(Nonempty(record)) => {
-                                            let mut resolve_edge = ResolveEdge::from(Resolve {
-                                                uuid: record.attributes.uuid,
-                                                source: record.attributes.source,
-                                                system: record.attributes.system,
-                                                name: record.attributes.name.clone(),
-                                                fetcher: record.attributes.fetcher,
-                                                updated_at: record.attributes.updated_at,
-                                            });
+                                            let mut resolve_edge =
+                                                ResolveEdge::from(ResolveReverse::from(Resolve {
+                                                    uuid: record.attributes.uuid,
+                                                    source: record.attributes.source,
+                                                    system: record.attributes.system,
+                                                    name: record.attributes.name.clone(),
+                                                    fetcher: record.attributes.fetcher,
+                                                    updated_at: record.attributes.updated_at,
+                                                }));
+
+                                            resolve_edge.reverse = domain.reverse;
+                                            resolve_edge.reverse_record = domain
+                                                .reverse_record
+                                                .and_then(|records| records.first().cloned());
                                             resolve_edge.owner = domain.owner.first().cloned();
                                             resolve_edge.resolved = domain
                                                 .resolved

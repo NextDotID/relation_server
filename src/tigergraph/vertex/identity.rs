@@ -2,7 +2,10 @@ use crate::{
     config::C,
     error::Error,
     tigergraph::{
-        edge::{EdgeUnion, HoldRecord},
+        edge::{
+            resolve::{ResolveRecord, ResolveReverse},
+            EdgeUnion, HoldRecord,
+        },
         upsert_graph,
         vertex::{FromWithParams, Vertex, VertexRecord},
         Attribute, BaseResponse, Graph, OpCode, Transfer, UpsertGraph, Vertices,
@@ -245,7 +248,6 @@ impl PartialEq for Identity {
 pub struct NeighborsWithSource {
     #[serde(flatten)]
     base: BaseResponse,
-    // results: Option<Vec<IdentityWithSource>>,
     results: Option<Vec<VertexWithSource>>,
 }
 
@@ -270,6 +272,18 @@ pub struct NeighborsResponse {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct EdgeUnions {
     edges: Vec<EdgeUnion>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ReverseDomainsResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<ReverseRecords>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ReverseRecords {
+    reverse_records: Vec<ResolveRecord>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -661,7 +675,7 @@ impl IdentityRecord {
                 "query identity_by_source | Fail to request: {:?}",
                 err.to_string()
             ))
-        })?; //
+        })?;
 
         match parse_body::<IdentityBySourceResponse>(&mut resp).await {
             Ok(r) => {
@@ -683,6 +697,72 @@ impl IdentityRecord {
             Err(err) => {
                 let err_message = format!(
                     "TigerGraph query identity_by_source parse_body error: {:?}",
+                    err
+                );
+                error!(err_message);
+                return Err(err);
+            }
+        }
+    }
+
+    /// Return primary domain names where they would typically only show addresses.
+    pub async fn resolve_reverse_domains(
+        &self,
+        client: &Client<HttpConnector>,
+    ) -> Result<Vec<ResolveReverse>, Error> {
+        let uri: http::Uri = format!(
+            "{}/query/{}/reverse_domains?p={}",
+            C.tdb.host,
+            Graph::IdentityGraph.to_string(),
+            self.v_id.to_string(),
+        )
+        .parse()
+        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+
+        let req = hyper::Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .header("Authorization", Graph::IdentityGraph.token())
+            .body(Body::empty())
+            .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+
+        let mut resp = client.request(req).await.map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "query reverse_domains | Fail to request: {:?}",
+                err.to_string()
+            ))
+        })?;
+        match parse_body::<ReverseDomainsResponse>(&mut resp).await {
+            Ok(r) => {
+                if r.base.error {
+                    let err_message = format!(
+                        "TigerGraph query reverse_domains error | Code: {:?}, Message: {:?}",
+                        r.base.code, r.base.message
+                    );
+                    error!(err_message);
+                    return Err(Error::General(err_message, resp.status()));
+                }
+                let result: Vec<ResolveReverse> = r
+                    .results
+                    .and_then(|vec_res| vec_res.first().cloned())
+                    .map_or(vec![], |result| {
+                        result
+                            .reverse_records
+                            .into_iter()
+                            .map(|record| {
+                                let mut resolve_reverse =
+                                    ResolveReverse::from(record.attributes.clone());
+                                // set 'reverse' to true.
+                                resolve_reverse.reverse = true;
+                                resolve_reverse
+                            })
+                            .collect()
+                    });
+                Ok(result)
+            }
+            Err(err) => {
+                let err_message = format!(
+                    "TigerGraph query reverse_domains parse_body error: {:?}",
                     err
                 );
                 error!(err_message);

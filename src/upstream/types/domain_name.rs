@@ -49,6 +49,12 @@ pub enum DomainNameSystem {
     #[graphql(name = "space_id")]
     SpaceId,
 
+    /// https://indexer.crossbell.io/docs
+    #[strum(serialize = "crossbell")]
+    #[serde(rename = "crossbell")]
+    #[graphql(name = "crossbell")]
+    Crossbell,
+
     #[default]
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
