@@ -61,6 +61,7 @@ async fn save_item(
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: eth_wallet_address.to_lowercase(),
+        uid: None,
         created_at: None,
         // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
         display_name: None,
@@ -74,6 +75,7 @@ async fn save_item(
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Twitter,
         identity: item.twitter.handle.to_lowercase(),
+        uid: None,
         created_at: None,
         display_name: Some(item.twitter.handle.clone()),
         added_at: naive_now(),
@@ -88,10 +90,7 @@ async fn save_item(
         source: DataSource::SybilList,
         level: ProofLevel::VeryConfident,
         record_id: Some(item.twitter.tweet_id.clone()),
-        created_at: timestamp_to_naive(
-            item.twitter.timestamp / 1000,
-            create_ms_time,
-        ),
+        created_at: timestamp_to_naive(item.twitter.timestamp / 1000, create_ms_time),
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
     };
@@ -101,10 +100,7 @@ async fn save_item(
         source: DataSource::SybilList,
         level: ProofLevel::VeryConfident,
         record_id: Some(item.twitter.tweet_id.clone()),
-        created_at: timestamp_to_naive(
-            item.twitter.timestamp / 1000,
-            create_ms_time,
-        ),
+        created_at: timestamp_to_naive(item.twitter.timestamp / 1000, create_ms_time),
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
     };

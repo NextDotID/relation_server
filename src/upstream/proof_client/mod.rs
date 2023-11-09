@@ -146,10 +146,8 @@ async fn fetch_connections_by_platform_identity(
                 uuid: Some(Uuid::new_v4()),
                 platform: Platform::NextID,
                 identity: avatar.clone(),
-                created_at: timestamp_to_naive(
-                    p.created_at.to_string().parse::<i64>().unwrap(),
-                    0,
-                ),
+                uid: None,
+                created_at: timestamp_to_naive(p.created_at.to_string().parse::<i64>().unwrap(), 0),
                 display_name: Some(avatar.clone()),
                 added_at: naive_now(),
                 avatar_url: None,
@@ -173,10 +171,8 @@ async fn fetch_connections_by_platform_identity(
                 uuid: Some(Uuid::new_v4()),
                 platform: to_platform,
                 identity: p.identity.to_string().to_lowercase(),
-                created_at: timestamp_to_naive(
-                    p.created_at.to_string().parse().unwrap(),
-                    0,
-                ),
+                uid: None,
+                created_at: timestamp_to_naive(p.created_at.to_string().parse().unwrap(), 0),
                 // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
                 display_name: if to_platform == Platform::Ethereum {
                     None
@@ -196,10 +192,7 @@ async fn fetch_connections_by_platform_identity(
                 source: DataSource::NextID,
                 level: ProofLevel::VeryConfident,
                 record_id: None,
-                created_at: timestamp_to_naive(
-                    p.created_at.to_string().parse().unwrap(),
-                    0,
-                ),
+                created_at: timestamp_to_naive(p.created_at.to_string().parse().unwrap(), 0),
                 updated_at: naive_now(),
                 fetcher: DataFetcher::RelationService,
             };
@@ -209,10 +202,7 @@ async fn fetch_connections_by_platform_identity(
                 source: DataSource::NextID,
                 level: ProofLevel::VeryConfident,
                 record_id: None,
-                created_at: timestamp_to_naive(
-                    p.created_at.to_string().parse().unwrap(),
-                    0,
-                ),
+                created_at: timestamp_to_naive(p.created_at.to_string().parse().unwrap(), 0),
                 updated_at: naive_now(),
                 fetcher: DataFetcher::RelationService,
             };

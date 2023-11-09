@@ -220,6 +220,7 @@ async fn fetch_connections_by_account_info(
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: account_info.owner_key.to_lowercase().clone(),
+        uid: None,
         created_at: created_at_naive,
         display_name: None,
         added_at: naive_now(),
@@ -232,6 +233,7 @@ async fn fetch_connections_by_account_info(
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Dotbit,
         identity: identity.to_string(),
+        uid: None,
         created_at: created_at_naive,
         display_name: Some(identity.to_string()),
         added_at: naive_now(),
@@ -274,9 +276,7 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
     _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
-    // account_list api result doesn't provide any proofs(tx, recordID...)
-    // remove the function first
-    // fetch_account_list_by_addrs(_platform, identity).await?;
+    fetch_account_list_by_addrs(_platform, identity).await?;
 
     // das_reverseRecord
     let request_params = get_req_params_by_platform(_platform, identity);
@@ -319,6 +319,7 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: identity.to_string().to_lowercase(),
+        uid: None,
         created_at: None,
         display_name: None,
         added_at: naive_now(),
@@ -331,6 +332,7 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Dotbit,
         identity: result_data.account.clone(),
+        uid: None,
         created_at: None,
         display_name: Some(result_data.account.clone()),
         added_at: naive_now(),
@@ -358,12 +360,21 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
         updated_at: naive_now(),
     };
 
+    let reverse: Resolve = Resolve {
+        uuid: Uuid::new_v4(),
+        source: DataSource::Dotbit,
+        system: DomainNameSystem::DotBit,
+        name: result_data.account.clone(),
+        fetcher: DataFetcher::RelationService,
+        updated_at: naive_now(),
+    };
+
     // hold record
     create_identity_to_identity_hold_record(&cli, &eth_identity, &dotbit_identity, &hold).await?;
     // 'regular' resolution involves mapping from a name to an address.
     create_identity_domain_resolve_record(&cli, &dotbit_identity, &eth_identity, &resolve).await?;
     // das_reverseRecord: 'reverse' resolution maps from an address back to a name.
-    create_identity_domain_reverse_resolve_record(&cli, &eth_identity, &dotbit_identity, &resolve)
+    create_identity_domain_reverse_resolve_record(&cli, &eth_identity, &dotbit_identity, &reverse)
         .await?;
 
     return Ok(vec![Target::Identity(
@@ -418,6 +429,7 @@ async fn fetch_account_list_by_addrs(
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: identity.to_string().to_lowercase().clone(),
+        uid: None,
         created_at: None,
         display_name: None,
         added_at: naive_now(),
@@ -431,6 +443,7 @@ async fn fetch_account_list_by_addrs(
             uuid: Some(Uuid::new_v4()),
             platform: Platform::Dotbit,
             identity: i.account.to_string(),
+            uid: None,
             created_at: None,
             display_name: Some(i.account.to_string()),
             added_at: naive_now(),
@@ -449,8 +462,19 @@ async fn fetch_account_list_by_addrs(
             fetcher: DataFetcher::RelationService,
         };
 
+        let resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Dotbit,
+            system: DomainNameSystem::DotBit,
+            name: i.account.to_string(),
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+
         // hold record
         create_identity_to_identity_hold_record(&cli, &from, &to, &hold).await?;
+        // 'regular' resolution involves mapping from a name to an address.
+        create_identity_domain_resolve_record(&cli, &to, &from, &resolve).await?;
     }
 
     Ok(vec![])

@@ -176,6 +176,7 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: p.owner.to_lowercase(),
+        uid: None,
         created_at: created_at_naive,
         // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
         display_name: None,

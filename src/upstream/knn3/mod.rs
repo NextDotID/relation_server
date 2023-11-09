@@ -126,6 +126,7 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
             uuid: Some(Uuid::new_v4()),
             platform: Platform::Ethereum,
             identity: identity.to_lowercase(),
+            uid: None,
             created_at: None,
             // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
             display_name: None,
@@ -216,6 +217,7 @@ async fn fetch_eth_wallet_by_ens(id: &str) -> Result<TargetProcessedList, Error>
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: address.to_lowercase(),
+        uid: None,
         // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
         display_name: None,
         profile_url: None,

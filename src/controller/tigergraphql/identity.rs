@@ -82,6 +82,13 @@ impl IdentityRecord {
         self.identity.clone()
     }
 
+    /// Uid on target platform.
+    /// uid is the unique ID on each platform
+    /// e.g. for `Farcaster`, this is the `fid`, for `Lens` this is the lens profile_id(0xabcd)
+    async fn uid(&self) -> Option<String> {
+        self.uid.clone()
+    }
+
     /// Usually user-friendly screen name.  e.g. for `Twitter`, this
     /// is the user's `screen_name`.
     /// Note: both `null` and `""` should be treated as "no value".

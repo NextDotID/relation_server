@@ -178,6 +178,7 @@ async fn save_profile_ethereum(
                     uuid: Some(Uuid::new_v4()),
                     platform: Platform::Ethereum,
                     identity: signer_address.to_lowercase().to_string(),
+                    uid: None,
                     created_at: None,
                     display_name: None,
                     added_at: naive_now(),
@@ -189,6 +190,7 @@ async fn save_profile_ethereum(
                     uuid: Some(Uuid::new_v4()),
                     platform: Platform::Farcaster,
                     identity: profile.username.clone(),
+                    uid: Some(profile.fid.clone().to_string()),
                     created_at: None,
                     display_name: profile.displayName.clone(),
                     added_at: naive_now(),
@@ -236,6 +238,7 @@ async fn save_profile_signer(
             .unwrap()
             .to_lowercase()
             .to_string(),
+        uid: None,
         created_at: None,
         display_name: None,
         added_at: naive_now(),
@@ -247,6 +250,7 @@ async fn save_profile_signer(
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Farcaster,
         identity: profile.username.clone(),
+        uid: Some(profile.fid.clone().to_string()),
         created_at: None,
         display_name: profile.displayName.clone(),
         added_at: naive_now(),

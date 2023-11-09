@@ -1,3 +1,4 @@
+use crate::upstream::dotbit::{get_req_params_by_platform, ReverseRecordRequest};
 use crate::upstream::Target;
 use crate::{error::Error, upstream::dotbit::DotBit, upstream::Fetcher};
 use crate::{
@@ -7,6 +8,44 @@ use crate::{
 #[tokio::test]
 async fn test_smoke_dotbit_by_dotbit_identity() -> Result<(), Error> {
     let target = Target::Identity(Platform::Dotbit, "test0920.bit".into());
+
+    DotBit::fetch(&target).await?;
+
+    let client = make_http_client();
+    let found =
+        Identity::find_by_platform_identity(&client, &target.platform()?, &target.identity()?)
+            .await?
+            .expect("Record not found");
+    tracing::debug!("found {:?}", found);
+    assert_eq!(found.updated_at.timestamp(), naive_now().timestamp());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_dotbit_account_list() -> Result<(), Error> {
+    let request_params = get_req_params_by_platform(
+        &Platform::Ethereum,
+        "0x9176acd39a3a9ae99dcb3922757f8af4f94cdf3c",
+    );
+    let params = ReverseRecordRequest {
+        jsonrpc: "2.0".to_string(),
+        id: 1,
+        method: "das_accountList".to_string(),
+        params: vec![request_params],
+    };
+    let json_raw = serde_json::to_string(&params).map_err(|err| Error::JSONParseError(err))?;
+    // println!("{}", json_raw);
+    tracing::info!("params {:?}", json_raw);
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_dotbit_reverse_record() -> Result<(), Error> {
+    let target = Target::Identity(
+        Platform::Ethereum,
+        "0x9176acd39a3a9ae99dcb3922757f8af4f94cdf3c".into(),
+    );
 
     DotBit::fetch(&target).await?;
 

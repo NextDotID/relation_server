@@ -142,6 +142,7 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         uuid: Some(Uuid::new_v4()),
         platform: from_platform,
         identity: p.sns_handle.clone().to_lowercase(),
+        uid: None,
         created_at: None,
         display_name: Some(p.sns_handle.clone()),
         added_at: naive_now(),
@@ -163,6 +164,7 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         uuid: Some(Uuid::new_v4()),
         platform: to_platform,
         identity: web3_addr.clone().to_lowercase(),
+        uid: None,
         created_at: None,
         // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
         display_name: None,
@@ -201,7 +203,8 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         updated_at: timestamp_to_naive(
             p.modify_timestamp.parse::<i64>().unwrap() / 1000,
             update_ms_time,
-        ).unwrap(),
+        )
+        .unwrap(),
         fetcher: DataFetcher::AggregationService,
     };
 
@@ -217,7 +220,8 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         updated_at: timestamp_to_naive(
             p.modify_timestamp.parse::<i64>().unwrap() / 1000,
             update_ms_time,
-        ).unwrap(),
+        )
+        .unwrap(),
         fetcher: DataFetcher::AggregationService,
     };
 

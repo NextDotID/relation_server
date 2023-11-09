@@ -44,6 +44,10 @@ pub struct Identity {
     /// Username or database primary key (prefer, usually digits).
     /// e.g. `Twitter` has this digits-like user ID thing.
     pub identity: String,
+    /// Uid on target platform.
+    /// uid is the unique ID on each platform
+    /// e.g. for `Farcaster`, this is the `fid`, for `Lens` this is the lens profile_id(0xabcd)
+    pub uid: Option<String>,
     /// Usually user-friendly screen name.
     /// e.g. for `Twitter`, this is the user's `screen_name`.
     /// For `ethereum`, this is the reversed ENS name set by user.
@@ -167,6 +171,15 @@ impl Transfer for Identity {
                 op: Some(OpCode::IgnoreIfExists),
             },
         );
+        if let Some(uid) = self.uid.clone() {
+            attributes_map.insert(
+                "uid".to_string(),
+                Attribute {
+                    value: json!(uid),
+                    op: None,
+                },
+            );
+        }
         if let Some(display_name) = self.display_name.clone() {
             attributes_map.insert(
                 "display_name".to_string(),
@@ -228,6 +241,7 @@ impl Default for Identity {
             uuid: Default::default(),
             platform: Platform::Twitter,
             identity: Default::default(),
+            uid: Default::default(),
             display_name: Default::default(),
             profile_url: None,
             avatar_url: None,
