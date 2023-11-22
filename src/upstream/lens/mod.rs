@@ -238,7 +238,7 @@ async fn save_profile(client: &Client<HttpConnector>, profile: &Profile) -> Resu
         updated_at: naive_now(),
     };
     create_identity_to_identity_hold_record(client, &from, &to, &hold).await?;
-    create_identity_domain_resolve_record(client, &from, &to, &resolve).await?;
+    create_identity_domain_resolve_record(client, &to, &from, &resolve).await?;
 
     if profile.is_default {
         let resolve: Resolve = Resolve {
@@ -249,7 +249,7 @@ async fn save_profile(client: &Client<HttpConnector>, profile: &Profile) -> Resu
             fetcher: DataFetcher::RelationService,
             updated_at: naive_now(),
         };
-        create_identity_domain_reverse_resolve_record(client, &to, &from, &resolve).await?;
+        create_identity_domain_reverse_resolve_record(client, &from, &to, &resolve).await?;
     }
     Ok(())
 }

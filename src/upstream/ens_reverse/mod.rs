@@ -38,7 +38,7 @@ impl Fetcher for ENSReverseLookup {
         // If reverse lookup record is reset to empty by user,
         // our cache should also be cleared.
         // Reach this by setting `display_name` into `Some("")`.
-        let reverse_ens = record.reverse_record.unwrap_or("".into());
+        let reverse_ens = record.reverse_record.clone().unwrap_or("".into());
 
         info!("ENS Reverse record: {} => {}", wallet, reverse_ens);
 
@@ -50,6 +50,11 @@ impl Fetcher for ENSReverseLookup {
         let cli = make_http_client();
         identity.create_or_update(&cli).await?;
 
+        // If reverse lookup record reverse_record is None
+        // Do not save the reverse_resolve_record
+        if record.reverse_record.is_none() {
+            return Ok(vec![]);
+        }
         let contract = Contract {
             uuid: Uuid::new_v4(),
             category: ContractCategory::ENS,

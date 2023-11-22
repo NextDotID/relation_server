@@ -155,7 +155,7 @@ impl IdentityRecord {
     }
 
     /// Return primary domain names where they would typically only show addresses.
-    async fn reverse_domains(&self, _ctx: &Context<'_>) -> Result<Vec<ResolveReverse>> {
+    async fn reverse_records(&self, _ctx: &Context<'_>) -> Result<Vec<ResolveReverse>> {
         let client = make_http_client();
         self.resolve_reverse_domains(&client).await
     }
