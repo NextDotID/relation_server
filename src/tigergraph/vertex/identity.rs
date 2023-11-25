@@ -276,6 +276,7 @@ pub struct VertexWithSource {
 pub struct IdentityWithSource {
     pub identity: IdentityRecord,
     pub sources: Vec<DataSource>,
+    pub reverse: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -364,6 +365,7 @@ impl<'de> Deserialize<'de> for IdentityWithSource {
             {
                 let mut v_type: Option<String> = None;
                 let mut v_id: Option<String> = None;
+                let mut reverse: Option<bool> = None;
                 let mut attributes: Option<serde_json::Map<String, serde_json::Value>> = None;
 
                 while let Some(key) = map.next_key()? {
@@ -827,21 +829,31 @@ impl IdentityRecord {
         }
     }
 
+    #[allow(dead_code)]
+    /// Temporarily do not use `domain_owned_by` query, because domain_owned_by usually use BatchLoadFn
     /// Return domain-identity owned by another identity: wallet address.
     pub async fn domain_owned_by(
         &self,
         client: &Client<HttpConnector>,
     ) -> Result<Option<IdentityRecord>, Error> {
         // query see in Solution: CREATE QUERY identity_owned_by(VERTEX<Identities> p, STRING platform)
+        let encoded_id = urlencoding::encode(self.v_id.as_str());
         let uri: http::Uri = format!(
             "{}/query/{}/identity_owned_by?p={}&platform={}",
             C.tdb.host,
             Graph::IdentityGraph.to_string(),
-            self.v_id.to_string(),
+            encoded_id,
             self.attributes.platform.to_string(),
         )
         .parse()
-        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+        .map_err(|_err: InvalidUri| {
+            Error::ParamError(format!(
+                "owned_by?p={}&platform={} Uri format Error {}",
+                encoded_id,
+                self.attributes.platform.to_string(),
+                _err
+            ))
+        })?;
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
@@ -960,6 +972,10 @@ impl IdentityRecord {
     }
 }
 
+pub struct OwnerLoadFn {
+    pub client: Client<HttpConnector>,
+}
+
 pub struct IdentityLoadFn {
     pub client: Client<HttpConnector>,
 }
@@ -981,15 +997,95 @@ struct VertexIdsResult {
     vertices: Vec<IdentityRecord>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct OwnerQueryIdResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<OwnerQueryIdResult>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct OwnerQueryIdResult {
+    query_id: String,
+    identity: Vec<IdentityRecord>,
+}
+
 #[async_trait::async_trait]
 impl BatchFn<String, Option<IdentityRecord>> for IdentityLoadFn {
     async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<IdentityRecord>> {
-        trace!(ids = ids.len(), "Loading Identity id");
+        trace!(ids = ids.len(), "Loading Identity id for identities_by_ids");
         let records = get_identities_by_ids(&self.client, ids.to_vec()).await;
         match records {
             Ok(records) => records,
             // HOLD ON: Not sure if `Err` need to return
             Err(_) => ids.iter().map(|k| (k.to_owned(), None)).collect(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl BatchFn<String, Option<IdentityRecord>> for OwnerLoadFn {
+    async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<IdentityRecord>> {
+        tracing::info!(ids = ids.len(), "Loading Identity id for owners_by_ids");
+        let records = get_owners_by_ids(&self.client, ids.to_vec()).await;
+        match records {
+            Ok(records) => records,
+            // HOLD ON: Not sure if `Err` need to return
+            Err(_) => ids.iter().map(|k| (k.to_owned(), None)).collect(),
+        }
+    }
+}
+
+async fn get_owners_by_ids(
+    client: &Client<HttpConnector>,
+    ids: Vec<String>,
+) -> Result<HashMap<String, Option<IdentityRecord>>, Error> {
+    let uri: http::Uri = format!(
+        "{}/query/{}/owners_by_ids",
+        C.tdb.host,
+        Graph::IdentityGraph.to_string()
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+    let payload = VertexIds { ids };
+    let json_params = serde_json::to_string(&payload).map_err(|err| Error::JSONParseError(err))?;
+    tracing::info!("owners_by_ids {}", json_params);
+    let req = hyper::Request::builder()
+        .method(Method::POST)
+        .uri(uri)
+        .header("Authorization", Graph::IdentityGraph.token())
+        .body(Body::from(json_params))
+        .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+    let mut resp = client.request(req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!(
+            "TigerGraph | Fail to request owners_by_ids: {:?}",
+            err.to_string()
+        ))
+    })?;
+    match parse_body::<OwnerQueryIdResponse>(&mut resp).await {
+        Ok(r) => {
+            if r.base.error {
+                let err_message = format!(
+                    "TigerGraph owners_by_ids error | Code: {:?}, Message: {:?}",
+                    r.base.code, r.base.message
+                );
+                error!(err_message);
+                return Err(Error::General(err_message, resp.status()));
+            }
+
+            let result: HashMap<String, Option<IdentityRecord>> = r
+                .results
+                .unwrap_or_else(Vec::new) // Converts None to an empty Vec
+                .into_iter()
+                .map(|res| (res.query_id, res.identity.first().cloned()))
+                .collect();
+            tracing::info!("get map {:#?}", result);
+            Ok(result)
+        }
+        Err(err) => {
+            let err_message = format!("TigerGraph owners_by_ids parse_body error: {:?}", err);
+            error!(err_message);
+            return Err(err);
         }
     }
 }

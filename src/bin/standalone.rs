@@ -9,7 +9,7 @@ use relation_server::{
     config::C,
     controller::tigergraphql::Query,
     error::Result,
-    tigergraph::vertex::{ContractLoadFn, IdentityLoadFn},
+    tigergraph::vertex::{ContractLoadFn, IdentityLoadFn, OwnerLoadFn},
     util::make_http_client,
 };
 use std::{convert::Infallible, net::SocketAddr};
@@ -44,6 +44,9 @@ async fn main() -> Result<()> {
     let identity_loader_fn = IdentityLoadFn {
         client: client.to_owned(),
     };
+    let owner_loader_fn = OwnerLoadFn {
+        client: client.to_owned(),
+    };
 
     let contract_loader = Loader::new(contract_loader_fn)
         .with_max_batch_size(500)
@@ -52,9 +55,14 @@ async fn main() -> Result<()> {
         .with_max_batch_size(500)
         .with_yield_count(100);
 
+    let owner_loader = Loader::new(owner_loader_fn)
+        .with_max_batch_size(500)
+        .with_yield_count(100);
+
     let schema = Schema::build(Query::default(), EmptyMutation, EmptySubscription)
         .data(contract_loader)
         .data(identity_loader)
+        .data(owner_loader)
         .finish();
 
     let graphql_post = async_graphql_warp::graphql(schema)

@@ -181,6 +181,18 @@ CREATE OR REPLACE QUERY identity_by_source(VERTEX<Identities> p, STRING source) 
   PRINT vertices;
 }
 
+CREATE OR REPLACE QUERY owners_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2 {
+  start (Identities) = SELECT s FROM Identities:s WHERE s.id IN ids;
+  # SumAccum<STRING> @query_id;
+  MapAccum<VERTEX<Identities>, VERTEX<Identities>> @@owners_map;
+  vertices = SELECT v FROM start:s-((<Hold_Identity):e)-Identities:v
+            ACCUM @@owners_map += (s -> v);
+  FOREACH (query_id, owner) IN @@owners_map DO
+    identity (Identities) = { owner };
+    PRINT query_id as query_id, identity;
+  END;
+}
+
 
 CREATE OR REPLACE QUERY identities_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2 {
   vertices = SELECT s FROM Identities:s WHERE s.id IN ids;

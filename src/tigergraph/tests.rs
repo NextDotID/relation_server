@@ -5,8 +5,8 @@ mod tests {
     use crate::error::Error;
     use crate::tigergraph::{
         create_contract_to_identity_resolve_record, create_identity_domain_resolve_record,
-        create_identity_to_contract_hold_record,
-        create_identity_to_identity_hold_record, create_identity_to_identity_proof_two_way_binding,
+        create_identity_to_contract_hold_record, create_identity_to_identity_hold_record,
+        create_identity_to_identity_proof_two_way_binding,
     };
     use crate::{
         tigergraph::{

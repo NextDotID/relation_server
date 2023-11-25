@@ -3,13 +3,14 @@ use crate::{
     tigergraph::{
         delete_vertex_and_edge,
         edge::{resolve::ResolveReverse, EdgeUnion, HoldRecord},
-        vertex::{Identity, IdentityRecord, IdentityWithSource},
+        vertex::{Identity, IdentityRecord, IdentityWithSource, OwnerLoadFn},
     },
     upstream::{fetch_all, ContractCategory, DataSource, Platform, Target},
     util::make_http_client,
 };
 
 use async_graphql::{Context, Object};
+use dataloader::non_cached::Loader;
 use strum::IntoEnumIterator;
 use tokio::time::{sleep, Duration};
 use tracing::{event, Level};
@@ -172,7 +173,7 @@ impl IdentityRecord {
     }
 
     /// there's only `platform: lens, dotbit, unstoppabledomains, farcaster, space_id` identity `ownedBy` is not null
-    async fn owned_by(&self, _ctx: &Context<'_>) -> Result<Option<IdentityRecord>> {
+    async fn owned_by(&self, ctx: &Context<'_>) -> Result<Option<IdentityRecord>> {
         if !vec![
             Platform::Lens,
             Platform::Dotbit,
@@ -184,10 +185,15 @@ impl IdentityRecord {
         {
             return Ok(None);
         }
-        let client = make_http_client();
-        self.domain_owned_by(&client).await
-    }
 
+        let loader: &Loader<String, Option<IdentityRecord>, OwnerLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+
+        match loader.load(self.v_id.clone()).await {
+            Some(value) => Ok(Some(value)),
+            None => Err(Error::GraphQLError("Record not found.".to_string())),
+        }
+    }
     /// NFTs owned by this identity.
     /// For now, there's only `platform: ethereum` identity has NFTs.
     /// If `category` is provided, only NFTs of that category will be returned.
