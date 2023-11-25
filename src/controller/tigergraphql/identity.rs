@@ -40,6 +40,10 @@ impl IdentityWithSource {
         self.sources.clone()
     }
 
+    async fn reverse(&self) -> Option<bool> {
+        self.reverse.clone()
+    }
+
     async fn identity(&self) -> IdentityRecord {
         self.identity.clone()
     }
@@ -138,9 +142,16 @@ impl IdentityRecord {
         // )]
         // upstream: Option<String>,
         #[graphql(desc = "Depth of traversal. 1 if omitted")] depth: Option<u16>,
+        #[graphql(
+            desc = "This reverse flag can be used as a filtering for Identity which type is domain system .
+        If `reverse=None` if omitted, there is no need to filter anything.
+        When `reverse=true`, just return `primary domain` related identities.
+        When `reverse=false`, Only `non-primary domain` will be returned, which is the inverse set of reverse=true."
+        )]
+        reverse: Option<bool>,
     ) -> Result<Vec<IdentityWithSource>> {
         let client = make_http_client();
-        self.neighbors(&client, depth.unwrap_or(1)).await
+        self.neighbors(&client, depth.unwrap_or(1), reverse).await
     }
 
     /// Neighbor identity from current. The entire topology can be restored by return records.

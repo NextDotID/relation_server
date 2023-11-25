@@ -596,7 +596,9 @@ impl Resolve {
                                                 }));
 
                                             resolve_edge.reverse = domain.reverse;
-                                            resolve_edge.reverse_record = None;
+                                            resolve_edge.reverse_record = domain
+                                                .reverse_record
+                                                .and_then(|records| records.first().cloned());
                                             resolve_edge.owner = domain.owner.first().cloned();
                                             resolve_edge.resolved = None;
                                             resolve_edge

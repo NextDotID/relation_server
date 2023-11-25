@@ -10,7 +10,9 @@ use crate::{
         vertex::{FromWithParams, Vertex, VertexRecord},
         Attribute, BaseResponse, Graph, OpCode, Transfer, UpsertGraph, Vertices,
     },
-    upstream::{vec_string_to_vec_datasource, ContractCategory, DataSource, Platform},
+    upstream::{
+        vec_string_to_vec_datasource, ContractCategory, DataSource, DomainNameSystem, Platform,
+    },
     util::{
         naive_datetime_from_string, naive_datetime_to_string, naive_now,
         option_naive_datetime_from_string, option_naive_datetime_to_string, parse_body,
@@ -382,14 +384,26 @@ impl<'de> Deserialize<'de> for IdentityWithSource {
                     .transpose()
                     .map_err(de::Error::custom)?;
 
-                let attributes = serde_json::from_value(serde_json::Value::Object(attributes))
+                let domain_reverse: Option<bool> = attributes
+                    .remove("@reverse")
+                    .map(serde_json::from_value)
+                    .transpose()
                     .map_err(de::Error::custom)?;
+
+                let attributes: Identity =
+                    serde_json::from_value(serde_json::Value::Object(attributes))
+                        .map_err(de::Error::custom)?;
+
                 let v_type = v_type.ok_or_else(|| de::Error::missing_field("v_type"))?;
                 let v_id = v_id.ok_or_else(|| de::Error::missing_field("v_id"))?;
                 let source_list =
                     source_list.ok_or_else(|| de::Error::missing_field("@source_list"))?;
                 let sources =
                     vec_string_to_vec_datasource(source_list).map_err(de::Error::custom)?;
+                let domain_system: DomainNameSystem = attributes.platform.clone().into();
+                if domain_system != DomainNameSystem::Unknown {
+                    reverse = domain_reverse;
+                }
 
                 Ok(IdentityWithSource {
                     identity: IdentityRecord(VertexRecord {
@@ -398,6 +412,7 @@ impl<'de> Deserialize<'de> for IdentityWithSource {
                         attributes,
                     }),
                     sources,
+                    reverse,
                 })
             }
         }
@@ -498,7 +513,14 @@ impl Identity {
             identity.to_string(),
         )
         .parse()
-        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error | {}", _err)))?;
+        .map_err(|_err: InvalidUri| {
+            Error::ParamError(format!(
+                "QUERY filter=platform=%22{}%22,identity=%22{}%22 Uri format Error | {}",
+                platform.to_string(),
+                identity.to_string(),
+                _err
+            ))
+        })?;
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
@@ -508,7 +530,9 @@ impl Identity {
 
         let mut resp = client.request(req).await.map_err(|err| {
             Error::ManualHttpClientError(format!(
-                "query filter error | Fail to request: {:?}",
+                "query filter=platform=%22{}%22,identity=%22{}%22 error | Fail to request: {:?}",
+                platform.to_string(),
+                identity.to_string(),
                 err.to_string()
             ))
         })?;
@@ -550,14 +574,24 @@ impl IdentityRecord {
         &self,
         client: &Client<HttpConnector>,
         depth: u16,
+        reverse: Option<bool>,
     ) -> Result<Vec<IdentityWithSource>, Error> {
+        // This reverse flag can be used as a filtering for Identity which type is domain system .
+        // flag = 0, If `reverse=None` if omitted, there is no need to filter anything.
+        // flag = 1, When `reverse=true`, just return `primary domain` related identities.
+        // flag = 2, When `reverse=false`, Only `non-primary domain` will be returned, which is the inverse set of reverse=true.
+        let flag = reverse.map_or(0, |r| match r {
+            true => 1,
+            false => 2,
+        });
         // query see in Solution: CREATE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth)
         let uri: http::Uri = format!(
-            "{}/query/{}/neighbors_with_source?p={}&depth={}",
+            "{}/query/{}/neighbors_with_source_reverse?p={}&depth={}&reverse_flag={}",
             C.tdb.host,
             Graph::IdentityGraph.to_string(),
             self.v_id,
             depth,
+            flag,
         )
         .parse()
         .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
@@ -624,8 +658,13 @@ impl IdentityRecord {
             depth,
         )
         .parse()
-        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
-        tracing::trace!("query neighbors Url {:?}", uri);
+        .map_err(|_err: InvalidUri| {
+            Error::ParamError(format!(
+                "QUERY neighbors_with_traversal({},{}) Uri format Error {}",
+                self.v_id, depth, _err
+            ))
+        })?;
+        tracing::trace!("query neighbors_with_traversal Url {:?}", uri);
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
@@ -634,7 +673,7 @@ impl IdentityRecord {
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {
             Error::ManualHttpClientError(format!(
-                "query neighbors | Fail to request: {:?}",
+                "query neighbors_with_traversal | Fail to request: {:?}",
                 err.to_string()
             ))
         })?;
@@ -642,7 +681,7 @@ impl IdentityRecord {
             Ok(r) => {
                 if r.base.error {
                     let err_message = format!(
-                        "TigerGraph query neighbors error | Code: {:?}, Message: {:?}",
+                        "TigerGraph query neighbors_with_traversal error | Code: {:?}, Message: {:?}",
                         r.base.code, r.base.message
                     );
                     error!(err_message);
@@ -656,7 +695,10 @@ impl IdentityRecord {
                 Ok(result)
             }
             Err(err) => {
-                let err_message = format!("TigerGraph query neighbors parse_body error: {:?}", err);
+                let err_message = format!(
+                    "TigerGraph query neighbors_with_traversal parse_body error: {:?}",
+                    err
+                );
                 error!(err_message);
                 return Err(err);
             }

@@ -219,8 +219,12 @@ mod tests {
     #[tokio::test]
     async fn test_neighbors_with_traversal() -> Result<(), Error> {
         let client = make_http_client();
-        if let Some(found) =
-            Identity::find_by_platform_identity(&client, &Platform::Ethereum, "d").await?
+        if let Some(found) = Identity::find_by_platform_identity(
+            &client,
+            &Platform::Ethereum,
+            "0xb2be2887a26f44555835eeacc47d65b88b6b42c2",
+        )
+        .await?
         {
             println!("found = {:?}", found);
             let edges = found.neighbors_with_traversal(&client, 1).await?;
@@ -240,7 +244,7 @@ mod tests {
             Identity::find_by_platform_identity(&client, &Platform::Ethereum, "d").await?
         {
             println!("found = {:?}", found);
-            let edges = found.neighbors(&client, 3).await?;
+            let edges = found.neighbors(&client, 3, None).await?;
             let json_raw =
                 serde_json::to_string(&edges).map_err(|err| Error::JSONParseError(err))?;
             println!("neighbors_with_source: {}", json_raw);

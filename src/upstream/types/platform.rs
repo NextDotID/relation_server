@@ -1,3 +1,4 @@
+use crate::upstream::DomainNameSystem;
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
 
@@ -109,4 +110,17 @@ pub enum Platform {
     #[graphql(name = "unknown")]
     #[default]
     Unknown,
+}
+
+impl From<Platform> for DomainNameSystem {
+    fn from(platform: Platform) -> Self {
+        match platform {
+            Platform::Dotbit => DomainNameSystem::DotBit,
+            Platform::UnstoppableDomains => DomainNameSystem::UnstoppableDomains,
+            Platform::Lens => DomainNameSystem::Lens,
+            Platform::SpaceId => DomainNameSystem::SpaceId,
+            Platform::Crossbell => DomainNameSystem::SpaceId,
+            _ => DomainNameSystem::Unknown,
+        }
+    }
 }
