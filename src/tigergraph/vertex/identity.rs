@@ -406,6 +406,9 @@ impl<'de> Deserialize<'de> for IdentityWithSource {
                 if domain_system != DomainNameSystem::Unknown {
                     reverse = domain_reverse;
                 }
+                if attributes.platform == Platform::Ethereum {
+                    reverse = domain_reverse;
+                }
 
                 Ok(IdentityWithSource {
                     identity: IdentityRecord(VertexRecord {

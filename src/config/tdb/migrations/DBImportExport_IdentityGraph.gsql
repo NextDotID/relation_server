@@ -110,6 +110,10 @@ CREATE OR REPLACE QUERY neighbors_with_source_reverse(VERTEX<Identities> p, INT 
             WHERE @@domainSystems.contains(r.system) == TRUE
             ACCUM start.@reverse += true;
   
+  address2 = SELECT addr FROM ResultSet:addr-((Reverse_Resolve_Contract>):r)-Contracts:c
+            WHERE r.system == "ENS"
+            ACCUM addr.@reverse += true;
+  
   IF reverse_flag == 0 THEN
     PRINT ResultSet as vertices;
   ELSE IF reverse_flag == 1 THEN
