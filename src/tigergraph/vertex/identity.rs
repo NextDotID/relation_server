@@ -1029,7 +1029,7 @@ impl BatchFn<String, Option<IdentityRecord>> for IdentityLoadFn {
 #[async_trait::async_trait]
 impl BatchFn<String, Option<IdentityRecord>> for OwnerLoadFn {
     async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<IdentityRecord>> {
-        tracing::info!(ids = ids.len(), "Loading Identity id for owners_by_ids");
+        trace!(ids = ids.len(), "Loading Identity id for owners_by_ids");
         let records = get_owners_by_ids(&self.client, ids.to_vec()).await;
         match records {
             Ok(records) => records,
@@ -1052,7 +1052,7 @@ async fn get_owners_by_ids(
     .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
     let payload = VertexIds { ids };
     let json_params = serde_json::to_string(&payload).map_err(|err| Error::JSONParseError(err))?;
-    tracing::info!("owners_by_ids {}", json_params);
+    trace!("owners_by_ids {}", json_params);
     let req = hyper::Request::builder()
         .method(Method::POST)
         .uri(uri)
@@ -1082,7 +1082,6 @@ async fn get_owners_by_ids(
                 .into_iter()
                 .map(|res| (res.query_id, res.identity.first().cloned()))
                 .collect();
-            tracing::info!("get map {:#?}", result);
             Ok(result)
         }
         Err(err) => {
