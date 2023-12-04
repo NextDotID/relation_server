@@ -3,7 +3,9 @@ use crate::{
     tigergraph::{
         delete_vertex_and_edge,
         edge::{resolve::ResolveReverse, EdgeUnion, HoldRecord},
-        vertex::{Identity, IdentityRecord, IdentityWithSource, OwnerLoadFn},
+        vertex::{
+            Identity, IdentityRecord, IdentityWithSource, NeighborReverseLoadFn, OwnerLoadFn,
+        },
     },
     upstream::{fetch_all, ContractCategory, DataSource, Platform, Target},
     util::make_http_client,
@@ -172,6 +174,31 @@ impl IdentityRecord {
         self.resolve_reverse_domains(&client).await
     }
 
+    /// reverse flag can be used as a filtering for Identity which type is domain system.
+    /// If `reverse=None` if omitted, there is no need to filter anything.
+    /// When `reverse=true`, just return `primary domain` related identities.
+    /// When `reverse=false`, Only `non-primary domain` will be returned, which is the inverse set of reverse=true.
+    async fn reverse(&self, ctx: &Context<'_>) -> Result<Option<bool>> {
+        if !vec![
+            Platform::Lens,
+            Platform::Dotbit,
+            Platform::UnstoppableDomains,
+            Platform::SpaceId,
+            Platform::Crossbell,
+            Platform::Ethereum, // ENS
+        ]
+        .contains(&self.platform)
+        {
+            return Ok(None);
+        }
+        let loader: &Loader<String, Option<bool>, NeighborReverseLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        match loader.load(self.v_id.clone()).await {
+            Some(value) => Ok(Some(value)),
+            None => Ok(None),
+        }
+    }
+
     /// there's only `platform: lens, dotbit, unstoppabledomains, farcaster, space_id` identity `ownedBy` is not null
     async fn owned_by(&self, ctx: &Context<'_>) -> Result<Option<IdentityRecord>> {
         if !vec![
@@ -180,6 +207,7 @@ impl IdentityRecord {
             Platform::UnstoppableDomains,
             Platform::Farcaster,
             Platform::SpaceId,
+            Platform::Crossbell,
         ]
         .contains(&self.platform)
         {

@@ -197,6 +197,23 @@ CREATE OR REPLACE QUERY owners_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph S
   END;
 }
 
+CREATE OR REPLACE QUERY neighbor_reverse_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2 {
+  MapAccum<VERTEX<Identities>, BOOL> @@reverse_map;
+  // Init.
+  VertexSet (Identities) = SELECT s FROM Identities:s WHERE s.id IN ids
+                          ACCUM @@reverse_map += (s -> false);
+  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell"];
+
+  address = SELECT addr FROM VertexSet:domain-((<Reverse_Resolve):r)-Identities:addr
+            WHERE @@domainSystems.contains(r.system) == TRUE
+            ACCUM @@reverse_map += (domain -> true);
+  
+  address2 = SELECT addr FROM VertexSet:addr-((Reverse_Resolve_Contract>):r)-Contracts:c
+            WHERE r.system == "ENS"
+            ACCUM @@reverse_map += (addr -> true);
+  PRINT @@reverse_map as reverse_map;
+}
+
 
 CREATE OR REPLACE QUERY identities_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2 {
   vertices = SELECT s FROM Identities:s WHERE s.id IN ids;
@@ -318,11 +335,6 @@ CREATE OR REPLACE QUERY domain(STRING name, STRING system) FOR GRAPH IdentityGra
 
 CREATE OR REPLACE QUERY contracts_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2 {
   vertices = SELECT s FROM Contracts:s WHERE s.id IN ids;
-  PRINT vertices;
-}
-
-CREATE OR REPLACE QUERY owners_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2 {
-  vertices = SELECT s FROM Identities:s WHERE s.id IN ids;
   PRINT vertices;
 }
 

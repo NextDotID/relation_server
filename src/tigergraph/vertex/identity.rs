@@ -975,6 +975,10 @@ impl IdentityRecord {
     }
 }
 
+pub struct NeighborReverseLoadFn {
+    pub client: Client<HttpConnector>,
+}
+
 pub struct OwnerLoadFn {
     pub client: Client<HttpConnector>,
 }
@@ -1013,6 +1017,18 @@ struct OwnerQueryIdResult {
     identity: Vec<IdentityRecord>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct NeighborReverseMapResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<NeighborReverseMapResult>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct NeighborReverseMapResult {
+    reverse_map: HashMap<String, Option<bool>>,
+}
+
 #[async_trait::async_trait]
 impl BatchFn<String, Option<IdentityRecord>> for IdentityLoadFn {
     async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<IdentityRecord>> {
@@ -1039,6 +1055,71 @@ impl BatchFn<String, Option<IdentityRecord>> for OwnerLoadFn {
     }
 }
 
+#[async_trait::async_trait]
+impl BatchFn<String, Option<bool>> for NeighborReverseLoadFn {
+    async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<bool>> {
+        tracing::info!("Loading ids for neighbor_reverse_by_ids {:?}", ids);
+        let records = get_neighbor_reverse_by_ids(&self.client, ids.to_vec()).await;
+        match records {
+            Ok(records) => records,
+            // HOLD ON: Not sure if `Err` need to return
+            Err(_) => ids.iter().map(|k| (k.to_owned(), None)).collect(),
+        }
+    }
+}
+
+async fn get_neighbor_reverse_by_ids(
+    client: &Client<HttpConnector>,
+    ids: Vec<String>,
+) -> Result<HashMap<String, Option<bool>>, Error> {
+    let uri: http::Uri = format!(
+        "{}/query/{}/neighbor_reverse_by_ids",
+        C.tdb.host,
+        Graph::IdentityGraph.to_string()
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+    let payload = VertexIds { ids };
+    let json_params = serde_json::to_string(&payload).map_err(|err| Error::JSONParseError(err))?;
+    let req = hyper::Request::builder()
+        .method(Method::POST)
+        .uri(uri)
+        .header("Authorization", Graph::IdentityGraph.token())
+        .body(Body::from(json_params))
+        .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+    let mut resp = client.request(req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!(
+            "TigerGraph | Fail to request neighbor_reverse_by_ids: {:?}",
+            err.to_string()
+        ))
+    })?;
+    match parse_body::<NeighborReverseMapResponse>(&mut resp).await {
+        Ok(r) => {
+            if r.base.error {
+                let err_message = format!(
+                    "TigerGraph neighbor_reverse_by_ids error | Code: {:?}, Message: {:?}",
+                    r.base.code, r.base.message
+                );
+                error!(err_message);
+                return Err(Error::General(err_message, resp.status()));
+            }
+            let result = r
+                .results
+                .and_then(|results| results.first().cloned())
+                .map_or(HashMap::new(), |res| res.reverse_map);
+            Ok(result)
+        }
+        Err(err) => {
+            let err_message = format!(
+                "TigerGraph neighbor_reverse_by_ids parse_body error: {:?}",
+                err
+            );
+            error!(err_message);
+            return Err(err);
+        }
+    }
+}
+
 async fn get_owners_by_ids(
     client: &Client<HttpConnector>,
     ids: Vec<String>,
@@ -1052,7 +1133,6 @@ async fn get_owners_by_ids(
     .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
     let payload = VertexIds { ids };
     let json_params = serde_json::to_string(&payload).map_err(|err| Error::JSONParseError(err))?;
-    trace!("owners_by_ids {}", json_params);
     let req = hyper::Request::builder()
         .method(Method::POST)
         .uri(uri)
