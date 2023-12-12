@@ -1,5 +1,5 @@
 mod tests;
-
+mod warpcast;
 use crate::config::C;
 use crate::error::Error;
 use crate::tigergraph::create_identity_to_identity_hold_record;
@@ -14,6 +14,39 @@ use hyper::{client::HttpConnector, Client};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 use uuid::Uuid;
+
+pub struct Farcaster {}
+
+#[async_trait]
+impl Fetcher for Farcaster {
+    async fn fetch(target: &Target) -> Result<TargetProcessedList, Error> {
+        if !Self::can_fetch(target) {
+            return Ok(vec![]);
+        }
+        match target {
+            Target::Identity(platform, identity) => {
+                warpcast::fetch_connections_by_platform_identity(platform, identity).await
+            }
+            Target::NFT(_, _, _, _) => todo!(),
+        }
+    }
+    fn can_fetch(target: &Target) -> bool {
+        target.in_platform_supported(vec![Platform::Farcaster, Platform::Ethereum])
+    }
+}
+
+/// After switch to warpcast api, this part is temporarily useless.
+#[allow(dead_code)]
+async fn fetch_connections_by_platform_identity(
+    platform: &Platform,
+    identity: &str,
+) -> Result<TargetProcessedList, Error> {
+    match *platform {
+        Platform::Farcaster => fetch_by_username(platform, identity).await,
+        Platform::Ethereum => fetch_by_signer(platform, identity).await,
+        _ => Ok(vec![]),
+    }
+}
 
 #[derive(Deserialize, Debug, Clone)]
 #[allow(non_snake_case)]
@@ -54,37 +87,6 @@ pub struct SignerAddressQueryResponse {
     // farcasterSigner
     #[serde(rename = "farcasterSigner")]
     data: Vec<FarcasterProfile>,
-}
-
-pub struct Farcaster {}
-
-#[async_trait]
-impl Fetcher for Farcaster {
-    async fn fetch(target: &Target) -> Result<TargetProcessedList, Error> {
-        if !Self::can_fetch(target) {
-            return Ok(vec![]);
-        }
-        match target {
-            Target::Identity(platform, identity) => {
-                fetch_connections_by_platform_identity(platform, identity).await
-            }
-            Target::NFT(_, _, _, _) => todo!(),
-        }
-    }
-    fn can_fetch(target: &Target) -> bool {
-        target.in_platform_supported(vec![Platform::Farcaster, Platform::Ethereum])
-    }
-}
-
-async fn fetch_connections_by_platform_identity(
-    platform: &Platform,
-    identity: &str,
-) -> Result<TargetProcessedList, Error> {
-    match *platform {
-        Platform::Farcaster => fetch_by_username(platform, identity).await,
-        Platform::Ethereum => fetch_by_signer(platform, identity).await,
-        _ => Ok(vec![]),
-    }
 }
 
 async fn get_farcaster_profile_by_username(username: &str) -> Result<Vec<FarcasterProfile>, Error> {
