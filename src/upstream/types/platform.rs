@@ -104,6 +104,36 @@ pub enum Platform {
     #[graphql(name = "crossbell")]
     Crossbell,
 
+    /// CKB
+    #[strum(serialize = "ckb")]
+    #[serde(rename = "ckb")]
+    #[graphql(name = "ckb")]
+    CKB,
+
+    /// Tron
+    #[strum(serialize = "tron")]
+    #[serde(rename = "tron")]
+    #[graphql(name = "tron")]
+    Tron,
+
+    /// doge
+    #[strum(serialize = "doge")]
+    #[serde(rename = "doge")]
+    #[graphql(name = "doge")]
+    Doge,
+
+    /// BNB Smart Chain (BSC)
+    #[strum(serialize = "bsc")]
+    #[serde(rename = "bsc")]
+    #[graphql(name = "bsc")]
+    BNBSmartChain,
+
+    /// Polygon
+    #[serde(rename = "polygon")]
+    #[strum(serialize = "polygon")]
+    #[graphql(name = "polygon")]
+    Polygon,
+
     /// Unknown
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]

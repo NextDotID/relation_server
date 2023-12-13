@@ -1058,7 +1058,7 @@ impl BatchFn<String, Option<IdentityRecord>> for OwnerLoadFn {
 #[async_trait::async_trait]
 impl BatchFn<String, Option<bool>> for NeighborReverseLoadFn {
     async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<bool>> {
-        tracing::info!("Loading ids for neighbor_reverse_by_ids {:?}", ids);
+        trace!("Loading ids for neighbor_reverse_by_ids {:?}", ids);
         let records = get_neighbor_reverse_by_ids(&self.client, ids.to_vec()).await;
         match records {
             Ok(records) => records,

@@ -149,3 +149,26 @@ where
     let formatted = dt.format("%Y-%m-%d %H:%M:%S").to_string();
     serializer.serialize_str(&formatted)
 }
+
+pub fn naive_datetime_from_milliseconds<'de, D>(deserializer: D) -> Result<NaiveDateTime, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let timestamp_ms: i64 = Deserialize::deserialize(deserializer)?;
+    NaiveDateTime::from_timestamp_opt(
+        timestamp_ms / 1000,                      // Convert milliseconds to seconds
+        (timestamp_ms % 1000) as u32 * 1_000_000, // Convert remainder to nanoseconds
+    )
+    .ok_or_else(|| serde::de::Error::custom("Invalid timestamp"))
+}
+
+pub fn naive_datetime_to_milliseconds<S>(
+    dt: &NaiveDateTime,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let timestamp_ms = dt.timestamp() * 1000 + (dt.timestamp_subsec_millis() as i64);
+    Serialize::serialize(&timestamp_ms, serializer)
+}
