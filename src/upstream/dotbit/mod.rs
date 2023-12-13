@@ -427,11 +427,11 @@ async fn fetch_reverse_record(
 }
 
 async fn fetch_account_list_by_addrs(
-    _platform: &Platform,
+    platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
     // das_accountList
-    let coin_type: CoinType = _platform.clone().into();
+    let coin_type: CoinType = platform.clone().into();
     if coin_type == CoinType::Unknown {
         return Ok(vec![]);
     }
@@ -473,7 +473,7 @@ async fn fetch_account_list_by_addrs(
     let cli = make_http_client(); // connect server
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
-        platform: Platform::Ethereum,
+        platform: platform.clone(),
         identity: identity.to_string().to_lowercase().clone(),
         uid: None,
         created_at: None,
