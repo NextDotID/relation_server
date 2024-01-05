@@ -110,6 +110,7 @@ impl Graph {
     }
 }
 
+#[allow(dead_code)]
 pub async fn delete_vertex_and_edge(
     client: &Client<HttpConnector>,
     v_id: String,
