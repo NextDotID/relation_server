@@ -1,8 +1,191 @@
-CREATE GRAPH IdentityGraph (Identities, Proof_Forward, Proof_Backward, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Resolve_Contract, Reverse_Resolve_Contract, Relation_Unique_TX, Relation_TX, Social_Feed)
+CREATE GRAPH SocialGraph (Identities, Proof_Forward, Proof_Backward, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Resolve_Contract, Reverse_Resolve_Contract, IdentityGraph, PartOfIdentityGraph, HyperEdge, Part1_SocialFollow, Part2_SocialFollow)
 
-USE GRAPH IdentityGraph
+USE GRAPH SocialGraph
 
-CREATE OR REPLACE QUERY delete_vertex_and_edge(VERTEX<Identities> p, INT depth=10) FOR GRAPH IdentityGraph SYNTAX v2 {
+CREATE OR REPLACE QUERY upsert_graph(from_str STRING, to_str STRING) FOR GRAPH SocialGraph SYNTAX v2 {
+  JSONARRAY from_v = parse_json_object(from_str);
+  JSONARRAY to_v = parse_json_object(to_str);
+
+  SetAccum<STRING> @@insert_vlist;
+  SetAccum<VERTEX<Identities>> @@existing_vlist;
+  ListAccum<VERTEX<IdentityGraph>> @@from_graph;
+  ListAccum<VERTEX<IdentityGraph>> @@to_graph;
+
+  OrAccum @@create_from_vertex = false;
+  OrAccum @@create_to_vertex = false;
+
+  from_type = from_v.getString("v_type");
+  from_id = from_v.getString("v_id");
+  @@insert_vlist += from_id;
+  @@existing_vlist = to_vertex_set(@@insert_vlist, from_type); // check existence of a vertex without slowing server
+  IF @@existing_vlist.size() > 0 THEN
+    // when it exists: update value
+    attributes = from_v.getJsonObject("attributes");
+
+    IF v_type == "Identities" THEN
+      exist_vset (Identities) = {from_id};
+      R = SELECT p
+        FROM exist_vset:v
+        POST-ACCUM
+              v.display_name = attributes.getString("display_name"),
+              v.profile_url = attributes.getString("profile_url"),
+              v.avatar_url = attributes.getString("avatar_url"),
+              v.created_at = to_datetime(attributes.getString("created_at")),
+              v.updated_at = to_datetime(attributes.getString("updated_at")),
+              v.uid = attributes.getString("uid");
+      
+      // find the HyperVertex: IdentityGraph
+      hyper_vertex = SELECT tgt FROM exist_vset-((PartOfIdentityGraph>):e)-IdentityGraph:tgt
+                    POST-ACCUM @@from_graph += tgt
+                    ORDER BY tgt.updated_at;
+    ELSE IF v_type == "Contracts" THEN
+      exist_vset (Contracts) = {from_id};
+      R = SELECT p
+        FROM exist_vset:v
+        POST-ACCUM
+              v.category = attributes.getString("category"),
+              v.symbol = attributes.getString("symbol"),
+              v.updated_at = to_datetime(attributes.getString("updated_at"));
+    END;
+  ELSE
+    // if it doesn't exist: insert value
+    attributes = from_v.getJsonObject("attributes");
+    IF v_type == "Identities" THEN
+      INSERT INTO Identities VALUES (from_id, from_id,
+                                      attributes.getString("uuid"),
+                                      attributes.getString("platform"), 
+                                      attributes.getString("identity"), 
+                                      attributes.getString("display_name"), 
+                                      attributes.getString("profile_url"),
+                                      attributes.getString("avatar_url"),
+                                      to_datetime(attributes.getString("created_at")),
+                                      to_datetime(attributes.getString("added_at")),
+                                      to_datetime(attributes.getString("updated_at")),
+                                      attributes.getString("uid"));
+      @@create_from_vertex += true;
+    ELSE IF v_type == "Contracts" THEN
+      INSERT INTO Contracts VALUES (from_id, from_id, 
+                                    attributes.getString("uuid"),
+                                    attributes.getString("category"),
+                                    attributes.getString("address"),
+                                    attributes.getString("chain"),
+                                    attributes.getString("symbol"),
+                                    to_datetime(attributes.getString("updated_at")));
+      @@create_from_vertex += true;
+    END;
+  END;
+
+  @@insert_vlist.clear();
+  @@existing_vlist.clear();
+  to_type = from_v.getString("v_type");
+  to_id = from_v.getString("v_id");
+  @@insert_vlist += to_id;
+  @@existing_vlist = to_vertex_set(@@insert_vlist, to_type);
+
+  IF @@existing_vlist.size() > 0 THEN
+    // when it exists: update value
+    attributes = from_v.getJsonObject("attributes");
+
+    IF v_type == "Identities" THEN
+      exist_vset (Identities) = {from_id};
+      R = SELECT p
+        FROM exist_vset:v
+        POST-ACCUM
+              v.display_name = attributes.getString("display_name"),
+              v.profile_url = attributes.getString("profile_url"),
+              v.avatar_url = attributes.getString("avatar_url"),
+              v.created_at = to_datetime(attributes.getString("created_at")),
+              v.updated_at = to_datetime(attributes.getString("updated_at")),
+              v.uid = attributes.getString("uid");
+      
+      // find the HyperVertex: IdentityGraph
+      hyper_vertex = SELECT tgt FROM exist_vset-((<PartOfIdentityGraph):e)-IdentityGraph:tgt
+                    POST-ACCUM @@to_graph += tgt
+                    ORDER BY tgt.updated_at;
+    ELSE IF v_type == "Contracts" THEN
+      exist_vset (Contracts) = {from_id};
+      R = SELECT p
+        FROM exist_vset:v
+        POST-ACCUM
+              v.category = attributes.getString("category"),
+              v.symbol = attributes.getString("symbol"),
+              v.updated_at = to_datetime(attributes.getString("updated_at"));
+    END;
+  ELSE
+    // if it doesn't exist: insert value
+    attributes = from_v.getJsonObject("attributes");
+    IF v_type == "Identities" THEN
+      INSERT INTO Identities VALUES (from_id, from_id,
+                                      attributes.getString("uuid"),
+                                      attributes.getString("platform"), 
+                                      attributes.getString("identity"), 
+                                      attributes.getString("display_name"), 
+                                      attributes.getString("profile_url"),
+                                      attributes.getString("avatar_url"),
+                                      to_datetime(attributes.getString("created_at")),
+                                      to_datetime(attributes.getString("added_at")),
+                                      to_datetime(attributes.getString("updated_at")),
+                                      attributes.getString("uid"));
+      @@create_to_vertex += true;
+    ELSE IF v_type == "Contracts" THEN
+      INSERT INTO Contracts VALUES (from_id, from_id, 
+                                    attributes.getString("uuid"),
+                                    attributes.getString("category"),
+                                    attributes.getString("address"),
+                                    attributes.getString("chain"),
+                                    attributes.getString("symbol"),
+                                    to_datetime(attributes.getString("updated_at")));
+      @@create_to_vertex += true;
+    END;
+  END;
+
+  // from（Identity）New, to（Identity）New: New_GraphID * 2
+  // from（Contract）New, to（Identity）New: New_GraphID -> to
+  // from（Identity）New, to（Contract）New: New_GraphID -> from
+
+  // from（Identity）Old:From_GraphID, to（Identity）New:   Old:From_GraphID -> to
+  // from（Contract）Old, to（Identity）New:                New_GraphID -> to
+  // from（Identity）Old:From_GraphID, to（Contract）None:  Nothing to Do.
+
+  // from（Identity）New, to（Identity）Old:To_GraphID: Old:To_GraphID -> from
+  // from（Identity）New, to（Contract）Old:           New_GraphID -> from
+  // from（Contract）New, to（Identity）Old:To_GraphID: Nothing to Do.
+
+  IF from_type == "Identities" AND to_type == "Identities"
+  THEN
+    IF @@create_from_vertex == true AND @@create_to_vertex == true THEN
+      // insert 1 hyper vertex connect from & to
+      primary_uuid = gsql_uuid_v4()
+      INSERT INTO IdentityGraph VALUES (primary_uuid, primary_uuid, now());
+      INSERT INTO PartOfIdentityGraph (FROM, TO) VALUES (primary_uuid IdentityGraph, from_id Identities);
+      INSERT INTO PartOfIdentityGraph (FROM, TO) VALUES (primary_uuid IdentityGraph, to_id Identities);
+
+    ELSE IF @@create_from_vertex == false AND @@create_to_vertex == true THEN
+      // add PartOfIdentityGraph Old:From_GraphID -> to
+
+    ELSE IF @@create_from_vertex == true AND @@create_to_vertex == false THEN
+      // add PartOfIdentityGraph Old:To_GraphID -> from
+
+    ELSE IF @@create_from_vertex == false AND @@create_to_vertex == false THEN
+      // combine two IdentityGraph
+
+    END;
+  ELSE IF from_type == "Identities" AND to_type == "Contracts" AND @@create_from_vertex == true
+  THEN
+    // insert 1 hyper vertex, New_GraphID -> from
+    primary_uuid = gsql_uuid_v4()
+    INSERT INTO IdentityGraph VALUES (primary_uuid, primary_uuid, now());
+    INSERT INTO PartOfIdentityGraph (FROM, TO) VALUES (primary_uuid IdentityGraph, from_id Identities);
+  ELSE IF from_type == "Contracts" AND to_type == "Identities" AND @@create_to_vertex == true
+  THEN
+    // insert 1 hyper vertex, New_GraphID -> to
+    primary_uuid = gsql_uuid_v4()
+    INSERT INTO IdentityGraph VALUES (primary_uuid, primary_uuid, now());
+    INSERT INTO PartOfIdentityGraph (FROM, TO) VALUES (primary_uuid IdentityGraph, to_id Identities);
+  END;
+}
+
+CREATE OR REPLACE QUERY delete_vertex_and_edge(VERTEX<Identities> p, INT depth=10) FOR GRAPH SocialGraph SYNTAX v2 {
   SetAccum<EDGE> @@edges;
   SetAccum<VERTEX> @@vertices;
   OrAccum @visited = FALSE;
@@ -30,7 +213,7 @@ CREATE OR REPLACE QUERY delete_vertex_and_edge(VERTEX<Identities> p, INT depth=1
   result = SELECT v FROM vertex2delete:v POST-ACCUM DELETE(v);
 }
 
-CREATE OR REPLACE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph { 
+CREATE OR REPLACE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH SocialGraph { 
   SetAccum<EDGE> @@edges;
   SetAccum<VERTEX> @@vertices;
   OrAccum @visited = FALSE;
@@ -52,7 +235,7 @@ CREATE OR REPLACE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH Ide
   PRINT @@vertices AS vertices, @@edges AS edges;
 }
 
-CREATE OR REPLACE QUERY neighbors_with_source_reverse(VERTEX<Identities> p, INT depth=10, INT reverse_flag=0) FOR GRAPH IdentityGraph SYNTAX V2 {
+CREATE OR REPLACE QUERY neighbors_with_source_reverse(VERTEX<Identities> p, INT depth=10, INT reverse_flag=0) FOR GRAPH SocialGraph SYNTAX V2 {
   MinAccum<INT> @min_dis;
   OrAccum @or_visited = false;
   OrAccum @or_visited2 = false;
@@ -125,7 +308,7 @@ CREATE OR REPLACE QUERY neighbors_with_source_reverse(VERTEX<Identities> p, INT 
   END;
 }
 
-CREATE OR REPLACE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth=10) FOR GRAPH IdentityGraph SYNTAX V2 { 
+CREATE OR REPLACE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth=10) FOR GRAPH SocialGraph SYNTAX V2 { 
   MinAccum<INT> @min_dis;
   OrAccum @or_visited = false;
   OrAccum @or_visited2 = false;
@@ -178,14 +361,14 @@ CREATE OR REPLACE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth=10
 }
 
 
-CREATE OR REPLACE QUERY identity_by_source(VERTEX<Identities> p, STRING source) FOR GRAPH IdentityGraph SYNTAX V2 {
+CREATE OR REPLACE QUERY identity_by_source(VERTEX<Identities> p, STRING source) FOR GRAPH SocialGraph SYNTAX V2 {
   start (Identities) = {p};
   vertices = SELECT v FROM start-((Proof_Forward>|Proof_Backward>):e)-Identities:v
             WHERE e.source == source;
   PRINT vertices;
 }
 
-CREATE OR REPLACE QUERY owners_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2 {
+CREATE OR REPLACE QUERY owners_by_ids(SET<STRING> ids) FOR GRAPH SocialGraph SYNTAX V2 {
   start (Identities) = SELECT s FROM Identities:s WHERE s.id IN ids;
   # SumAccum<STRING> @query_id;
   MapAccum<VERTEX<Identities>, VERTEX<Identities>> @@owners_map;
@@ -197,7 +380,7 @@ CREATE OR REPLACE QUERY owners_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph S
   END;
 }
 
-CREATE OR REPLACE QUERY neighbor_reverse_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2 {
+CREATE OR REPLACE QUERY neighbor_reverse_by_ids(SET<STRING> ids) FOR GRAPH SocialGraph SYNTAX V2 {
   MapAccum<VERTEX<Identities>, BOOL> @@reverse_map;
   // Init.
   VertexSet (Identities) = SELECT s FROM Identities:s WHERE s.id IN ids
@@ -215,19 +398,19 @@ CREATE OR REPLACE QUERY neighbor_reverse_by_ids(SET<STRING> ids) FOR GRAPH Ident
 }
 
 
-CREATE OR REPLACE QUERY identities_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2 {
+CREATE OR REPLACE QUERY identities_by_ids(SET<STRING> ids) FOR GRAPH SocialGraph SYNTAX V2 {
   vertices = SELECT s FROM Identities:s WHERE s.id IN ids;
   PRINT vertices;
 }
 
-CREATE OR REPLACE QUERY identity_owned_by(VERTEX<Identities> p, STRING platform) FOR GRAPH IdentityGraph SYNTAX V2 {
+CREATE OR REPLACE QUERY identity_owned_by(VERTEX<Identities> p, STRING platform) FOR GRAPH SocialGraph SYNTAX V2 {
   start (Identities) = {p};
   owner = SELECT v FROM start-((<Hold_Identity):e)-Identities:v
         WHERE e.source == platform;
   PRINT owner;
 }
 
-CREATE OR REPLACE QUERY hold_nft(STRING id, STRING chain, STRING address) FOR GRAPH IdentityGraph SYNTAX V2 {
+CREATE OR REPLACE QUERY hold_nft(STRING id, STRING chain, STRING address) FOR GRAPH SocialGraph SYNTAX V2 {
   SetAccum<EDGE> @@holds;
   contract = SELECT v FROM Identities:s-((Hold_Contract>):e)-Contracts:v
         WHERE v.chain == chain AND v.address == address AND e.id == id
@@ -236,7 +419,7 @@ CREATE OR REPLACE QUERY hold_nft(STRING id, STRING chain, STRING address) FOR GR
   PRINT @@holds AS holds;
 }
 
-CREATE OR REPLACE QUERY nfts(VERTEX<Identities> p, SET<STRING> categories, INT numPerPage = 100, INT pageNum = 0) FOR GRAPH IdentityGraph {
+CREATE OR REPLACE QUERY nfts(VERTEX<Identities> p, SET<STRING> categories, INT numPerPage = 100, INT pageNum = 0) FOR GRAPH SocialGraph {
   SetAccum<EDGE> @@edges;
   start (Identities) = {p};
   
@@ -255,7 +438,7 @@ CREATE OR REPLACE QUERY nfts(VERTEX<Identities> p, SET<STRING> categories, INT n
   PRINT @@edges AS edges;
 }
 
-CREATE OR REPLACE QUERY reverse_domains(VERTEX<Identities> p, SET<STRING> domainSystems) FOR GRAPH IdentityGraph {
+CREATE OR REPLACE QUERY reverse_domains(VERTEX<Identities> p, SET<STRING> domainSystems) FOR GRAPH SocialGraph {
   OrAccum @reverse = FALSE;
   SetAccum<EDGE> @@reverse_records;
 
@@ -269,7 +452,7 @@ CREATE OR REPLACE QUERY reverse_domains(VERTEX<Identities> p, SET<STRING> domain
 }
 
 
-CREATE OR REPLACE QUERY domain2(STRING name, STRING system) FOR GRAPH IdentityGraph {
+CREATE OR REPLACE QUERY domain2(STRING name, STRING system) FOR GRAPH SocialGraph {
   EDGE record;
   EDGE hold;
   EDGE reverse_edge;
@@ -307,7 +490,7 @@ CREATE OR REPLACE QUERY domain2(STRING name, STRING system) FOR GRAPH IdentityGr
   END;
 }
 
-CREATE OR REPLACE QUERY domain(STRING name, STRING system) FOR GRAPH IdentityGraph {
+CREATE OR REPLACE QUERY domain(STRING name, STRING system) FOR GRAPH SocialGraph {
   EDGE record;
   EDGE hold;
   IF system == "ENS" THEN
@@ -333,61 +516,9 @@ CREATE OR REPLACE QUERY domain(STRING name, STRING system) FOR GRAPH IdentityGra
   END;
 }
 
-CREATE OR REPLACE QUERY contracts_by_ids(SET<STRING> ids) FOR GRAPH IdentityGraph SYNTAX V2 {
+CREATE OR REPLACE QUERY contracts_by_ids(SET<STRING> ids) FOR GRAPH SocialGraph SYNTAX V2 {
   vertices = SELECT s FROM Contracts:s WHERE s.id IN ids;
   PRINT vertices;
-}
-
-CREATE OR REPLACE QUERY expand(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph { 
-  SetAccum<EDGE> @@edges;
-  OrAccum @visited = FALSE;
-
-  seed (Identities) = {p};
-  FOREACH i in RANGE[1, depth] DO
-    seed = SELECT v FROM seed-((Relation_Unique_TX>|<Relation_Unique_TX|Social_Feed>|<Social_Feed|Relation_TX>|<Relation_TX):e)-Identities:v
-           WHERE v.@visited == FALSE
-           ACCUM @@edges += e, v.@visited = TRUE;
-  END;
-  PRINT @@edges AS relations;
-}
-
-CREATE OR REPLACE QUERY relation_single_pair(VERTEX<Identities> v_source, VERTEX<Identities> target_v, INT depth = 10) FOR GRAPH IdentityGraph {
-  ListAccum<ListAccum<VERTEX>> @path_list; 
-  ListAccum<ListAccum<VERTEX>> @new_list;
-  OrAccum @end_point;
-  ListAccum<ListAccum<VERTEX>> @@total_path_list; // all vertex as List
-  SetAccum<EDGE> @@total_edge_list; // all edge as Set
-
-  endset = {target_v};
-  endset = SELECT s
-          From endset:s
-          ACCUM s.@end_point = true;
-  
-  Source = {v_source};
-  Source = SELECT s 
-           FROM Source:s
-           ACCUM s.@path_list = [s];
-  
-  WHILE Source.size() > 0 LIMIT depth DO 
-       Source = SELECT t 
-                 FROM Source:s-((Relation_Unique_TX>|<Relation_Unique_TX|Social_Feed>|<Social_Feed|Relation_TX>|<Relation_TX):e)-Identities:t
-                 ACCUM @@total_edge_list += e,
-                 FOREACH sequence IN s.@path_list DO 
-                   IF t.@end_point == true THEN
-                     @@total_path_list += [sequence + [t]]
-                   ELSE IF sequence.contains(t) == FALSE THEN
-                     t.@new_list += [sequence + [t]]  
-                   END
-                 END
-        POST-ACCUM s.@path_list.clear();
-  
-      Source = SELECT t 
-                FROM Source:t    
-                POST-ACCUM t.@path_list = t.@new_list,
-                           t.@new_list.clear()
-                HAVING t.@path_list.size() > 0;
-  END;
-  PRINT @@total_path_list as path, @@total_edge_list as relations;
 }
 
 

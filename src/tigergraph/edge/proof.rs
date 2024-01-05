@@ -161,6 +161,14 @@ impl Transfer for ProofRecord {
                     op: None,
                 },
             );
+        } else {
+            attributes_map.insert(
+                "record_id".to_string(),
+                Attribute {
+                    value: json!(""),
+                    op: None,
+                },
+            );
         }
 
         if let Some(created_at) = self.attributes.created_at {
@@ -169,6 +177,14 @@ impl Transfer for ProofRecord {
                 Attribute {
                     value: json!(created_at),
                     op: Some(OpCode::IgnoreIfExists),
+                },
+            );
+        } else {
+            attributes_map.insert(
+                "created_at".to_string(),
+                Attribute {
+                    value: json!("1970-01-01 00:00:00"), // default value
+                    op: None,
                 },
             );
         }

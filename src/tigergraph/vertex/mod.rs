@@ -1,11 +1,13 @@
 pub mod contract;
 pub mod identity;
+pub mod identity_graph;
 use async_trait::async_trait;
-pub use contract::{Contract, ContractLoadFn, ContractRecord};
+pub use contract::{Contract, ContractLoadFn, ContractRecord, VERTEX_NAME as CONTRACTS_NAME};
 pub use identity::{
     Identity, IdentityLoadFn, IdentityRecord, IdentityWithSource, NeighborReverseLoadFn,
-    NeighborsResponse, OwnerLoadFn,
+    NeighborsResponse, OwnerLoadFn, VERTEX_NAME as IDENTITIES_NAME,
 };
+pub use identity_graph::{IdentityGraph, IdentityGraphEdge};
 use serde::{Deserialize, Serialize};
 
 /// All `Vertex` records.

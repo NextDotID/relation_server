@@ -170,6 +170,14 @@ impl Transfer for Contract {
                     op: None,
                 },
             );
+        } else {
+            attributes_map.insert(
+                "symbol".to_string(),
+                Attribute {
+                    value: json!(""),
+                    op: None,
+                },
+            );
         }
         attributes_map.insert(
             "updated_at".to_string(),

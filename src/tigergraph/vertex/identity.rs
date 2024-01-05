@@ -158,6 +158,14 @@ impl Transfer for Identity {
                     op: Some(OpCode::IgnoreIfExists),
                 },
             );
+        } else {
+            attributes_map.insert(
+                "uuid".to_string(),
+                Attribute {
+                    value: json!(""), // default value
+                    op: Some(OpCode::IgnoreIfExists),
+                },
+            );
         }
         attributes_map.insert(
             "platform".to_string(),
@@ -181,12 +189,28 @@ impl Transfer for Identity {
                     op: None,
                 },
             );
+        } else {
+            attributes_map.insert(
+                "uid".to_string(),
+                Attribute {
+                    value: json!(""), // default value
+                    op: None,
+                },
+            );
         }
         if let Some(display_name) = self.display_name.clone() {
             attributes_map.insert(
                 "display_name".to_string(),
                 Attribute {
                     value: json!(display_name),
+                    op: None,
+                },
+            );
+        } else {
+            attributes_map.insert(
+                "display_name".to_string(),
+                Attribute {
+                    value: json!(""), // default value
                     op: None,
                 },
             );
@@ -199,12 +223,28 @@ impl Transfer for Identity {
                     op: None,
                 },
             );
+        } else {
+            attributes_map.insert(
+                "profile_url".to_string(),
+                Attribute {
+                    value: json!(""), // default value
+                    op: None,
+                },
+            );
         }
         if let Some(avatar_url) = self.avatar_url.clone() {
             attributes_map.insert(
                 "avatar_url".to_string(),
                 Attribute {
                     value: json!(avatar_url),
+                    op: None,
+                },
+            );
+        } else {
+            attributes_map.insert(
+                "avatar_url".to_string(),
+                Attribute {
+                    value: json!(""), // default value
                     op: None,
                 },
             );
@@ -215,6 +255,14 @@ impl Transfer for Identity {
                 Attribute {
                     value: json!(created_at),
                     op: Some(OpCode::IgnoreIfExists),
+                },
+            );
+        } else {
+            attributes_map.insert(
+                "created_at".to_string(),
+                Attribute {
+                    value: json!("1970-01-01 00:00:00"), // default value
+                    op: None,
                 },
             );
         }

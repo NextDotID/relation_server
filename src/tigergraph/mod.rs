@@ -1,5 +1,6 @@
 pub mod edge;
 mod tests;
+pub mod upsert;
 pub mod vertex;
 
 use crate::{
@@ -163,7 +164,7 @@ pub async fn delete_vertex_and_edge(
     Ok(())
 }
 
-pub async fn upsert_graph(
+async fn upsert_graph(
     client: &Client<HttpConnector>,
     payload: &UpsertGraph,
     graph_name: Graph,

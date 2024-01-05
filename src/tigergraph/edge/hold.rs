@@ -168,6 +168,14 @@ impl Transfer for HoldRecord {
                     op: None,
                 },
             );
+        } else {
+            attributes_map.insert(
+                "transaction".to_string(),
+                Attribute {
+                    value: json!(""), // default value
+                    op: None,
+                },
+            );
         }
         attributes_map.insert(
             "id".to_string(),
@@ -182,6 +190,14 @@ impl Transfer for HoldRecord {
                 Attribute {
                     value: json!(created_at),
                     op: Some(OpCode::IgnoreIfExists),
+                },
+            );
+        } else {
+            attributes_map.insert(
+                "created_at".to_string(),
+                Attribute {
+                    value: json!("1970-01-01 00:00:00"), // default value
+                    op: None,
                 },
             );
         }
