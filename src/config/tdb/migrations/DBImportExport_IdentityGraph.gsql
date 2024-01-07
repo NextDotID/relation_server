@@ -2,140 +2,173 @@ CREATE GRAPH SocialGraph (Identities, Proof_Forward, Proof_Backward, Contracts, 
 
 USE GRAPH SocialGraph
 
-CREATE OR REPLACE QUERY upsert_graph(from_str STRING, to_str STRING) FOR GRAPH SocialGraph SYNTAX v2 {
-  JSONARRAY from_v = parse_json_object(from_str);
-  JSONARRAY to_v = parse_json_object(to_str);
+CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH SocialGraph SYNTAX v2 {
+  TYPEDEF TUPLE< DATETIME updated_at, STRING id > MinUpdatedTimeTuple;
+  JSONOBJECT from_v = parse_json_object(from_str);
+  JSONOBJECT to_v = parse_json_object(to_str);
+
+  SumAccum<INT> @@created_vertices;
+  SumAccum<INT> @@created_hyper_vertices;
 
   SetAccum<STRING> @@insert_vlist;
-  SetAccum<VERTEX<Identities>> @@existing_vlist;
-  ListAccum<VERTEX<IdentityGraph>> @@from_graph;
-  ListAccum<VERTEX<IdentityGraph>> @@to_graph;
+  SetAccum<VERTEX> @@existing_vlist;
+  SetAccum<VERTEX<IdentityGraph>> @@from_graph;
+  SetAccum<VERTEX<IdentityGraph>> @@to_graph;
+
+  MinAccum<MinUpdatedTimeTuple> @@minUpdateTime;
 
   OrAccum @@create_from_vertex = false;
   OrAccum @@create_to_vertex = false;
 
-  from_type = from_v.getString("v_type");
-  from_id = from_v.getString("v_id");
+  STRING from_type = from_v.getString("v_type");
+  STRING from_id = from_v.getString("v_id");
   @@insert_vlist += from_id;
   @@existing_vlist = to_vertex_set(@@insert_vlist, from_type); // check existence of a vertex without slowing server
   IF @@existing_vlist.size() > 0 THEN
     // when it exists: update value
-    attributes = from_v.getJsonObject("attributes");
+    IF from_type == "Identities" THEN
+      exist_vset (Identities|Contracts) = {@@existing_vlist};
+      STRING display_name = from_v.getJsonObject("attributes").getString("display_name");
+      STRING profile_url = from_v.getJsonObject("attributes").getString("profile_url");
+      STRING avatar_url = from_v.getJsonObject("attributes").getString("avatar_url");
+      STRING created_at = from_v.getJsonObject("attributes").getString("created_at");
+      STRING updated_at = from_v.getJsonObject("attributes").getString("updated_at");
+      STRING uid = from_v.getJsonObject("attributes").getString("uid");
 
-    IF v_type == "Identities" THEN
-      exist_vset (Identities) = {from_id};
-      R = SELECT p
+      R = SELECT v
         FROM exist_vset:v
         POST-ACCUM
-              v.display_name = attributes.getString("display_name"),
-              v.profile_url = attributes.getString("profile_url"),
-              v.avatar_url = attributes.getString("avatar_url"),
-              v.created_at = to_datetime(attributes.getString("created_at")),
-              v.updated_at = to_datetime(attributes.getString("updated_at")),
-              v.uid = attributes.getString("uid");
-      
+              IF display_name != "" THEN
+                v.display_name = display_name
+              END,
+              v.profile_url = profile_url,
+              v.avatar_url = avatar_url,
+              v.created_at = to_datetime(created_at),
+              v.updated_at = to_datetime(updated_at),
+              IF uid != "" THEN
+                v.uid = uid
+              END;
       // find the HyperVertex: IdentityGraph
-      hyper_vertex = SELECT tgt FROM exist_vset-((PartOfIdentityGraph>):e)-IdentityGraph:tgt
+      hyper_vertex = SELECT tgt FROM exist_vset-((<PartOfIdentityGraph):e)-IdentityGraph:tgt
                     POST-ACCUM @@from_graph += tgt
-                    ORDER BY tgt.updated_at;
-    ELSE IF v_type == "Contracts" THEN
-      exist_vset (Contracts) = {from_id};
-      R = SELECT p
+                    POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_at, tgt.id);
+    ELSE IF from_type == "Contracts" THEN
+      exist_vset (Identities|Contracts) = {@@existing_vlist};
+      STRING category = from_v.getJsonObject("attributes").getString("category");
+      STRING symbol = from_v.getJsonObject("attributes").getString("symbol");
+      STRING updated_at = from_v.getJsonObject("attributes").getString("updated_at");
+
+      R = SELECT v
         FROM exist_vset:v
         POST-ACCUM
-              v.category = attributes.getString("category"),
-              v.symbol = attributes.getString("symbol"),
-              v.updated_at = to_datetime(attributes.getString("updated_at"));
+              v.category = category,
+              v.symbol = symbol,
+              v.updated_at = to_datetime(updated_at);
     END;
   ELSE
     // if it doesn't exist: insert value
-    attributes = from_v.getJsonObject("attributes");
-    IF v_type == "Identities" THEN
+    IF from_type == "Identities" THEN
       INSERT INTO Identities VALUES (from_id, from_id,
-                                      attributes.getString("uuid"),
-                                      attributes.getString("platform"), 
-                                      attributes.getString("identity"), 
-                                      attributes.getString("display_name"), 
-                                      attributes.getString("profile_url"),
-                                      attributes.getString("avatar_url"),
-                                      to_datetime(attributes.getString("created_at")),
-                                      to_datetime(attributes.getString("added_at")),
-                                      to_datetime(attributes.getString("updated_at")),
-                                      attributes.getString("uid"));
+                                      from_v.getJsonObject("attributes").getString("uuid"),
+                                      from_v.getJsonObject("attributes").getString("platform"), 
+                                      from_v.getJsonObject("attributes").getString("identity"), 
+                                      from_v.getJsonObject("attributes").getString("display_name"), 
+                                      from_v.getJsonObject("attributes").getString("profile_url"),
+                                      from_v.getJsonObject("attributes").getString("avatar_url"),
+                                      to_datetime(from_v.getJsonObject("attributes").getString("created_at")),
+                                      to_datetime(from_v.getJsonObject("attributes").getString("added_at")),
+                                      to_datetime(from_v.getJsonObject("attributes").getString("updated_at")),
+                                      from_v.getJsonObject("attributes").getString("uid"));
       @@create_from_vertex += true;
-    ELSE IF v_type == "Contracts" THEN
+      @@created_vertices += 1;
+    ELSE IF from_type == "Contracts" THEN
       INSERT INTO Contracts VALUES (from_id, from_id, 
-                                    attributes.getString("uuid"),
-                                    attributes.getString("category"),
-                                    attributes.getString("address"),
-                                    attributes.getString("chain"),
-                                    attributes.getString("symbol"),
-                                    to_datetime(attributes.getString("updated_at")));
+                                    from_v.getJsonObject("attributes").getString("uuid"),
+                                    from_v.getJsonObject("attributes").getString("category"),
+                                    from_v.getJsonObject("attributes").getString("address"),
+                                    from_v.getJsonObject("attributes").getString("chain"),
+                                    from_v.getJsonObject("attributes").getString("symbol"),
+                                    to_datetime(from_v.getJsonObject("attributes").getString("updated_at")));
       @@create_from_vertex += true;
+      @@created_vertices += 1;
     END;
   END;
 
   @@insert_vlist.clear();
   @@existing_vlist.clear();
-  to_type = from_v.getString("v_type");
-  to_id = from_v.getString("v_id");
+  STRING to_type = to_v.getString("v_type");
+  STRING to_id = to_v.getString("v_id");
   @@insert_vlist += to_id;
   @@existing_vlist = to_vertex_set(@@insert_vlist, to_type);
 
   IF @@existing_vlist.size() > 0 THEN
     // when it exists: update value
-    attributes = from_v.getJsonObject("attributes");
+    IF to_type == "Identities" THEN
+      exist_vset (Identities|Contracts) = {@@existing_vlist};
+      STRING display_name = from_v.getJsonObject("attributes").getString("display_name");
+      STRING profile_url = from_v.getJsonObject("attributes").getString("profile_url");
+      STRING avatar_url = from_v.getJsonObject("attributes").getString("avatar_url");
+      STRING created_at = from_v.getJsonObject("attributes").getString("created_at");
+      STRING updated_at = from_v.getJsonObject("attributes").getString("updated_at");
+      STRING uid = from_v.getJsonObject("attributes").getString("uid");
 
-    IF v_type == "Identities" THEN
-      exist_vset (Identities) = {from_id};
-      R = SELECT p
+      R = SELECT v
         FROM exist_vset:v
         POST-ACCUM
-              v.display_name = attributes.getString("display_name"),
-              v.profile_url = attributes.getString("profile_url"),
-              v.avatar_url = attributes.getString("avatar_url"),
-              v.created_at = to_datetime(attributes.getString("created_at")),
-              v.updated_at = to_datetime(attributes.getString("updated_at")),
-              v.uid = attributes.getString("uid");
+              IF display_name != "" THEN
+                v.display_name = display_name
+              END,
+              v.profile_url = profile_url,
+              v.avatar_url = avatar_url,
+              v.created_at = to_datetime(created_at),
+              v.updated_at = to_datetime(updated_at),
+              IF uid != "" THEN
+                v.uid = uid
+              END;
       
       // find the HyperVertex: IdentityGraph
       hyper_vertex = SELECT tgt FROM exist_vset-((<PartOfIdentityGraph):e)-IdentityGraph:tgt
                     POST-ACCUM @@to_graph += tgt
-                    ORDER BY tgt.updated_at;
-    ELSE IF v_type == "Contracts" THEN
-      exist_vset (Contracts) = {from_id};
-      R = SELECT p
+                    POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_at, tgt.id);
+    ELSE IF to_type == "Contracts" THEN
+      exist_vset (Identities|Contracts) = {@@existing_vlist};
+      STRING category = from_v.getJsonObject("attributes").getString("category");
+      STRING symbol = from_v.getJsonObject("attributes").getString("symbol");
+      STRING updated_at = from_v.getJsonObject("attributes").getString("updated_at");
+
+      R = SELECT v
         FROM exist_vset:v
         POST-ACCUM
-              v.category = attributes.getString("category"),
-              v.symbol = attributes.getString("symbol"),
-              v.updated_at = to_datetime(attributes.getString("updated_at"));
+              v.category = category,
+              v.symbol = symbol,
+              v.updated_at = to_datetime(updated_at);
     END;
   ELSE
     // if it doesn't exist: insert value
-    attributes = from_v.getJsonObject("attributes");
-    IF v_type == "Identities" THEN
+    IF to_type == "Identities" THEN
       INSERT INTO Identities VALUES (from_id, from_id,
-                                      attributes.getString("uuid"),
-                                      attributes.getString("platform"), 
-                                      attributes.getString("identity"), 
-                                      attributes.getString("display_name"), 
-                                      attributes.getString("profile_url"),
-                                      attributes.getString("avatar_url"),
-                                      to_datetime(attributes.getString("created_at")),
-                                      to_datetime(attributes.getString("added_at")),
-                                      to_datetime(attributes.getString("updated_at")),
-                                      attributes.getString("uid"));
+                                      to_v.getJsonObject("attributes").getString("uuid"),
+                                      to_v.getJsonObject("attributes").getString("platform"), 
+                                      to_v.getJsonObject("attributes").getString("identity"), 
+                                      to_v.getJsonObject("attributes").getString("display_name"), 
+                                      to_v.getJsonObject("attributes").getString("profile_url"),
+                                      to_v.getJsonObject("attributes").getString("avatar_url"),
+                                      to_datetime(to_v.getJsonObject("attributes").getString("created_at")),
+                                      to_datetime(to_v.getJsonObject("attributes").getString("added_at")),
+                                      to_datetime(to_v.getJsonObject("attributes").getString("updated_at")),
+                                      to_v.getJsonObject("attributes").getString("uid"));
       @@create_to_vertex += true;
-    ELSE IF v_type == "Contracts" THEN
+      @@created_vertices += 1;
+    ELSE IF to_type == "Contracts" THEN
       INSERT INTO Contracts VALUES (from_id, from_id, 
-                                    attributes.getString("uuid"),
-                                    attributes.getString("category"),
-                                    attributes.getString("address"),
-                                    attributes.getString("chain"),
-                                    attributes.getString("symbol"),
-                                    to_datetime(attributes.getString("updated_at")));
+                                    to_v.getJsonObject("attributes").getString("uuid"),
+                                    to_v.getJsonObject("attributes").getString("category"),
+                                    to_v.getJsonObject("attributes").getString("address"),
+                                    to_v.getJsonObject("attributes").getString("chain"),
+                                    to_v.getJsonObject("attributes").getString("symbol"),
+                                    to_datetime(to_v.getJsonObject("attributes").getString("updated_at")));
       @@create_to_vertex += true;
+      @@created_vertices += 1;
     END;
   END;
 
@@ -155,34 +188,81 @@ CREATE OR REPLACE QUERY upsert_graph(from_str STRING, to_str STRING) FOR GRAPH S
   THEN
     IF @@create_from_vertex == true AND @@create_to_vertex == true THEN
       // insert 1 hyper vertex connect from & to
-      primary_uuid = gsql_uuid_v4()
+      STRING primary_uuid = gsql_uuid_v4();
       INSERT INTO IdentityGraph VALUES (primary_uuid, primary_uuid, now());
       INSERT INTO PartOfIdentityGraph (FROM, TO) VALUES (primary_uuid IdentityGraph, from_id Identities);
       INSERT INTO PartOfIdentityGraph (FROM, TO) VALUES (primary_uuid IdentityGraph, to_id Identities);
+      @@created_hyper_vertices += 1;
 
     ELSE IF @@create_from_vertex == false AND @@create_to_vertex == true THEN
       // add PartOfIdentityGraph Old:From_GraphID -> to
+      STRING earliest_uuid = @@minUpdateTime.id;
+      FOREACH v1 in @@from_graph DO
+        hyper_v (IdentityGraph) = { v1 };
+        STRING hyper_vid = v1.id;
+        IF hyper_vid == earliest_uuid THEN
+          INSERT INTO PartOfIdentityGraph (FROM, TO) VALUES (earliest_uuid IdentityGraph, to_id Identities);
+        ELSE
+          combine_v = SELECT s FROM Identities:s-((<PartOfIdentityGraph):e)-hyper_v
+                      POST-ACCUM
+                        INSERT INTO PartOfIdentityGraph (FROM, TO) VALUES (earliest_uuid IdentityGraph, s.id Identities);
+          del_v = SELECT tgt FROM combine_v-((<PartOfIdentityGraph):e)-hyper_v:tgt ACCUM DELETE(e);
+          tmp = SELECT tgt FROM del_v:tgt POST-ACCUM DELETE(tgt);
+        END;
+      END;
 
     ELSE IF @@create_from_vertex == true AND @@create_to_vertex == false THEN
       // add PartOfIdentityGraph Old:To_GraphID -> from
+      STRING earliest_uuid = @@minUpdateTime.id;
+      FOREACH v2 in @@to_graph DO
+        hyper_v (IdentityGraph) = { v2 };
+        STRING hyper_vid = v2.id;
+        IF hyper_vid == earliest_uuid THEN
+          INSERT INTO PartOfIdentityGraph (FROM, TO) VALUES (earliest_uuid IdentityGraph, from_id Identities);
+        ELSE
+          combine_v = SELECT s FROM Identities:s-((<PartOfIdentityGraph):e)-hyper_v
+                      POST-ACCUM
+                        INSERT INTO PartOfIdentityGraph (FROM, TO) VALUES (earliest_uuid IdentityGraph, s.id Identities);
+          del_v = SELECT tgt FROM combine_v-((<PartOfIdentityGraph):e)-hyper_v:tgt ACCUM DELETE(e);
+          tmp = SELECT tgt FROM del_v:tgt POST-ACCUM DELETE(tgt);
+        END;
+      END;
 
     ELSE IF @@create_from_vertex == false AND @@create_to_vertex == false THEN
       // combine two IdentityGraph
+      STRING earliest_uuid = @@minUpdateTime.id;
+      SetAccum<VERTEX<IdentityGraph>> @@from_union_to;
+      @@from_union_to = @@from_graph UNION @@to_graph;
+      FOREACH v3 IN @@from_union_to DO
+        hyper_v (IdentityGraph) = { v3 };
+        STRING hyper_vid = v3.id;
+        IF hyper_vid != earliest_uuid THEN
+          combine_v = SELECT s FROM Identities:s-((<PartOfIdentityGraph):e)-hyper_v
+                      POST-ACCUM
+                        INSERT INTO PartOfIdentityGraph (FROM, TO) VALUES (earliest_uuid IdentityGraph, s.id Identities);
+          del_v = SELECT tgt FROM combine_v-((<PartOfIdentityGraph):e)-hyper_v:tgt ACCUM DELETE(e);
+          tmp = SELECT tgt FROM del_v:tgt POST-ACCUM DELETE(tgt);
+        END;
+      END; // end FOREACH
 
-    END;
+    END; // end ELSE_IF
   ELSE IF from_type == "Identities" AND to_type == "Contracts" AND @@create_from_vertex == true
   THEN
     // insert 1 hyper vertex, New_GraphID -> from
-    primary_uuid = gsql_uuid_v4()
+    STRING primary_uuid = gsql_uuid_v4();
     INSERT INTO IdentityGraph VALUES (primary_uuid, primary_uuid, now());
     INSERT INTO PartOfIdentityGraph (FROM, TO) VALUES (primary_uuid IdentityGraph, from_id Identities);
+    @@created_hyper_vertices += 1;
   ELSE IF from_type == "Contracts" AND to_type == "Identities" AND @@create_to_vertex == true
   THEN
     // insert 1 hyper vertex, New_GraphID -> to
-    primary_uuid = gsql_uuid_v4()
+    STRING primary_uuid = gsql_uuid_v4();
     INSERT INTO IdentityGraph VALUES (primary_uuid, primary_uuid, now());
     INSERT INTO PartOfIdentityGraph (FROM, TO) VALUES (primary_uuid IdentityGraph, to_id Identities);
+    @@created_hyper_vertices += 1;
   END;
+
+  PRINT @@created_vertices as created_vertices, @@created_hyper_vertices as created_hyper_vertices;
 }
 
 CREATE OR REPLACE QUERY delete_vertex_and_edge(VERTEX<Identities> p, INT depth=10) FOR GRAPH SocialGraph SYNTAX v2 {
