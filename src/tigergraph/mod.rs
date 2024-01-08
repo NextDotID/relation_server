@@ -26,6 +26,8 @@ use std::collections::HashMap;
 use strum_macros::{Display, EnumIter, EnumString};
 use tracing::{error, trace};
 
+use self::vertex::VertexRecord;
+
 #[derive(
     Serialize,
     Deserialize,
@@ -278,6 +280,7 @@ where
 
 pub trait Transfer {
     fn to_attributes_map(&self) -> HashMap<String, Attribute>;
+    fn to_json_value(&self) -> Value;
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

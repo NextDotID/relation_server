@@ -6,7 +6,7 @@ mod tests {
     use crate::tigergraph::{
         create_contract_to_identity_resolve_record, create_identity_domain_resolve_record,
         create_identity_to_contract_hold_record, create_identity_to_identity_hold_record,
-        upsert::create_identity_to_identity_proof_two_way_binding,
+        upsert::{create_identity_to_identity_proof_two_way_binding, UpsertHyperVertex},
     };
     use crate::{
         tigergraph::{
@@ -33,8 +33,14 @@ mod tests {
         from.platform = Platform::Ethereum;
         to.platform = Platform::NextID;
 
-        // let json_raw = serde_json::to_string(&from).map_err(|err| Error::JSONParseError(err))?;
-        // println!("{}", json_raw);
+        // let from_str = serde_json::to_string(&from).map_err(|err| Error::JSONParseError(err))?;
+        // // println!("{}", json_raw);
+        // let to_str = serde_json::to_string(&to).map_err(|err| Error::JSONParseError(err))?;
+        // // println!("{}", json_raw);
+        // let payload = UpsertHyperVertex { from_str, to_str };
+        // let json_params =
+        //     serde_json::to_string(&payload).map_err(|err| Error::JSONParseError(err))?;
+        // println!("{}", json_params);
 
         let mut proof_forward = Proof::default();
         let mut proof_backward = Proof::default();

@@ -2,7 +2,7 @@ use crate::{
     config::C,
     error::Error,
     tigergraph::{
-        edge::{Edge, EdgeRecord, EdgeWrapper, FromWithParams, HoldRecord, Wrapper},
+        edge::{Edge, EdgeRecord, EdgeWrapper, FromWithAttributes, HoldRecord, Wrapper},
         upsert_graph,
         vertex::{Contract, Identity, IdentityRecord, Vertex, VertexRecord},
         Attribute, BaseResponse, Edges, Graph, OpCode, Transfer, UpsertGraph,
@@ -16,6 +16,7 @@ use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use serde_json::value::{Map, Value};
 use std::collections::HashMap;
 use tracing::error;
 use uuid::Uuid;
@@ -78,8 +79,8 @@ impl PartialEq for Resolve {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ResolveRecord(pub EdgeRecord<Resolve>);
 
-impl FromWithParams<Resolve> for EdgeRecord<Resolve> {
-    fn from_with_params(
+impl FromWithAttributes<Resolve> for EdgeRecord<Resolve> {
+    fn from_with_attributes(
         e_type: String,
         directed: bool,
         from_id: String,
@@ -186,6 +187,17 @@ impl Transfer for ResolveRecord {
         );
         attributes_map
     }
+
+    fn to_json_value(&self) -> Value {
+        let mut map = Map::new();
+        map.insert("uuid".to_string(), json!(self.uuid));
+        map.insert("source".to_string(), json!(self.source));
+        map.insert("system".to_string(), json!(self.system));
+        map.insert("name".to_string(), json!(self.name));
+        map.insert("fetcher".to_string(), json!(self.fetcher));
+        map.insert("updated_at".to_string(), json!(self.updated_at));
+        Value::Object(map)
+    }
 }
 
 impl Wrapper<ResolveRecord, Contract, Identity> for Resolve {
@@ -195,7 +207,7 @@ impl Wrapper<ResolveRecord, Contract, Identity> for Resolve {
         to: &Identity,
         name: &str,
     ) -> EdgeWrapper<ResolveRecord, Contract, Identity> {
-        let resolve = EdgeRecord::from_with_params(
+        let resolve = EdgeRecord::from_with_attributes(
             name.to_string(),
             IS_DIRECTED,
             from.primary_key(),
@@ -274,7 +286,7 @@ impl Wrapper<ResolveRecord, Identity, Contract> for Resolve {
         to: &Contract,
         name: &str,
     ) -> EdgeWrapper<ResolveRecord, Identity, Contract> {
-        let resolve = EdgeRecord::from_with_params(
+        let resolve = EdgeRecord::from_with_attributes(
             name.to_string(),
             IS_DIRECTED,
             from.primary_key(),
@@ -353,7 +365,7 @@ impl Wrapper<ResolveRecord, Identity, Identity> for Resolve {
         to: &Identity,
         name: &str,
     ) -> EdgeWrapper<ResolveRecord, Identity, Identity> {
-        let resolve = EdgeRecord::from_with_params(
+        let resolve = EdgeRecord::from_with_attributes(
             name.to_string(),
             IS_DIRECTED,
             from.primary_key(),

@@ -7,7 +7,7 @@ use crate::{
             EdgeUnion, HoldRecord,
         },
         upsert_graph,
-        vertex::{FromWithParams, Vertex, VertexRecord},
+        vertex::{FromWithAttributes, Vertex, VertexRecord},
         Attribute, BaseResponse, Graph, OpCode, Transfer, UpsertGraph, Vertices,
     },
     upstream::{
@@ -27,6 +27,7 @@ use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use serde_json::value::{Map, Value};
 use std::collections::HashMap;
 use std::fmt;
 use tracing::{error, trace};
@@ -91,8 +92,8 @@ impl Vertex for Identity {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IdentityRecord(pub VertexRecord<Identity>);
 
-impl FromWithParams<Identity> for IdentityRecord {
-    fn from_with_params(v_type: String, v_id: String, attributes: Identity) -> Self {
+impl FromWithAttributes<Identity> for IdentityRecord {
+    fn from_with_attributes(v_type: String, v_id: String, attributes: Identity) -> Self {
         IdentityRecord(VertexRecord {
             v_type,
             v_id,
@@ -282,6 +283,41 @@ impl Transfer for Identity {
             },
         );
         attributes_map
+    }
+
+    fn to_json_value(&self) -> Value {
+        let mut map = Map::new();
+        map.insert("id".to_string(), json!(self.primary_key()));
+        map.insert(
+            "uuid".to_string(),
+            json!(self.uuid.map_or("".to_string(), |u| u.to_string())),
+        );
+        map.insert("platform".to_string(), json!(self.platform));
+        map.insert("identity".to_string(), json!(self.identity));
+        map.insert(
+            "uid".to_string(),
+            json!(self.uid.clone().unwrap_or("".to_string())),
+        );
+        map.insert(
+            "display_name".to_string(),
+            json!(self.display_name.clone().unwrap_or("".to_string())),
+        );
+        map.insert(
+            "profile_url".to_string(),
+            json!(self.profile_url.clone().unwrap_or("".to_string())),
+        );
+        map.insert(
+            "avatar_url".to_string(),
+            json!(self.avatar_url.clone().unwrap_or("".to_string())),
+        );
+        map.insert(
+            "created_at".to_string(),
+            self.created_at
+                .map_or(json!("1970-01-01 00:00:00"), |created_at| json!(created_at)),
+        );
+        map.insert("added_at".to_string(), json!(self.added_at));
+        map.insert("updated_at".to_string(), json!(self.updated_at));
+        Value::Object(map)
     }
 }
 

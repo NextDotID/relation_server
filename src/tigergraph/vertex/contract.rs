@@ -3,7 +3,7 @@ use crate::{
     error::Error,
     tigergraph::{
         upsert_graph,
-        vertex::{FromWithParams, Vertex, VertexRecord},
+        vertex::{FromWithAttributes, Vertex, VertexRecord},
         Attribute, BaseResponse, Graph, OpCode, Transfer, UpsertGraph, Vertices,
     },
     upstream::{Chain, ContractCategory},
@@ -17,6 +17,7 @@ use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use serde_json::value::{Map, Value};
 use std::collections::HashMap;
 use tracing::{error, trace};
 use uuid::Uuid;
@@ -76,8 +77,8 @@ impl Vertex for Contract {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ContractRecord(pub VertexRecord<Contract>);
 
-impl FromWithParams<Contract> for ContractRecord {
-    fn from_with_params(v_type: String, v_id: String, attributes: Contract) -> Self {
+impl FromWithAttributes<Contract> for ContractRecord {
+    fn from_with_attributes(v_type: String, v_id: String, attributes: Contract) -> Self {
         ContractRecord(VertexRecord {
             v_type,
             v_id,
@@ -188,6 +189,21 @@ impl Transfer for Contract {
         );
 
         attributes_map
+    }
+
+    fn to_json_value(&self) -> Value {
+        let mut map = Map::new();
+        map.insert("id".to_string(), json!(self.primary_key()));
+        map.insert("uuid".to_string(), json!(self.uuid));
+        map.insert("chain".to_string(), json!(self.chain));
+        map.insert("address".to_string(), json!(self.address));
+        map.insert("category".to_string(), json!(self.category));
+        map.insert(
+            "symbol".to_string(),
+            json!(self.symbol.clone().unwrap_or("".to_string())),
+        );
+        map.insert("updated_at".to_string(), json!(self.updated_at));
+        Value::Object(map)
     }
 }
 

@@ -3,16 +3,16 @@ use crate::{
     error::Error,
     tigergraph::{
         edge::{
-            Edge, EdgeRecord, FromWithParams as EdgeFromWithParams, Hold, HoldRecord, Proof,
-            ProofRecord, Resolve, ResolveRecord, Wrapper,
+            Edge, EdgeRecord, FromWithAttributes as EdgeFromWithAttributes, Hold, HoldRecord,
+            Proof, ProofRecord, Resolve, ResolveRecord, Wrapper,
         },
         edge::{
             HOLD_CONTRACT, HOLD_IDENTITY, PROOF_EDGE, PROOF_REVERSE_EDGE, RESOLVE,
             RESOLVE_CONTRACT, REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT,
         },
         vertex::{
-            Contract, ContractRecord, FromWithParams, Identity, IdentityRecord, Vertex,
-            CONTRACTS_NAME, IDENTITIES_NAME,
+            Contract, ContractRecord, FromWithAttributes, FromWithJsonValue, Identity,
+            IdentityRecord, Vertex, CONTRACTS_NAME, IDENTITIES_NAME,
         },
         Attribute, BaseResponse, EdgeWrapper, Edges, Graph, Transfer,
     },
@@ -25,8 +25,11 @@ use hyper::{client::HttpConnector, Body, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::value::Value;
 use std::collections::HashMap;
+use std::convert::{TryFrom, TryInto};
 use strum_macros::{Display, EnumIter, EnumString};
 use tracing::{error, trace};
+
+use super::vertex::VertexRecord;
 
 ////////////////////////////////// Upsert Only Edge Start //////////////////////////////////
 
@@ -137,9 +140,40 @@ async fn upsert_edge(
 ////////////////////////////////// Upsert Hyper Vertex Start //////////////////////////////////
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-struct UpsertHyperVertex {
-    from_str: String, // STRING TO GSQL JSONObject
-    to_str: String,   // STRING TO GSQL JSONObject
+pub struct HyperVertexWrapper<Source, Target> {
+    pub source: Source,
+    pub target: Target,
+}
+
+impl<Source, Target> TryFrom<HyperVertexWrapper<Source, Target>> for UpsertHyperVertex
+where
+    Source: Transfer + Vertex,
+    Target: Transfer + Vertex,
+{
+    type Error = Error;
+    fn try_from(warpper: HyperVertexWrapper<Source, Target>) -> Result<Self, Self::Error> {
+        let from_record = VertexRecord::from_with_json_value(
+            warpper.source.vertex_type(),
+            warpper.source.primary_key(),
+            warpper.source.to_json_value(),
+        );
+        let to_record = VertexRecord::from_with_json_value(
+            warpper.target.vertex_type(),
+            warpper.target.primary_key(),
+            warpper.target.to_json_value(),
+        );
+        let from_str =
+            serde_json::to_string(&from_record).map_err(|err| Error::JSONParseError(err))?;
+        let to_str = serde_json::to_string(&to_record).map_err(|err| Error::JSONParseError(err))?;
+
+        Ok(UpsertHyperVertex { from_str, to_str })
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UpsertHyperVertex {
+    pub from_str: String, // STRING TO GSQL JSONObject
+    pub to_str: String,   // STRING TO GSQL JSONObject
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -150,7 +184,7 @@ struct UpsertHyperVertexResponse {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-struct UpsertHyperVertexResult {
+pub struct UpsertHyperVertexResult {
     created_vertices: i32,
     created_hyper_vertices: Option<i32>,
 }
@@ -161,6 +195,7 @@ async fn upsert_hyper_vertex(
     graph: Graph,
 ) -> Result<(), Error> {
     let json_params = serde_json::to_string(payload).map_err(|err| Error::JSONParseError(err))?;
+    println!("json_params: {:?}", json_params);
     let uri: http::Uri = format!("{}/query/{}/upsert_graph", C.tdb.host, graph.to_string())
         .parse()
         .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
@@ -177,13 +212,19 @@ async fn upsert_hyper_vertex(
         ))
     })?;
     let result = match parse_body::<UpsertHyperVertexResponse>(&mut resp).await {
-        Ok(result) => result,
-        Err(_) => {
-            let err_resp: UpsertHyperVertexResponse = parse_body(&mut resp).await?;
-            let err_message = format!(
-                "TigerGraph upsert_graph error, Code: {:?}, Message: {:?}",
-                err_resp.base.code, err_resp.base.message
-            );
+        Ok(result) => {
+            if result.base.error {
+                let err_message = format!(
+                    "TigerGraph upsert_graph error, Code: {:?}, Message: {:?}",
+                    result.base.code, result.base.message
+                );
+                error!(err_message);
+                return Err(Error::General(err_message, resp.status()));
+            }
+            result
+        }
+        Err(err) => {
+            let err_message = format!("TigerGraph upsert_graph parse_body error: {:?}", err);
             error!(err_message);
             return Err(Error::General(err_message, resp.status()));
         }
@@ -206,14 +247,11 @@ pub async fn create_identity_to_identity_proof_two_way_binding(
     let pb = proof_backward.wrapper(to, from, PROOF_REVERSE_EDGE);
     let edges = Edges(vec![pf, pb]);
 
-    let from_record =
-        IdentityRecord::from_with_params(from.primary_key(), from.vertex_type(), from.to_owned());
-    let to_record =
-        IdentityRecord::from_with_params(to.primary_key(), to.primary_key(), to.to_owned());
-    let from_str = serde_json::to_string(&from_record).map_err(|err| Error::JSONParseError(err))?;
-    let to_str = serde_json::to_string(&to_record).map_err(|err| Error::JSONParseError(err))?;
-
-    let upsert_hyper_vertex_req = UpsertHyperVertex { from_str, to_str };
+    let from_to_wrapper = HyperVertexWrapper {
+        source: from.to_owned(),
+        target: to.to_owned(),
+    };
+    let upsert_hyper_vertex_req = from_to_wrapper.try_into()?;
     let upsert_edge_req: UpsertEdge = edges.into();
 
     upsert_hyper_vertex(&client, &upsert_hyper_vertex_req, Graph::SocialGraph).await?;

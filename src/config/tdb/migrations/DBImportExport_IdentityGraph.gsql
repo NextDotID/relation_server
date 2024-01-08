@@ -31,7 +31,6 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
       STRING display_name = from_v.getJsonObject("attributes").getString("display_name");
       STRING profile_url = from_v.getJsonObject("attributes").getString("profile_url");
       STRING avatar_url = from_v.getJsonObject("attributes").getString("avatar_url");
-      STRING created_at = from_v.getJsonObject("attributes").getString("created_at");
       STRING updated_at = from_v.getJsonObject("attributes").getString("updated_at");
       STRING uid = from_v.getJsonObject("attributes").getString("uid");
 
@@ -43,7 +42,6 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
               END,
               v.profile_url = profile_url,
               v.avatar_url = avatar_url,
-              v.created_at = to_datetime(created_at),
               v.updated_at = to_datetime(updated_at),
               IF uid != "" THEN
                 v.uid = uid
@@ -108,7 +106,6 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
       STRING display_name = from_v.getJsonObject("attributes").getString("display_name");
       STRING profile_url = from_v.getJsonObject("attributes").getString("profile_url");
       STRING avatar_url = from_v.getJsonObject("attributes").getString("avatar_url");
-      STRING created_at = from_v.getJsonObject("attributes").getString("created_at");
       STRING updated_at = from_v.getJsonObject("attributes").getString("updated_at");
       STRING uid = from_v.getJsonObject("attributes").getString("uid");
 
@@ -120,7 +117,6 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
               END,
               v.profile_url = profile_url,
               v.avatar_url = avatar_url,
-              v.created_at = to_datetime(created_at),
               v.updated_at = to_datetime(updated_at),
               IF uid != "" THEN
                 v.uid = uid

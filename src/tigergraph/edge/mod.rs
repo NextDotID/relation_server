@@ -118,8 +118,8 @@ pub struct EdgeRecord<T> {
 }
 
 // Define a custom trait with a function that takes multiple input parameters.
-pub trait FromWithParams<T> {
-    fn from_with_params(
+pub trait FromWithAttributes<T> {
+    fn from_with_attributes(
         e_type: String,
         directed: bool,
         from_id: String,
@@ -229,7 +229,7 @@ impl<'de> Deserialize<'de> for EdgeUnion {
                             let proof: Proof =
                                 serde_json::from_value(attributes).map_err(de::Error::custom)?;
                             Ok(EdgeUnion::ProofRecord(ProofRecord(
-                                EdgeRecord::from_with_params(
+                                EdgeRecord::from_with_attributes(
                                     e_type,
                                     directed.unwrap_or_default(),
                                     from_id.unwrap_or_default(),
@@ -243,7 +243,7 @@ impl<'de> Deserialize<'de> for EdgeUnion {
                             let hold: Hold =
                                 serde_json::from_value(attributes).map_err(de::Error::custom)?;
                             Ok(EdgeUnion::HoldRecord(HoldRecord(
-                                EdgeRecord::from_with_params(
+                                EdgeRecord::from_with_attributes(
                                     e_type,
                                     directed.unwrap_or_default(),
                                     from_id.unwrap_or_default(),

@@ -9,6 +9,7 @@ pub use identity::{
 };
 pub use identity_graph::{IdentityGraph, IdentityGraphEdge};
 use serde::{Deserialize, Serialize};
+use serde_json::value::Value;
 
 /// All `Vertex` records.
 #[async_trait]
@@ -31,6 +32,20 @@ pub struct VertexRecord<T> {
 }
 
 // Define a custom trait with a function that takes multiple input parameters.
-pub trait FromWithParams<T> {
-    fn from_with_params(v_type: String, v_id: String, attributes: T) -> Self;
+pub trait FromWithAttributes<T> {
+    fn from_with_attributes(v_type: String, v_id: String, attributes: T) -> Self;
+}
+
+pub trait FromWithJsonValue<T> {
+    fn from_with_json_value(v_type: String, v_id: String, attributes: T) -> Self;
+}
+
+impl FromWithJsonValue<Value> for VertexRecord<Value> {
+    fn from_with_json_value(v_type: String, v_id: String, attributes: Value) -> Self {
+        VertexRecord {
+            v_type,
+            v_id,
+            attributes,
+        }
+    }
 }

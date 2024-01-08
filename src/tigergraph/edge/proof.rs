@@ -1,7 +1,7 @@
 use crate::{
     error::Error,
     tigergraph::{
-        edge::{Edge, EdgeRecord, FromWithParams, Wrapper},
+        edge::{Edge, EdgeRecord, FromWithAttributes, Wrapper},
         upsert_graph,
         vertex::{Identity, Vertex, VertexRecord},
         Attribute, BaseResponse, EdgeWrapper, Edges, Graph, OpCode, Transfer, UpsertGraph,
@@ -16,6 +16,7 @@ use crate::{
 use chrono::{Duration, NaiveDateTime};
 use hyper::{client::HttpConnector, Client};
 use serde::{Deserialize, Serialize};
+use serde_json::value::{Map, Value};
 use serde_json::{json, to_value};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -67,8 +68,8 @@ impl Default for Proof {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ProofRecord(pub EdgeRecord<Proof>);
 
-impl FromWithParams<Proof> for EdgeRecord<Proof> {
-    fn from_with_params(
+impl FromWithAttributes<Proof> for EdgeRecord<Proof> {
+    fn from_with_attributes(
         e_type: String,
         directed: bool,
         from_id: String,
@@ -205,6 +206,24 @@ impl Transfer for ProofRecord {
         );
         attributes_map
     }
+    fn to_json_value(&self) -> Value {
+        let mut map = Map::new();
+        map.insert("uuid".to_string(), json!(self.uuid));
+        map.insert("source".to_string(), json!(self.source));
+        map.insert("level".to_string(), json!(self.level));
+        map.insert(
+            "record_id".to_string(),
+            json!(self.record_id.clone().unwrap_or("".to_string())),
+        );
+        map.insert(
+            "created_at".to_string(),
+            self.created_at
+                .map_or(json!("1970-01-01 00:00:00"), |created_at| json!(created_at)),
+        );
+        map.insert("updated_at".to_string(), json!(self.updated_at));
+        map.insert("fetcher".to_string(), json!(self.fetcher));
+        Value::Object(map)
+    }
 }
 
 impl Wrapper<ProofRecord, Identity, Identity> for Proof {
@@ -214,7 +233,7 @@ impl Wrapper<ProofRecord, Identity, Identity> for Proof {
         to: &Identity,
         name: &str,
     ) -> EdgeWrapper<ProofRecord, Identity, Identity> {
-        let pb = EdgeRecord::from_with_params(
+        let pb = EdgeRecord::from_with_attributes(
             name.to_string(),
             IS_DIRECTED,
             from.primary_key(),

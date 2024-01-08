@@ -2,7 +2,7 @@ use crate::{
     config::C,
     error::Error,
     tigergraph::{
-        edge::{Edge, EdgeRecord, EdgeWrapper, FromWithParams, Wrapper},
+        edge::{Edge, EdgeRecord, EdgeWrapper, FromWithAttributes, Wrapper},
         upsert_graph,
         vertex::{contract::VERTEX_NAME as CONTRACTS, Contract, Identity, Vertex, VertexRecord},
         Attribute, BaseResponse, Edges, Graph, OpCode, Transfer, UpsertGraph,
@@ -20,6 +20,7 @@ use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use serde_json::value::{Map, Value};
 use std::collections::HashMap;
 use tracing::error;
 use uuid::Uuid;
@@ -82,8 +83,8 @@ impl PartialEq for Hold {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HoldRecord(pub EdgeRecord<Hold>);
 
-impl FromWithParams<Hold> for EdgeRecord<Hold> {
-    fn from_with_params(
+impl FromWithAttributes<Hold> for EdgeRecord<Hold> {
+    fn from_with_attributes(
         e_type: String,
         directed: bool,
         from_id: String,
@@ -217,6 +218,25 @@ impl Transfer for HoldRecord {
         );
         attributes_map
     }
+
+    fn to_json_value(&self) -> Value {
+        let mut map = Map::new();
+        map.insert("uuid".to_string(), json!(self.uuid));
+        map.insert("source".to_string(), json!(self.source));
+        map.insert(
+            "transaction".to_string(),
+            json!(self.transaction.clone().unwrap_or("".to_string())),
+        );
+        map.insert("id".to_string(), json!(self.id));
+        map.insert(
+            "created_at".to_string(),
+            self.created_at
+                .map_or(json!("1970-01-01 00:00:00"), |created_at| json!(created_at)),
+        );
+        map.insert("updated_at".to_string(), json!(self.updated_at));
+        map.insert("fetcher".to_string(), json!(self.fetcher));
+        Value::Object(map)
+    }
 }
 
 impl Wrapper<HoldRecord, Identity, Identity> for Hold {
@@ -226,7 +246,7 @@ impl Wrapper<HoldRecord, Identity, Identity> for Hold {
         to: &Identity,
         name: &str,
     ) -> EdgeWrapper<HoldRecord, Identity, Identity> {
-        let hold = EdgeRecord::from_with_params(
+        let hold = EdgeRecord::from_with_attributes(
             name.to_string(),
             IS_DIRECTED,
             from.primary_key(),
@@ -305,7 +325,7 @@ impl Wrapper<HoldRecord, Identity, Contract> for Hold {
         to: &Contract,
         name: &str,
     ) -> EdgeWrapper<HoldRecord, Identity, Contract> {
-        let hold = EdgeRecord::from_with_params(
+        let hold = EdgeRecord::from_with_attributes(
             name.to_string(),
             IS_DIRECTED,
             from.primary_key(),
