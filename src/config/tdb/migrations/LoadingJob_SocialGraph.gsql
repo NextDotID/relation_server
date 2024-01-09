@@ -201,7 +201,7 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
         ELSE
           combine_v = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-hyper_v
                       POST-ACCUM
-                        INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (s.id Identities, earliest_uuid IdentitiesGraph);
+                        INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (s Identities, earliest_uuid IdentitiesGraph);
           del_v = SELECT tgt FROM combine_v-((PartOfIdentitiesGraph>):e)-hyper_v:tgt ACCUM DELETE(e);
           tmp = SELECT tgt FROM del_v:tgt POST-ACCUM DELETE(tgt);
         END;
@@ -218,7 +218,7 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
         ELSE
           combine_v = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-hyper_v
                       POST-ACCUM
-                        INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (s.id Identities, earliest_uuid IdentitiesGraph);
+                        INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (s Identities, earliest_uuid IdentitiesGraph);
           del_v = SELECT tgt FROM combine_v-((PartOfIdentitiesGraph>):e)-hyper_v:tgt ACCUM DELETE(e);
           tmp = SELECT tgt FROM del_v:tgt POST-ACCUM DELETE(tgt);
         END;
@@ -235,7 +235,7 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
         IF hyper_vid != earliest_uuid THEN
           combine_v = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-hyper_v
                       POST-ACCUM
-                        INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (s.id Identities, earliest_uuid IdentitiesGraph);
+                        INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (s Identities, earliest_uuid IdentitiesGraph);
           del_v = SELECT tgt FROM combine_v-((PartOfIdentitiesGraph>):e)-hyper_v:tgt ACCUM DELETE(e);
           tmp = SELECT tgt FROM del_v:tgt POST-ACCUM DELETE(tgt);
         END;
