@@ -3,9 +3,9 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::create_contract_to_identity_resolve_record;
-use crate::tigergraph::create_identity_to_contract_hold_record;
 use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::upsert::create_contract_to_identity_resolve_record;
+use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
 use crate::tigergraph::vertex::{Contract, Identity};
 use crate::upstream::{
     Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target,

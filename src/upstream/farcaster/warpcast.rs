@@ -1,7 +1,8 @@
 use crate::{
     config::C,
     error::Error,
-    tigergraph::{create_identity_to_identity_hold_record, edge::Hold, vertex::Identity},
+    tigergraph::upsert::create_identity_to_identity_hold_record,
+    tigergraph::{edge::Hold, vertex::Identity},
     upstream::{DataFetcher, DataSource, Platform, Target, TargetProcessedList},
     util::{
         make_client, make_http_client, naive_datetime_from_milliseconds,

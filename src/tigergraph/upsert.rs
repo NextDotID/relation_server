@@ -2,18 +2,12 @@ use crate::{
     config::C,
     error::Error,
     tigergraph::{
-        edge::{
-            Edge, EdgeRecord, FromWithAttributes as EdgeFromWithAttributes, Hold, HoldRecord,
-            Proof, ProofRecord, Resolve, ResolveRecord, Wrapper,
-        },
+        edge::{Edge, Hold, Proof, Resolve, Wrapper},
         edge::{
             HOLD_CONTRACT, HOLD_IDENTITY, PROOF_EDGE, PROOF_REVERSE_EDGE, RESOLVE,
             RESOLVE_CONTRACT, REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT,
         },
-        vertex::{
-            Contract, ContractRecord, FromWithAttributes, FromWithJsonValue, Identity,
-            IdentityRecord, Vertex, CONTRACTS_NAME, IDENTITIES_NAME,
-        },
+        vertex::{Contract, FromWithJsonValue, Identity, Vertex},
         Attribute, BaseResponse, EdgeWrapper, Edges, Graph, Transfer,
     },
     util::parse_body,
@@ -23,10 +17,8 @@ use http::uri::InvalidUri;
 use hyper::Method;
 use hyper::{client::HttpConnector, Body, Client};
 use serde::{Deserialize, Serialize};
-use serde_json::value::Value;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
-use strum_macros::{Display, EnumIter, EnumString};
 use tracing::{error, trace};
 
 use super::vertex::VertexRecord;
@@ -195,7 +187,6 @@ async fn upsert_hyper_vertex(
     graph: Graph,
 ) -> Result<(), Error> {
     let json_params = serde_json::to_string(payload).map_err(|err| Error::JSONParseError(err))?;
-    println!("json_params: {:?}", json_params);
     let uri: http::Uri = format!("{}/query/{}/upsert_graph", C.tdb.host, graph.to_string())
         .parse()
         .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
@@ -251,12 +242,11 @@ pub async fn create_identity_to_identity_proof_two_way_binding(
         source: from.to_owned(),
         target: to.to_owned(),
     };
-    let upsert_hyper_vertex_req = from_to_wrapper.try_into()?;
+    let upsert_hyper_vertex_req: UpsertHyperVertex = from_to_wrapper.try_into()?;
     let upsert_edge_req: UpsertEdge = edges.into();
 
     upsert_hyper_vertex(&client, &upsert_hyper_vertex_req, Graph::SocialGraph).await?;
     upsert_edge(&client, &upsert_edge_req, Graph::SocialGraph).await?;
-
     Ok(())
 }
 
@@ -266,6 +256,19 @@ pub async fn create_identity_to_identity_hold_record(
     to: &Identity,
     hold: &Hold,
 ) -> Result<(), Error> {
+    let hold_identity = hold.wrapper(from, to, HOLD_IDENTITY);
+    let edges = Edges(vec![hold_identity]);
+
+    let from_to_wrapper = HyperVertexWrapper {
+        source: from.to_owned(),
+        target: to.to_owned(),
+    };
+
+    let upsert_hyper_vertex_req: UpsertHyperVertex = from_to_wrapper.try_into()?;
+    let upsert_edge_req: UpsertEdge = edges.into();
+
+    upsert_hyper_vertex(&client, &upsert_hyper_vertex_req, Graph::SocialGraph).await?;
+    upsert_edge(&client, &upsert_edge_req, Graph::SocialGraph).await?;
     Ok(())
 }
 
@@ -275,6 +278,19 @@ pub async fn create_identity_to_contract_hold_record(
     to: &Contract,
     hold: &Hold,
 ) -> Result<(), Error> {
+    let hold_contract = hold.wrapper(from, to, HOLD_CONTRACT);
+    let edges = Edges(vec![hold_contract]);
+
+    let from_to_wrapper = HyperVertexWrapper {
+        source: from.to_owned(),
+        target: to.to_owned(),
+    };
+
+    let upsert_hyper_vertex_req: UpsertHyperVertex = from_to_wrapper.try_into()?;
+    let upsert_edge_req: UpsertEdge = edges.into();
+
+    upsert_hyper_vertex(&client, &upsert_hyper_vertex_req, Graph::SocialGraph).await?;
+    upsert_edge(&client, &upsert_edge_req, Graph::SocialGraph).await?;
     Ok(())
 }
 
@@ -284,6 +300,19 @@ pub async fn create_contract_to_identity_resolve_record(
     to: &Identity,
     reverse: &Resolve,
 ) -> Result<(), Error> {
+    let resolve_contract = reverse.wrapper(from, to, RESOLVE_CONTRACT);
+    let edges = Edges(vec![resolve_contract]);
+
+    let from_to_wrapper = HyperVertexWrapper {
+        source: from.to_owned(),
+        target: to.to_owned(),
+    };
+
+    let upsert_hyper_vertex_req: UpsertHyperVertex = from_to_wrapper.try_into()?;
+    let upsert_edge_req: UpsertEdge = edges.into();
+
+    upsert_hyper_vertex(&client, &upsert_hyper_vertex_req, Graph::SocialGraph).await?;
+    upsert_edge(&client, &upsert_edge_req, Graph::SocialGraph).await?;
     Ok(())
 }
 
@@ -293,6 +322,19 @@ pub async fn create_identity_to_contract_reverse_resolve_record(
     to: &Contract,
     reverse: &Resolve,
 ) -> Result<(), Error> {
+    let reverse_resolve_contract = reverse.wrapper(from, to, REVERSE_RESOLVE_CONTRACT);
+    let edges = Edges(vec![reverse_resolve_contract]);
+
+    let from_to_wrapper = HyperVertexWrapper {
+        source: from.to_owned(),
+        target: to.to_owned(),
+    };
+
+    let upsert_hyper_vertex_req: UpsertHyperVertex = from_to_wrapper.try_into()?;
+    let upsert_edge_req: UpsertEdge = edges.into();
+
+    upsert_hyper_vertex(&client, &upsert_hyper_vertex_req, Graph::SocialGraph).await?;
+    upsert_edge(&client, &upsert_edge_req, Graph::SocialGraph).await?;
     Ok(())
 }
 
@@ -302,6 +344,19 @@ pub async fn create_identity_domain_resolve_record(
     to: &Identity,
     resolve: &Resolve,
 ) -> Result<(), Error> {
+    let resolve_record = resolve.wrapper(from, to, RESOLVE);
+    let edges = Edges(vec![resolve_record]);
+
+    let from_to_wrapper = HyperVertexWrapper {
+        source: from.to_owned(),
+        target: to.to_owned(),
+    };
+
+    let upsert_hyper_vertex_req: UpsertHyperVertex = from_to_wrapper.try_into()?;
+    let upsert_edge_req: UpsertEdge = edges.into();
+
+    upsert_hyper_vertex(&client, &upsert_hyper_vertex_req, Graph::SocialGraph).await?;
+    upsert_edge(&client, &upsert_edge_req, Graph::SocialGraph).await?;
     Ok(())
 }
 
@@ -311,5 +366,18 @@ pub async fn create_identity_domain_reverse_resolve_record(
     to: &Identity,
     reverse: &Resolve,
 ) -> Result<(), Error> {
+    let reverse_record = reverse.wrapper(from, to, REVERSE_RESOLVE);
+    let edges = Edges(vec![reverse_record]);
+
+    let from_to_wrapper = HyperVertexWrapper {
+        source: from.to_owned(),
+        target: to.to_owned(),
+    };
+
+    let upsert_hyper_vertex_req: UpsertHyperVertex = from_to_wrapper.try_into()?;
+    let upsert_edge_req: UpsertEdge = edges.into();
+
+    upsert_hyper_vertex(&client, &upsert_hyper_vertex_req, Graph::SocialGraph).await?;
+    upsert_edge(&client, &upsert_edge_req, Graph::SocialGraph).await?;
     Ok(())
 }

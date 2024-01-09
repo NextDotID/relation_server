@@ -6,7 +6,7 @@ mod tests {
     use crate::tigergraph::{
         create_contract_to_identity_resolve_record, create_identity_domain_resolve_record,
         create_identity_to_contract_hold_record, create_identity_to_identity_hold_record,
-        upsert::{create_identity_to_identity_proof_two_way_binding, UpsertHyperVertex},
+        upsert::create_identity_to_identity_proof_two_way_binding,
     };
     use crate::{
         tigergraph::{
@@ -25,9 +25,9 @@ mod tests {
         from.uuid = Some(Uuid::new_v4());
         to.uuid = Some(Uuid::new_v4());
 
-        from.identity = "a".to_string();
+        from.identity = "f".to_string();
         from.display_name = Some("aaa".to_string());
-        to.identity = "b".to_string();
+        to.identity = "d".to_string();
         to.display_name = Some("bbb".to_string());
 
         from.platform = Platform::Ethereum;

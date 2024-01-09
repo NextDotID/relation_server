@@ -3,8 +3,8 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::create_identity_to_contract_reverse_resolve_record;
 use crate::tigergraph::edge::Resolve;
+use crate::tigergraph::upsert::create_identity_to_contract_reverse_resolve_record;
 use crate::tigergraph::vertex::{Contract, Identity};
 use crate::upstream::{Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem};
 use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};

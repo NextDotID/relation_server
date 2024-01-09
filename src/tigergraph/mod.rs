@@ -26,8 +26,6 @@ use std::collections::HashMap;
 use strum_macros::{Display, EnumIter, EnumString};
 use tracing::{error, trace};
 
-use self::vertex::VertexRecord;
-
 #[derive(
     Serialize,
     Deserialize,
