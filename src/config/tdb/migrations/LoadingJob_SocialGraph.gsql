@@ -1,8 +1,8 @@
-CREATE GRAPH SocialGraph (Identities, Proof_Forward, Proof_Backward, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Resolve_Contract, Reverse_Resolve_Contract, IdentitiesGraph, PartOfIdentitiesGraph, HyperEdge, Part1_SocialFollow, Part2_SocialFollow)
+CREATE GRAPH SocialGraph (Identities, Proof_Forward, Proof_Backward, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Resolve_Contract, Reverse_Resolve_Contract, IdentitiesGraph, PartOfIdentitiesGraph, Follow)
 
 USE GRAPH SocialGraph
 
-CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH SocialGraph SYNTAX v2 {
+CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR GRAPH SocialGraph SYNTAX v2 {
   TYPEDEF TUPLE< DATETIME updated_at, STRING id > MinUpdatedTimeTuple;
   JSONOBJECT from_v = parse_json_object(from_str);
   JSONOBJECT to_v = parse_json_object(to_str);
@@ -14,6 +14,7 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
   SetAccum<VERTEX> @@existing_vlist;
   SetAccum<VERTEX<IdentitiesGraph>> @@from_graph;
   SetAccum<VERTEX<IdentitiesGraph>> @@to_graph;
+  STRING final_identity_graph;
 
   MinAccum<MinUpdatedTimeTuple> @@minUpdateTime;
 
@@ -103,11 +104,11 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
     // when it exists: update value
     IF to_type == "Identities" THEN
       exist_vset (Identities|Contracts) = {@@existing_vlist};
-      STRING display_name = from_v.getJsonObject("attributes").getString("display_name");
-      STRING profile_url = from_v.getJsonObject("attributes").getString("profile_url");
-      STRING avatar_url = from_v.getJsonObject("attributes").getString("avatar_url");
-      STRING updated_at = from_v.getJsonObject("attributes").getString("updated_at");
-      STRING uid = from_v.getJsonObject("attributes").getString("uid");
+      STRING display_name = to_v.getJsonObject("attributes").getString("display_name");
+      STRING profile_url = to_v.getJsonObject("attributes").getString("profile_url");
+      STRING avatar_url = to_v.getJsonObject("attributes").getString("avatar_url");
+      STRING updated_at = to_v.getJsonObject("attributes").getString("updated_at");
+      STRING uid = to_v.getJsonObject("attributes").getString("uid");
 
       R = SELECT v
         FROM exist_vset:v
@@ -128,9 +129,9 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
                     POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_at, tgt.id);
     ELSE IF to_type == "Contracts" THEN
       exist_vset (Identities|Contracts) = {@@existing_vlist};
-      STRING category = from_v.getJsonObject("attributes").getString("category");
-      STRING symbol = from_v.getJsonObject("attributes").getString("symbol");
-      STRING updated_at = from_v.getJsonObject("attributes").getString("updated_at");
+      STRING category = to_v.getJsonObject("attributes").getString("category");
+      STRING symbol = to_v.getJsonObject("attributes").getString("symbol");
+      STRING updated_at = to_v.getJsonObject("attributes").getString("updated_at");
 
       R = SELECT v
         FROM exist_vset:v
@@ -142,7 +143,7 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
   ELSE
     // if it doesn't exist: insert value
     IF to_type == "Identities" THEN
-      INSERT INTO Identities VALUES (from_id, from_id,
+      INSERT INTO Identities VALUES (to_id, to_id,
                                       to_v.getJsonObject("attributes").getString("uuid"),
                                       to_v.getJsonObject("attributes").getString("platform"), 
                                       to_v.getJsonObject("attributes").getString("identity"), 
@@ -156,7 +157,7 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
       @@create_to_vertex += true;
       @@created_vertices += 1;
     ELSE IF to_type == "Contracts" THEN
-      INSERT INTO Contracts VALUES (from_id, from_id, 
+      INSERT INTO Contracts VALUES (to_id, to_id, 
                                     to_v.getJsonObject("attributes").getString("uuid"),
                                     to_v.getJsonObject("attributes").getString("category"),
                                     to_v.getJsonObject("attributes").getString("address"),
@@ -185,6 +186,7 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
     IF @@create_from_vertex == true AND @@create_to_vertex == true THEN
       // insert 1 hyper vertex connect from & to
       STRING primary_uuid = gsql_uuid_v4();
+      final_identity_graph = primary_uuid;
       INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, now());
       INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (from_id Identities, primary_uuid IdentitiesGraph);
       INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (to_id Identities, primary_uuid IdentitiesGraph);
@@ -193,6 +195,7 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
     ELSE IF @@create_from_vertex == false AND @@create_to_vertex == true THEN
       // add PartOfIdentitiesGraph Old:From_GraphID -> to
       STRING earliest_uuid = @@minUpdateTime.id;
+      final_identity_graph = earliest_uuid;
       FOREACH v1 in @@from_graph DO
         hyper_v (IdentitiesGraph) = { v1 };
         STRING hyper_vid = v1.id;
@@ -200,16 +203,24 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
           INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (to_id Identities, earliest_uuid IdentitiesGraph);
         ELSE
           combine_v = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-hyper_v
+                      ACCUM DELETE(e)
                       POST-ACCUM
                         INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (s Identities, earliest_uuid IdentitiesGraph);
-          del_v = SELECT tgt FROM combine_v-((PartOfIdentitiesGraph>):e)-hyper_v:tgt ACCUM DELETE(e);
-          tmp = SELECT tgt FROM del_v:tgt POST-ACCUM DELETE(tgt);
+          // also need to combine the hyper_edge
+          follower = SELECT hv FROM IdentitiesGraph:hv-((Follow>):e1)-hyper_v
+                      ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                            VALUES(hv IdentitiesGraph, earliest_uuid IdentitiesGraph, e1.original_from, e1.original_to, e1.source, now()), DELETE(e1);        
+          following = SELECT hv FROM IdentitiesGraph:hv-((<Follow):e2)-hyper_v
+                      ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                            VALUES(earliest_uuid IdentitiesGraph, hv IdentitiesGraph, e2.original_from, e2.original_to, e2.source, now()), DELETE(e2);
+          tmp = SELECT tgt FROM hyper_v:tgt POST-ACCUM DELETE(tgt);
         END;
       END;
 
     ELSE IF @@create_from_vertex == true AND @@create_to_vertex == false THEN
       // add PartOfIdentitiesGraph Old:To_GraphID -> from
       STRING earliest_uuid = @@minUpdateTime.id;
+      final_identity_graph = earliest_uuid;
       FOREACH v2 in @@to_graph DO
         hyper_v (IdentitiesGraph) = { v2 };
         STRING hyper_vid = v2.id;
@@ -217,16 +228,24 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
           INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (from_id Identities, earliest_uuid IdentitiesGraph);
         ELSE
           combine_v = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-hyper_v
+                      ACCUM DELETE(e)
                       POST-ACCUM
                         INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (s Identities, earliest_uuid IdentitiesGraph);
-          del_v = SELECT tgt FROM combine_v-((PartOfIdentitiesGraph>):e)-hyper_v:tgt ACCUM DELETE(e);
-          tmp = SELECT tgt FROM del_v:tgt POST-ACCUM DELETE(tgt);
+          // also need to combine the hyper_edge
+          follower = SELECT hv FROM IdentitiesGraph:hv-((Follow>):e1)-hyper_v
+                      ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                            VALUES(hv IdentitiesGraph, earliest_uuid IdentitiesGraph, e1.original_from, e1.original_to, e1.source, now()), DELETE(e1);        
+          following = SELECT hv FROM IdentitiesGraph:hv-((<Follow):e2)-hyper_v
+                      ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                            VALUES(earliest_uuid IdentitiesGraph, hv IdentitiesGraph, e2.original_from, e2.original_to, e2.source, now()), DELETE(e2);
+          tmp = SELECT tgt FROM hyper_v:tgt POST-ACCUM DELETE(tgt);
         END;
       END;
 
     ELSE IF @@create_from_vertex == false AND @@create_to_vertex == false THEN
       // combine two IdentitiesGraph
       STRING earliest_uuid = @@minUpdateTime.id;
+      final_identity_graph = earliest_uuid;
       SetAccum<VERTEX<IdentitiesGraph>> @@from_union_to;
       @@from_union_to = @@from_graph UNION @@to_graph;
       FOREACH v3 IN @@from_union_to DO
@@ -234,10 +253,17 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
         STRING hyper_vid = v3.id;
         IF hyper_vid != earliest_uuid THEN
           combine_v = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-hyper_v
+                      ACCUM DELETE(e)
                       POST-ACCUM
                         INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (s Identities, earliest_uuid IdentitiesGraph);
-          del_v = SELECT tgt FROM combine_v-((PartOfIdentitiesGraph>):e)-hyper_v:tgt ACCUM DELETE(e);
-          tmp = SELECT tgt FROM del_v:tgt POST-ACCUM DELETE(tgt);
+          // also need to combine the hyper_edge
+          follower = SELECT hv FROM IdentitiesGraph:hv-((Follow>):e1)-hyper_v
+                      ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                            VALUES(hv IdentitiesGraph, earliest_uuid IdentitiesGraph, e1.original_from, e1.original_to, e1.source, now()), DELETE(e1);        
+          following = SELECT hv FROM IdentitiesGraph:hv-((<Follow):e2)-hyper_v
+                      ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                            VALUES(earliest_uuid IdentitiesGraph, hv IdentitiesGraph, e2.original_from, e2.original_to, e2.source, now()), DELETE(e2);
+          tmp = SELECT tgt FROM hyper_v:tgt POST-ACCUM DELETE(tgt);
         END;
       END; // end FOREACH
 
@@ -246,6 +272,7 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
   THEN
     // insert 1 hyper vertex, New_GraphID -> from
     STRING primary_uuid = gsql_uuid_v4();
+    final_identity_graph = primary_uuid;
     INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, now());
     INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (from_id Identities, primary_uuid IdentitiesGraph);
     @@created_hyper_vertices += 1;
@@ -253,12 +280,13 @@ CREATE OR REPLACE QUERY upsert_graph(STRING from_str, STRING to_str) FOR GRAPH S
   THEN
     // insert 1 hyper vertex, New_GraphID -> to
     STRING primary_uuid = gsql_uuid_v4();
+    final_identity_graph = primary_uuid;
     INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, now());
     INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (to_id Identities, primary_uuid IdentitiesGraph);
     @@created_hyper_vertices += 1;
   END;
 
-  PRINT @@created_vertices as created_vertices, @@created_hyper_vertices as created_hyper_vertices;
+  PRINT @@created_vertices as created_vertices, @@created_hyper_vertices as created_hyper_vertices, final_identity_graph;
 }
 
 CREATE OR REPLACE QUERY delete_vertex_and_edge(VERTEX<Identities> p, INT depth=10) FOR GRAPH SocialGraph SYNTAX v2 {

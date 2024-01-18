@@ -179,6 +179,7 @@ struct UpsertHyperVertexResponse {
 pub struct UpsertHyperVertexResult {
     created_vertices: i32,
     created_hyper_vertices: Option<i32>,
+    final_identity_graph: Option<String>,
 }
 
 async fn upsert_hyper_vertex(
@@ -187,9 +188,13 @@ async fn upsert_hyper_vertex(
     graph: Graph,
 ) -> Result<(), Error> {
     let json_params = serde_json::to_string(payload).map_err(|err| Error::JSONParseError(err))?;
-    let uri: http::Uri = format!("{}/query/{}/upsert_graph", C.tdb.host, graph.to_string())
-        .parse()
-        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+    let uri: http::Uri = format!(
+        "{}/query/{}/upsert_hyper_vertex",
+        C.tdb.host,
+        graph.to_string()
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
     let req = hyper::Request::builder()
         .method(Method::POST)
         .uri(uri)
@@ -198,7 +203,7 @@ async fn upsert_hyper_vertex(
         .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
     let mut resp = client.request(req).await.map_err(|err| {
         Error::ManualHttpClientError(format!(
-            "TigerGraph | Fail to request upsert_graph: {:?}",
+            "TigerGraph | Fail to request upsert_hyper_vertex: {:?}",
             err.to_string()
         ))
     })?;

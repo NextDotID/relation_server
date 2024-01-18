@@ -1,0 +1,17 @@
+CREATE LOADING JOB Load_LensSocialFeed FOR GRAPH SocialGraph {
+  // ethereum identity and lens identity already have been loading in call `upsert_hyper_vertex()`
+  // from	to	source	uuid	id	updated_at	fetcher
+  LOAD "/home/tigergraph/shared_data/lens_social_feeds/lens.hold.tsv"
+    TO EDGE Hold_Identity VALUES ($"from", $"to", $"source", REDUCE(ignore_if_exists($"uuid")), _, $"id", _, REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  // from	to	source	system	name	uuid	updated_at	fetcher
+  LOAD "/home/tigergraph/shared_data/lens_social_feeds/lens.resolve.tsv"
+    TO EDGE Resolve VALUES ($"from", $"to", $"source", $"system", $"name", REDUCE(ignore_if_exists($"uuid")), REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  // from	to	source	system	name	uuid	updated_at	fetcher
+  LOAD "/home/tigergraph/shared_data/lens_social_feeds/lens.reverse_resolve.tsv"
+    TO EDGE Resolve VALUES ($"from", $"to", $"source", $"system", $"name", REDUCE(ignore_if_exists($"uuid")), REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  // from	to	original_from	original_to	source	updated_at
+  LOAD "/home/tigergraph/shared_data/lens_social_feeds/lens.follow.tsv"
+    TO EDGE Follow VALUES ($"from", $"to", $"original_from", $"original_to", $"source", REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+}
+
+RUN LOADING JOB Load_LensSocialFeed

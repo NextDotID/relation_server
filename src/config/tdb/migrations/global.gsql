@@ -12,6 +12,4 @@ CREATE DIRECTED EDGE Relation_TX(FROM Identities, TO Identities, DISCRIMINATOR(t
 CREATE DIRECTED EDGE Social_Feed(FROM Identities, TO Identities, source STRING, action STRING, action_count INT, updated_at DATETIME)
 CREATE VERTEX IdentitiesGraph(PRIMARY_ID id STRING, id STRING, updated_at DATETIME)
 CREATE DIRECTED EDGE PartOfIdentitiesGraph(FROM Identities, TO IdentitiesGraph)
-CREATE VERTEX HyperEdge(PRIMARY_ID id STRING, hyper_from STRING, hyper_to STRING)
-CREATE DIRECTED EDGE Part1_SocialFollow(FROM IdentitiesGraph, TO HyperEdge, original_from STRING, source STRING, updated_at DATETIME)
-CREATE DIRECTED EDGE Part2_SocialFollow(FROM HyperEdge, TO IdentitiesGraph, original_to STRING, source STRING, updated_at DATETIME)
+CREATE DIRECTED EDGE Follow(FROM IdentitiesGraph, TO IdentitiesGraph, DISCRIMINATOR(original_from STRING, original_to STRING, source STRING), updated_at DATETIME)
