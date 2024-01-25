@@ -8,7 +8,7 @@ CREATE LOADING JOB Load_LensSocialFeed FOR GRAPH SocialGraph {
     TO EDGE Resolve VALUES ($"from", $"to", $"source", $"system", $"name", REDUCE(ignore_if_exists($"uuid")), REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
   // from	to	source	system	name	uuid	updated_at	fetcher
   LOAD "/home/tigergraph/shared_data/lens_social_feeds/lens.reverse_resolve.tsv"
-    TO EDGE Resolve VALUES ($"from", $"to", $"source", $"system", $"name", REDUCE(ignore_if_exists($"uuid")), REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+    TO EDGE Reverse_Resolve VALUES ($"from", $"to", $"source", $"system", $"name", REDUCE(ignore_if_exists($"uuid")), REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
   // from	to	original_from	original_to	source	updated_at
   LOAD "/home/tigergraph/shared_data/lens_social_feeds/lens.follow.tsv"
     TO EDGE Follow VALUES ($"from", $"to", $"original_from", $"original_to", $"source", REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";

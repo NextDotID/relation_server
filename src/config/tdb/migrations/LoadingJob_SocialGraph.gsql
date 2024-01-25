@@ -289,32 +289,95 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
   PRINT @@created_vertices as created_vertices, @@created_hyper_vertices as created_hyper_vertices, final_identity_graph;
 }
 
-CREATE OR REPLACE QUERY delete_vertex_and_edge(VERTEX<Identities> p, INT depth=10) FOR GRAPH SocialGraph SYNTAX v2 {
-  SetAccum<EDGE> @@edges;
-  SetAccum<VERTEX> @@vertices;
-  OrAccum @visited = FALSE;
-  OrAccum @visited2 = FALSE;
+CREATE OR REPLACE QUERY delete_graph_inner_connection(VERTEX<Identities> p, INT depth=10) FOR GRAPH SocialGraph SYNTAX v2 {
+  seed (Identities) = {p};
+  SumAccum<INT> @before;
+  SumAccum<INT> @after;
+  identities_graph = SELECT tgt FROM seed-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt;
+  vertex2delete = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-identities_graph;
+
+  // only delete connection
+  v2c = SELECT v FROM vertex2delete-(:e)-Contracts:v ACCUM DELETE(e);
+  v2v = SELECT v FROM vertex2delete-(:e)-vertex2delete:v ACCUM DELETE(e);
+}
+
+CREATE OR REPLACE QUERY find_identity_graph_by_vertex(VERTEX<Identities> p) FOR GRAPH SocialGraph {
+  TYPEDEF TUPLE< VERTEX source_v, VERTEX target_v, STRING data_source > IdentityConnection;
+  TYPEDEF TUPLE< DATETIME updated_at, STRING id > MinUpdatedTimeTuple;
+
+  MinAccum<MinUpdatedTimeTuple> @@minUpdateTime;
+  STRING graph_id;
+  SumAccum<INT> @degree;
+  SetAccum<IdentityConnection> @@edges;
 
   seed (Identities) = {p};
-  WHILE(seed.size()>0) LIMIT depth DO
-    SetAccum<VERTEX> @@pool;
-    proof = SELECT v FROM seed:s1-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:v-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed:s2
-           WHERE v.@visited == FALSE AND s1 == s2
-           ACCUM @@edges += pf, @@edges += pw, @@vertices += v, v.@visited = TRUE
-           POST-ACCUM @@pool += v;
-    hold = SELECT v FROM seed-((Hold_Identity>|<Hold_Identity):e)-Identities:v
-           WHERE v.@visited2 == FALSE
-           ACCUM @@edges += e, @@vertices += v, v.@visited2 = TRUE
-           POST-ACCUM @@pool += v;
-    seed (Identities) = {@@pool};
-  END;
+  identities_graph = SELECT tgt FROM seed-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt
+                     POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_at, tgt.id);
+  graph_id = @@minUpdateTime.id;
+  
+  // filter single vertex
+  // exist_vset = SELECT v FROM Identities:v-((PartOfIdentitiesGraph>):e)-identities_graph
+  //       POST-ACCUM v.@degree += v.outdegree(["Proof_Forward", "Proof_Backward", "Hold_Identity", "Hold_Contract", "Resolve", "Reverse_Resolve", "Resolve_Contract", "Reverse_Resolve_Contract"]);
+  // vset = SELECT v FROM exist_vset:v WHERE v.@degree > 0;
+  vset = SELECT v FROM Identities:v-((PartOfIdentitiesGraph>):e)-identities_graph;
 
-  vertex2delete (Identities) = {@@vertices};
-  contracts = SELECT v FROM vertex2delete-((Reverse_Resolve_Contract>|<Resolve_Contract):e)-Contracts:v ACCUM DELETE(e);
-  contracts = SELECT v FROM vertex2delete-((Hold_Contract>):e)-Contracts:v ACCUM DELETE(e);
-  resolved = SELECT v FROM vertex2delete-((Resolve>|<Reverse_Resolve):e)-Identities:v ACCUM DELETE(e);
-  proof2delete = SELECT v FROM vertex2delete-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward|Hold_Identity>|<Hold_Identity):e)-Identities:v ACCUM DELETE(e);
-  result = SELECT v FROM vertex2delete:v POST-ACCUM DELETE(v);
+  tmp = SELECT v1 FROM vset:v1-((Proof_Forward>|Proof_Backward>|Hold_Identity>):e1)-vset:v2
+        ACCUM @@edges += IdentityConnection(v1, v2, e1.source);
+  tmp2 = SELECT v1 FROM vset:v1-((<Proof_Forward|<Proof_Backward|<Hold_Identity):e2)-vset:v2
+        ACCUM @@edges += IdentityConnection(v2, v1, e2.source);
+  
+  PRINT graph_id, vset as vertices, @@edges as edges;
+}
+
+
+CREATE OR REPLACE QUERY query_identity_graph_by_ids(SET<STRING> ids) FOR GRAPH SocialGraph {
+  TYPEDEF TUPLE< VERTEX source_v, VERTEX target_v, STRING data_source > IdentityConnection;
+  SetAccum<IdentityConnection> @@edges;
+  SetAccum<VERTEX> @@hyper_vset;
+  @@hyper_vset = to_vertex_set(ids, "IdentitiesGraph");
+  hyper_vertices (IdentitiesGraph) = {@@hyper_vset};
+
+  FOREACH hv IN @@hyper_vset DO
+    @@edges.clear();
+    hyper_v = {hv};
+    vset = SELECT v FROM Identities:v-((PartOfIdentitiesGraph>):e)-hyper_v;
+    tmp = SELECT v1 FROM vset:v1-((Proof_Forward>|Proof_Backward>|Hold_Identity>):e1)-vset:v2
+        ACCUM @@edges += IdentityConnection(v1, v2, e1.source);
+    tmp2 = SELECT v1 FROM vset:v1-((<Proof_Forward|<Proof_Backward|<Hold_Identity):e2)-vset:v2
+          ACCUM @@edges += IdentityConnection(v2, v1, e2.source);
+
+    PRINT hv as graph_id, vset as vertices, @@edges as edges;
+  END;
+}
+
+CREATE OR REPLACE QUERY follow_relation(VERTEX<IdentitiesGraph> g, STRING follow_type, INT hop) FOR GRAPH SocialGraph {
+  OrAccum @visited = FALSE;
+  SetAccum<EDGE> @@follow_edges;
+  SetAccum<VERTEX<IdentitiesGraph>> @@hyper_vertices;
+
+  IF follow_type == "follower" THEN
+    seed (IdentitiesGraph) = {g};
+    WHILE(seed.size()>0) LIMIT hop DO
+      SetAccum<VERTEX> @@pool;
+      follower = SELECT hv FROM seed-((<Follow):e)-IdentitiesGraph:hv
+                 WHERE hv.@visited == FALSE
+                 ACCUM @@follow_edges += e
+                 POST-ACCUM hv.@visited = TRUE, @@hyper_vertices += hv, @@pool += hv;
+      seed (IdentitiesGraph) = {@@pool};
+    END;
+
+  ELSE IF follow_type == "following" THEN
+    seed (IdentitiesGraph) = {g};
+    WHILE(seed.size()>0) LIMIT hop DO
+      SetAccum<VERTEX> @@pool;
+      following = SELECT hv FROM seed-((Follow>):e)-IdentitiesGraph:hv
+                 WHERE hv.@visited == FALSE
+                 ACCUM @@follow_edges += e
+                 POST-ACCUM hv.@visited = TRUE, @@hyper_vertices += hv, @@pool += hv;
+      seed (IdentitiesGraph) = {@@pool};
+    END;
+  END;
+  PRINT @@hyper_vertices as list, @@follow_edges as topology;
 }
 
 CREATE OR REPLACE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH SocialGraph { 
@@ -1032,78 +1095,3 @@ CREATE OR REPLACE QUERY tg_fastRP(
 
 
 INSTALL QUERY ALL
-
-
-BEGIN
-CREATE LOADING JOB load_tx_relation FOR GRAPH IdentitiesGraph {
-  DEFINE FILENAME relation_file;
-  LOAD relation_file TO EDGE Relation_Unique_TX VALUES ($0, $1, REDUCE(add($2)), REDUCE(add($3)), REDUCE(max($4)), REDUCE(min($5)), now()) WHERE to_int($3) > 0 USING header="true", separator="\t";
-}
-END
-
-RUN LOADING JOB load_tx_relation USING relation_file="/home/tigergraph/shared_data/unique_tx/2023-03-txdata/2023-03.relation.tsv"
-
-BEGIN
-CREATE LOADING JOB load_tx_identity FOR GRAPH IdentitiesGraph {
-  DEFINE FILENAME identity_file;
-  LOAD identity_file TO VERTEX Identities VALUES ($0, $0, REDUCE(ignore_if_exists($1)), $2, $3, _, _, _, _, now(), now()) USING header="true", separator="\t";
-}
-END
-
-RUN LOADING JOB load_tx_identity USING identity_file="/home/tigergraph/shared_data/unique_tx/2023-03-txdata/2023-03.identity.tsv"
-
-CREATE OR REPLACE QUERY find_subgraph_by_vertex(VERTEX<Identities> p)
-
-CREATE OR REPLACE QUERY follow_relation()
-
-CREATE OR REPLACE QUERY expand(VERTEX<Identities> p, INT depth) FOR GRAPH SocialGraph { 
-  SetAccum<EDGE> @@edges;
-  OrAccum @visited = FALSE;
-
-  seed (Identities) = {p};
-  FOREACH i in RANGE[1, depth] DO
-    seed = SELECT v FROM seed-((Relation_Unique_TX>|<Relation_Unique_TX|Social_Feed>|<Social_Feed|Relation_TX>|<Relation_TX):e)-Identities:v
-           WHERE v.@visited == FALSE
-           ACCUM @@edges += e, v.@visited = TRUE;
-  END;
-  PRINT @@edges AS relations;
-}
-
-CREATE OR REPLACE QUERY relation_single_pair(VERTEX<Identities> v_source, VERTEX<Identities> target_v, INT depth = 10) FOR GRAPH SocialGraph {
-  ListAccum<ListAccum<VERTEX>> @path_list; 
-  ListAccum<ListAccum<VERTEX>> @new_list;
-  OrAccum @end_point;
-  ListAccum<ListAccum<VERTEX>> @@total_path_list; // all vertex as List
-  SetAccum<EDGE> @@total_edge_list; // all edge as Set
-
-  endset = {target_v};
-  endset = SELECT s
-          From endset:s
-          ACCUM s.@end_point = true;
-  
-  Source = {v_source};
-  Source = SELECT s 
-           FROM Source:s
-           ACCUM s.@path_list = [s];
-  
-  WHILE Source.size() > 0 LIMIT depth DO 
-       Source = SELECT t 
-                 FROM Source:s-((Relation_Unique_TX>|<Relation_Unique_TX|Social_Feed>|<Social_Feed|Relation_TX>|<Relation_TX):e)-Identities:t
-                 ACCUM @@total_edge_list += e,
-                 FOREACH sequence IN s.@path_list DO 
-                   IF t.@end_point == true THEN
-                     @@total_path_list += [sequence + [t]]
-                   ELSE IF sequence.contains(t) == FALSE THEN
-                     t.@new_list += [sequence + [t]]  
-                   END
-                 END
-        POST-ACCUM s.@path_list.clear();
-  
-      Source = SELECT t 
-                FROM Source:t    
-                POST-ACCUM t.@path_list = t.@new_list,
-                           t.@new_list.clear()
-                HAVING t.@path_list.size() > 0;
-  END;
-  PRINT @@total_path_list as path, @@total_edge_list as relations;
-}
