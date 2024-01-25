@@ -111,6 +111,7 @@ impl Graph {
     }
 }
 
+#[allow(dead_code)]
 pub async fn delete_vertex_and_edge(
     client: &Client<HttpConnector>,
     v_id: String,
@@ -121,7 +122,7 @@ pub async fn delete_vertex_and_edge(
     let uri: http::Uri = format!(
         "{}/query/{}/delete_vertex_and_edge?p={}&depth={}",
         C.tdb.host,
-        Graph::IdentityGraph.to_string(),
+        Graph::SocialGraph.to_string(),
         v_id.clone(),
         10, // max depth
     )
@@ -130,7 +131,7 @@ pub async fn delete_vertex_and_edge(
     let req = hyper::Request::builder()
         .method(Method::GET)
         .uri(uri)
-        .header("Authorization", Graph::IdentityGraph.token())
+        .header("Authorization", Graph::SocialGraph.token())
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
     let mut resp = client.request(req).await.map_err(|err| {

@@ -211,7 +211,7 @@ async fn upsert_hyper_vertex(
         Ok(result) => {
             if result.base.error {
                 let err_message = format!(
-                    "TigerGraph upsert_graph error, Code: {:?}, Message: {:?}",
+                    "TigerGraph upsert_hyper_vertex error, Code: {:?}, Message: {:?}",
                     result.base.code, result.base.message
                 );
                 error!(err_message);

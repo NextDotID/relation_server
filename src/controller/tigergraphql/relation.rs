@@ -1,9 +1,8 @@
 use std::vec;
 
 use crate::{
-    error::{Error, Result},
+    error::Result,
     tigergraph::{
-        delete_vertex_and_edge,
         edge::{RelationUniqueTX, RelationUniqueTXRecord},
         vertex::{Identity, IdentityRecord},
     },
@@ -11,7 +10,6 @@ use crate::{
     util::make_http_client,
 };
 use async_graphql::{Context, Object};
-use tokio::time::{sleep, Duration};
 use tracing::{event, Level};
 
 #[Object]
@@ -89,14 +87,9 @@ impl RelationQuery {
                             source_identity,
                             "Outdated. Delete and Refetching."
                         );
-                        let v_id = found.v_id.clone();
-                        tokio::spawn(async move {
-                            // Delete and Refetch in the background
-                            sleep(Duration::from_secs(10)).await;
-                            delete_vertex_and_edge(&client, v_id).await?;
-                            fetch_all(vec![source_fetch], Some(3)).await?;
-                            Ok::<_, Error>(())
-                        });
+                        // let v_id = found.v_id.clone();
+                        // Refetch in the background
+                        tokio::spawn(fetch_all(vec![source_fetch], Some(3)));
                     }
                     Some(found)
                 }
@@ -129,14 +122,8 @@ impl RelationQuery {
                             target_identity,
                             "Outdated. Delete and Refetching."
                         );
-                        let v_id = found.v_id.clone();
-                        tokio::spawn(async move {
-                            // Delete and Refetch in the background
-                            sleep(Duration::from_secs(10)).await;
-                            delete_vertex_and_edge(&client, v_id).await?;
-                            fetch_all(vec![target_fetch], Some(3)).await?;
-                            Ok::<_, Error>(())
-                        });
+                        // let v_id = found.v_id.clone();
+                        tokio::spawn(fetch_all(vec![target_fetch], Some(3)));
                     }
                     Some(found)
                 }
@@ -189,14 +176,9 @@ impl RelationQuery {
                             identity,
                             "Outdated. Delete and Refetching."
                         );
-                        let v_id = found.v_id.clone();
-                        tokio::spawn(async move {
-                            // Delete and Refetch in the background
-                            sleep(Duration::from_secs(10)).await;
-                            delete_vertex_and_edge(&client, v_id).await?;
-                            fetch_all(vec![target], Some(3)).await?;
-                            Ok::<_, Error>(())
-                        });
+                        // let v_id = found.v_id.clone();
+                        // Refetch in the background
+                        tokio::spawn(fetch_all(vec![target], Some(3)));
                     }
                     Some(found)
                 }

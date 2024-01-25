@@ -7,7 +7,7 @@ pub use identity::{
     Identity, IdentityLoadFn, IdentityRecord, IdentityWithSource, NeighborReverseLoadFn,
     NeighborsResponse, OwnerLoadFn, VERTEX_NAME as IDENTITIES_NAME,
 };
-pub use identity_graph::{IdentityGraph, IdentityGraphEdge};
+pub use identity_graph::{IdentityConnection, IdentityGraph, IdentityGraphLoadFn};
 use serde::{Deserialize, Serialize};
 use serde_json::value::Value;
 

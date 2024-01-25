@@ -25,10 +25,10 @@ mod tests {
         from.uuid = Some(Uuid::new_v4());
         to.uuid = Some(Uuid::new_v4());
 
-        from.identity = "f".to_string();
+        from.identity = "a".to_string();
         from.display_name = Some("aaa".to_string());
         to.identity = "d".to_string();
-        to.display_name = Some("bbb".to_string());
+        to.display_name = Some("ddd".to_string());
 
         from.platform = Platform::Ethereum;
         to.platform = Platform::NextID;
