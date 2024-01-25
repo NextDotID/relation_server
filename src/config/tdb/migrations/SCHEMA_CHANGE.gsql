@@ -1,4 +1,5 @@
 CREATE GLOBAL SCHEMA_CHANGE job update_index {
+  ALTER VERTEX IdentitiesGraph ADD INDEX graphid_index ON (id);
   ALTER VERTEX Identities ADD INDEX identity_index ON (identity);
   ALTER VERTEX Identities ADD INDEX platform_index ON (platform);
   ALTER VERTEX Contracts ADD INDEX address_index ON (address);

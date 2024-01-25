@@ -41,10 +41,10 @@ pub struct Upstream {
     pub ens_reverse: ConfigENSReverse,
     pub dotbit_service: ConfigDotbitService,
     pub lens_api: ConfigLensAPI,
+    pub spaceid_api: ConfigSpaceIdAPI,
     pub unstoppable_api: ConfigUnstoppableDomainsAPI,
     pub datamgr_api: ConfigDataMgrAPI,
     pub warpcast_api: ConfigWarpcastAPI,
-    pub spaceid_api: ConfigSpaceIdAPI,
 }
 
 #[derive(Clone, Deserialize, Default)]
