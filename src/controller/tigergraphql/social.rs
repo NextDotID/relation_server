@@ -1,8 +1,8 @@
 use crate::{
     error::{Error, Result},
     tigergraph::{
-        edge::{SocialFollow, SocialGraph},
-        vertex::{IdentityConnection, IdentityGraph, IdentityGraphLoadFn, IdentityRecord},
+        edge::{FollowEdge, SocialFollow, SocialGraph},
+        vertex::{IdentityGraph, IdentityGraphLoadFn, IdentityRecord},
     },
     upstream::{DataSource, Platform},
     util::make_http_client,
@@ -46,6 +46,38 @@ impl SocialFollowResult {
         &self.identity_graph
     }
 
+    #[graphql(complexity = 1)]
+    async fn follower_topology(
+        &self,
+        _ctx: &Context<'_>,
+        #[graphql(
+            desc = "`hop` relationships in a social network refers to the degrees of separation between entities.
+                1 if omitted. 1-Hop (Direct Friends), 2-Hop (Friends of Friends), 3-Hop (Friends of Friends of Friends)."
+        )]
+        hop: Option<u16>,
+    ) -> Result<Option<Vec<FollowEdge>>> {
+        let client = make_http_client();
+        self.identity_graph
+            .follow_topology(&client, hop.unwrap_or(1), "follower")
+            .await
+    }
+
+    #[graphql(complexity = 1)]
+    async fn following_topology(
+        &self,
+        _ctx: &Context<'_>,
+        #[graphql(
+            desc = "`hop` relationships in a social network refers to the degrees of separation between entities.
+                1 if omitted. 1-Hop (Direct Friends), 2-Hop (Friends of Friends), 3-Hop (Friends of Friends of Friends)."
+        )]
+        hop: Option<u16>,
+    ) -> Result<Option<Vec<FollowEdge>>> {
+        let client = make_http_client();
+        self.identity_graph
+            .follow_topology(&client, hop.unwrap_or(1), "following")
+            .await
+    }
+
     /// Users following this IdentityGraph
     #[graphql(complexity = 1)]
     async fn follower(
@@ -82,42 +114,6 @@ impl SocialFollowResult {
 }
 
 #[Object]
-impl IdentityGraph {
-    /// Connecting a person’s different identifiers together, form an identity graph
-    async fn graph_id(&self) -> String {
-        self.graph_id.clone()
-    }
-
-    /// The set of vertices forming a identity graph.
-    async fn vertices(&self) -> &Vec<IdentityRecord> {
-        &self.vertices
-    }
-
-    /// The set of edges forming a identity graph.
-    async fn edges(&self) -> &Vec<IdentityConnection> {
-        &self.edges
-    }
-}
-
-#[Object]
-impl IdentityConnection {
-    /// Returns data sources from upstreams supported by RelationService.
-    async fn data_source(&self) -> DataSource {
-        self.data_source
-    }
-
-    /// The start node that forms the edge.
-    async fn source(&self) -> String {
-        self.source.clone()
-    }
-
-    /// The end node that forms the edge.
-    async fn target(&self) -> String {
-        self.target.clone()
-    }
-}
-
-#[Object]
 impl SocialGraph {
     /// The collection of identity graph forming a social network.
     async fn list(&self, ctx: &Context<'_>) -> Result<Option<Vec<IdentityGraph>>> {
@@ -144,6 +140,29 @@ impl SocialGraph {
     ///The Collection of follow arrows forming a social network
     async fn topology(&self) -> &Option<Vec<SocialFollow>> {
         &self.topology
+    }
+}
+
+#[Object]
+impl FollowEdge {
+    async fn data_source(&self) -> DataSource {
+        self.follow_edge.source.clone()
+    }
+
+    async fn source(&self) -> String {
+        self.follow_edge.from_id.clone()
+    }
+
+    async fn target(&self) -> String {
+        self.follow_edge.to_id.clone()
+    }
+
+    async fn original_source(&self) -> &Option<IdentityRecord> {
+        &self.original_from
+    }
+
+    async fn original_target(&self) -> &Option<IdentityRecord> {
+        &self.original_to
     }
 }
 

@@ -12,7 +12,7 @@ pub use resolve::{
     Resolve, ResolveEdge, ResolveRecord, RESOLVE, RESOLVE_CONTRACT, REVERSE_RESOLVE,
     REVERSE_RESOLVE_CONTRACT,
 };
-pub use social::{SocialFollow, SocialGraph};
+pub use social::{FollowEdge, SocialFollow, SocialGraph};
 
 use crate::{
     error::Error,

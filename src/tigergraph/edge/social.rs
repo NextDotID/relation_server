@@ -1,5 +1,5 @@
 use crate::{
-    tigergraph::edge::EdgeRecord,
+    tigergraph::{edge::EdgeRecord, vertex::IdentityRecord},
     upstream::DataSource,
     util::{naive_datetime_from_string, naive_datetime_to_string, naive_now},
 };
@@ -74,4 +74,11 @@ impl std::ops::DerefMut for EdgeRecord<Follow> {
 pub struct SocialGraph {
     pub list: Option<Vec<Uuid>>,
     pub topology: Option<Vec<SocialFollow>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FollowEdge {
+    pub follow_edge: SocialFollow,
+    pub original_from: Option<IdentityRecord>,
+    pub original_to: Option<IdentityRecord>,
 }

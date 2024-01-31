@@ -1,14 +1,15 @@
 mod contract;
 mod hold;
 mod identity;
+mod identity_graph;
 mod proof;
 mod relation;
 mod resolve;
 mod social;
 
 use self::{
-    hold::HoldQuery, identity::IdentityQuery, proof::ProofQuery, resolve::ResolveQuery,
-    social::SocialQuery,
+    hold::HoldQuery, identity::IdentityQuery, identity_graph::IdentityGraphQuery,
+    proof::ProofQuery, resolve::ResolveQuery, social::SocialQuery,
 };
 use async_graphql::{MergedObject, Object};
 const API_VERSION: &str = "0.1";
@@ -22,6 +23,7 @@ pub struct Query(
     ProofQuery,
     HoldQuery,
     SocialQuery,
+    IdentityGraphQuery,
 );
 
 #[derive(Default)]

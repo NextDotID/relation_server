@@ -1,7 +1,11 @@
 use crate::{
     config::C,
     error::Error,
-    tigergraph::{edge::SocialGraph, vertex::IdentityRecord, BaseResponse, Graph},
+    tigergraph::{
+        edge::{FollowEdge, SocialFollow, SocialGraph},
+        vertex::IdentityRecord,
+        BaseResponse, Graph,
+    },
     upstream::{DataSource, Platform},
     util::parse_body,
 };
@@ -39,6 +43,20 @@ pub struct RelationFollowResponse {
     #[serde(flatten)]
     base: BaseResponse,
     results: Option<Vec<SocialGraph>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct FollowTopologyResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<FollowTopology>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FollowTopology {
+    pub follow_edge: SocialFollow,
+    pub original_from: Vec<IdentityRecord>,
+    pub original_to: Vec<IdentityRecord>,
 }
 
 impl IdentityGraph {
@@ -99,6 +117,75 @@ impl IdentityGraph {
             Err(err) => {
                 let err_message = format!(
                     "TigerGraph query find_identity_graph_by_vertex parse_body error: {:?}",
+                    err
+                );
+                error!(err_message);
+                return Err(err);
+            }
+        }
+    }
+
+    pub async fn follow_topology(
+        &self,
+        client: &Client<HttpConnector>,
+        hop: u16,
+        follow_type: &str,
+    ) -> Result<Option<Vec<FollowEdge>>, Error> {
+        let uri: http::Uri = format!(
+            "{}/query/{}/follow_topology?g={}&follow_type={}&hop={}",
+            C.tdb.host,
+            Graph::SocialGraph.to_string(),
+            self.graph_id.to_string(),
+            follow_type.to_string(),
+            hop,
+        )
+        .parse()
+        .map_err(|_err: InvalidUri| {
+            Error::ParamError(format!("query follow_topology Uri format Error | {}", _err))
+        })?;
+
+        let req = hyper::Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .header("Authorization", Graph::SocialGraph.token())
+            .body(Body::empty())
+            .map_err(|_err| {
+                Error::ParamError(format!("query follow_topology ParamError Error {}", _err))
+            })?;
+
+        let mut resp = client.request(req).await.map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "query follow_topology | Fail to request: {:?}",
+                err.to_string()
+            ))
+        })?;
+
+        match parse_body::<FollowTopologyResponse>(&mut resp).await {
+            Ok(r) => {
+                if r.base.error {
+                    let err_message = format!(
+                        "TigerGraph query follow_relation error | Code: {:?}, Message: {:?}",
+                        r.base.code, r.base.message
+                    );
+                    error!(err_message);
+                    return Err(Error::General(err_message, resp.status()));
+                }
+
+                let result = r
+                    .results
+                    .map_or(vec![], |res| res)
+                    .into_iter()
+                    .map(|edge| FollowEdge {
+                        follow_edge: edge.follow_edge,
+                        original_from: edge.original_from.first().cloned(),
+                        original_to: edge.original_to.first().cloned(),
+                    })
+                    .collect();
+                Ok(Some(result))
+            }
+            Err(err) => {
+                let err_message = format!(
+                    "TigerGraph query follow_relation parse_body error: {:?}",
                     err
                 );
                 error!(err_message);
@@ -184,7 +271,13 @@ impl BatchFn<String, Option<IdentityGraph>> for IdentityGraphLoadFn {
     async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<IdentityGraph>> {
         let records = query_identity_graph_by_ids(&self.client, ids.to_vec()).await;
         match records {
-            Ok(records) => records,
+            Ok(records) => {
+                let map: HashMap<String, Option<IdentityGraph>> = records
+                    .into_iter()
+                    .map(|graph| (graph.graph_id.to_string(), Some(graph)))
+                    .collect();
+                map
+            }
             Err(_) => ids.iter().map(|k| (k.to_owned(), None)).collect(),
         }
     }
@@ -195,10 +288,10 @@ struct VertexIds {
     ids: Vec<String>,
 }
 
-async fn query_identity_graph_by_ids(
+pub async fn query_identity_graph_by_ids(
     client: &Client<HttpConnector>,
     ids: Vec<String>,
-) -> Result<HashMap<String, Option<IdentityGraph>>, Error> {
+) -> Result<Vec<IdentityGraph>, Error> {
     let uri: http::Uri = format!(
         "{}/query/{}/query_identity_graph_by_ids",
         C.tdb.host,
@@ -231,13 +324,7 @@ async fn query_identity_graph_by_ids(
                 return Err(Error::General(err_message, resp.status()));
             }
 
-            // let result = r.results.and_then(|results| results.first().cloned()).map_or(default, f)
-            let result = r
-                .results
-                .map_or(vec![], |res| res)
-                .into_iter()
-                .map(|graph| (graph.graph_id.to_string(), Some(graph)))
-                .collect();
+            let result = r.results.map_or(vec![], |res| res);
             Ok(result)
         }
         Err(err) => {
