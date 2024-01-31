@@ -4,6 +4,7 @@ mod tests;
 use crate::config::C;
 use crate::error::Error;
 use crate::tigergraph::edge::Resolve;
+use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_contract_reverse_resolve_record;
 use crate::tigergraph::vertex::{Contract, Identity};
 use crate::upstream::{Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem};
@@ -55,6 +56,18 @@ impl Fetcher for ENSReverseLookup {
         if record.reverse_record.is_none() {
             return Ok(vec![]);
         }
+        let ens_domain = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::ENS,
+            identity: reverse_ens.clone(),
+            uid: None,
+            created_at: None,
+            display_name: Some(reverse_ens.clone()),
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+        };
         let contract = Contract {
             uuid: Uuid::new_v4(),
             category: ContractCategory::ENS,
@@ -76,6 +89,8 @@ impl Fetcher for ENSReverseLookup {
         create_identity_to_contract_reverse_resolve_record(&cli, &identity, &contract, &resolve)
             .await?;
 
+        create_identity_domain_reverse_resolve_record(&cli, &identity, &ens_domain, &resolve)
+            .await?;
         Ok(vec![])
     }
 

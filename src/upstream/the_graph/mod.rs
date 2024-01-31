@@ -5,7 +5,9 @@ use crate::config::C;
 use crate::error::Error;
 use crate::tigergraph::edge::{Hold, Resolve};
 use crate::tigergraph::upsert::create_contract_to_identity_resolve_record;
+use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
+use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::{Contract, Identity};
 use crate::upstream::{
     Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target,
@@ -237,7 +239,7 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
 
     for domain in merged_domains.into_iter() {
         // Create own record
-        let contract = create_or_update_own(&cli, &domain).await?;
+        let (contract, ens_domain) = create_or_update_own(&cli, &domain).await?;
 
         // Deal with resolve target.
         let resolved_address = domain.resolved_address.map(|r| r.id);
@@ -277,6 +279,13 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                         &resolve,
                     )
                     .await?;
+                    create_identity_domain_resolve_record(
+                        &cli,
+                        &ens_domain,
+                        &resolve_target,
+                        &resolve,
+                    )
+                    .await?;
                 }
             }
             None => {
@@ -312,7 +321,7 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
 async fn create_or_update_own(
     client: &Client<HttpConnector>,
     domain: &Domain,
-) -> Result<Contract, Error> {
+) -> Result<(Contract, Identity), Error> {
     let creation_tx = domain
         .events
         .first() // TODO: really?
@@ -330,7 +339,19 @@ async fn create_or_update_own(
         profile_url: None,
         updated_at: naive_now(),
     };
-    let conrtract = Contract {
+    let ens_domain = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::ENS,
+        identity: domain.name.clone(),
+        uid: None,
+        created_at: ens_created_at,
+        display_name: Some(domain.name.clone()),
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+    };
+    let contract = Contract {
         uuid: Uuid::new_v4(),
         category: ContractCategory::ENS,
         address: ContractCategory::ENS.default_contract_address().unwrap(),
@@ -348,6 +369,7 @@ async fn create_or_update_own(
         fetcher: DataFetcher::RelationService,
     };
     // hold record
-    create_identity_to_contract_hold_record(client, &owner, &conrtract, &ownership).await?;
-    Ok(conrtract)
+    create_identity_to_contract_hold_record(client, &owner, &contract, &ownership).await?;
+    create_identity_to_identity_hold_record(client, &owner, &ens_domain, &ownership).await?;
+    Ok((contract, ens_domain))
 }
