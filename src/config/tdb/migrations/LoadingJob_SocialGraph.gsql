@@ -321,9 +321,9 @@ CREATE OR REPLACE QUERY find_identity_graph_by_vertex(VERTEX<Identities> p) FOR 
   // vset = SELECT v FROM exist_vset:v WHERE v.@degree > 0;
   vset = SELECT v FROM Identities:v-((PartOfIdentitiesGraph>):e)-identities_graph;
 
-  tmp = SELECT v1 FROM vset:v1-((Proof_Forward>|Proof_Backward>|Hold_Identity>):e1)-vset:v2
+  tmp = SELECT v1 FROM vset:v1-((Proof_Forward>|Proof_Backward>|Hold_Identity>|Resolve>|Reverse_Resolve>):e1)-vset:v2
         ACCUM @@edges += IdentityConnection(v1, v2, e1.source);
-  tmp2 = SELECT v1 FROM vset:v1-((<Proof_Forward|<Proof_Backward|<Hold_Identity):e2)-vset:v2
+  tmp2 = SELECT v1 FROM vset:v1-((<Proof_Forward|<Proof_Backward|<Hold_Identity|<Resolve|<Reverse_Resolve):e2)-vset:v2
         ACCUM @@edges += IdentityConnection(v2, v1, e2.source);
   
   PRINT graph_id, vset as vertices, @@edges as edges;
@@ -341,9 +341,9 @@ CREATE OR REPLACE QUERY query_identity_graph_by_ids(SET<STRING> ids) FOR GRAPH S
     @@edges.clear();
     hyper_v = {hv};
     vset = SELECT v FROM Identities:v-((PartOfIdentitiesGraph>):e)-hyper_v;
-    tmp = SELECT v1 FROM vset:v1-((Proof_Forward>|Proof_Backward>|Hold_Identity>):e1)-vset:v2
-        ACCUM @@edges += IdentityConnection(v1, v2, e1.source);
-    tmp2 = SELECT v1 FROM vset:v1-((<Proof_Forward|<Proof_Backward|<Hold_Identity):e2)-vset:v2
+    tmp1 = SELECT v1 FROM vset:v1-((Proof_Forward>|Proof_Backward>|Hold_Identity>|Resolve>|Reverse_Resolve>):e1)-vset:v2
+          ACCUM @@edges += IdentityConnection(v1, v2, e1.source);
+    tmp2 = SELECT v1 FROM vset:v1-((<Proof_Forward|<Proof_Backward|<Hold_Identity|<Resolve|<Reverse_Resolve):e2)-vset:v2
           ACCUM @@edges += IdentityConnection(v2, v1, e2.source);
 
     PRINT hv as graph_id, vset as vertices, @@edges as edges;
@@ -351,10 +351,10 @@ CREATE OR REPLACE QUERY query_identity_graph_by_ids(SET<STRING> ids) FOR GRAPH S
 }
 
 CREATE OR REPLACE QUERY follow_topology(VERTEX<IdentitiesGraph> g, STRING follow_type, INT hop) FOR GRAPH SocialGraph {
-  TYPEDEF TUPLE< STRING original_from, STRING original_to> original_tuple;
   OrAccum @visited = FALSE;
   SetAccum<EDGE<Follow>> @@follow_edges;
-  MapAccum<EDGE<Follow>, original_tuple> @@original_edge;
+  SetAccum<STRING> @@original_vid;
+  SetAccum<VERTEX> @@original_vset;
 
   IF follow_type == "follower" THEN
     seed (IdentitiesGraph) = {g};
@@ -363,7 +363,8 @@ CREATE OR REPLACE QUERY follow_topology(VERTEX<IdentitiesGraph> g, STRING follow
       follower = SELECT hv FROM seed-((<Follow):e)-IdentitiesGraph:hv
                  WHERE hv.@visited == FALSE
                  ACCUM @@follow_edges += e,
-                       @@original_edge += (e -> original_tuple(e.original_from, e.original_to))
+                       @@original_vid += e.original_from,
+                       @@original_vid += e.original_to
                  POST-ACCUM hv.@visited = TRUE, @@pool += hv;
       seed (IdentitiesGraph) = {@@pool};
     END;
@@ -371,30 +372,23 @@ CREATE OR REPLACE QUERY follow_topology(VERTEX<IdentitiesGraph> g, STRING follow
     seed (IdentitiesGraph) = {g};
     WHILE(seed.size()>0) LIMIT hop DO
       SetAccum<VERTEX> @@pool;
-      following = SELECT hv FROM seed-((Follow>):e)-IdentitiesGraph:hv
+      following = SELECT hv FROM seed:hs-((Follow>):e)-IdentitiesGraph:hv
                  WHERE hv.@visited == FALSE
                  ACCUM @@follow_edges += e,
-                       @@original_edge += (e -> original_tuple(e.original_from, e.original_to))
+                       @@original_vid += e.original_from,
+                       @@original_vid += e.original_to
                  POST-ACCUM hv.@visited = TRUE, @@pool += hv;
       seed (IdentitiesGraph) = {@@pool};
     END;
   END;
 
-  ListAccum<VERTEX> @@from_set, @@to_set;
-  FOREACH e IN @@follow_edges DO
-    // Return all original related identities at once
-    // Save RelationService http request time
-    VERTEX from_id = to_vertex(@@original_edge.get(e).original_from, "Identities");
-    VERTEX to_id = to_vertex(@@original_edge.get(e).original_to, "Identities");
-    @@from_set.clear();
-    @@to_set.clear();
-    @@from_set += from_id;
-    @@to_set += to_id;
-    original_from = {@@from_set};
-    original_to = {@@to_set};
-    PRINT e as follow_edge, original_from, original_to;
-  END;
+  // Return all original related identities at once
+  // Save RelationService http request time
+  @@original_vset = to_vertex_set(@@original_vid, "Identities");
+  original_vertices = { @@original_vset };
+  PRINT @@follow_edges as follow_edges, original_vertices;
 }
+
 
 CREATE OR REPLACE QUERY follow_relation(VERTEX<IdentitiesGraph> g, STRING follow_type, INT hop) FOR GRAPH SocialGraph {
   OrAccum @visited = FALSE;

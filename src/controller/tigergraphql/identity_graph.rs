@@ -1,19 +1,13 @@
 use crate::{
     error::{Error, Result},
-    tigergraph::{
-        edge::{FollowEdge, SocialFollow, SocialGraph},
-        vertex::{
-            query_identity_graph_by_ids, IdentityConnection, IdentityGraph, IdentityGraphLoadFn,
-            IdentityRecord,
-        },
+    tigergraph::vertex::{
+        query_identity_graph_by_ids, IdentityConnection, IdentityGraph, IdentityRecord,
     },
-    upstream::{DataSource, Platform},
+    upstream::DataSource,
     util::make_http_client,
 };
-use async_graphql::{Context, Enum, InputObject, Object};
-use dataloader::non_cached::Loader;
+use async_graphql::{Context, InputObject, Object};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 #[derive(InputObject, Debug, Clone, Serialize, Deserialize)]
 pub struct IdentityFilter {
@@ -41,9 +35,9 @@ impl IdentityGraphQuery {
         if let Some(graph_ids) = filter.by_graph_id {
             let client = make_http_client();
             Ok(query_identity_graph_by_ids(&client, graph_ids).await?)
-        } else if let Some(identity_filters) = filter.by_identity_platform {
+        } else if let Some(_identity_filters) = filter.by_identity_platform {
             Ok(vec![])
-        } else if let Some(identity_filters) = filter.by_identity_id {
+        } else if let Some(_identity_filters) = filter.by_identity_id {
             Ok(vec![])
         } else {
             Err(Error::ParamMissing("Must use filter to query".to_string()))

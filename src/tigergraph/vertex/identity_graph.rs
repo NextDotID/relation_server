@@ -54,9 +54,8 @@ pub struct FollowTopologyResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FollowTopology {
-    pub follow_edge: SocialFollow,
-    pub original_from: Vec<IdentityRecord>,
-    pub original_to: Vec<IdentityRecord>,
+    pub follow_edges: Vec<SocialFollow>,
+    pub original_vertices: Vec<IdentityRecord>,
 }
 
 impl IdentityGraph {
@@ -170,18 +169,32 @@ impl IdentityGraph {
                     error!(err_message);
                     return Err(Error::General(err_message, resp.status()));
                 }
+                if let Some(topology) = r.results.and_then(|res| res.first().cloned()) {
+                    let identity_map: HashMap<String, IdentityRecord> = topology
+                        .original_vertices
+                        .into_iter()
+                        .map(|record| (record.v_id.clone(), record))
+                        .collect();
 
-                let result = r
-                    .results
-                    .map_or(vec![], |res| res)
-                    .into_iter()
-                    .map(|edge| FollowEdge {
-                        follow_edge: edge.follow_edge,
-                        original_from: edge.original_from.first().cloned(),
-                        original_to: edge.original_to.first().cloned(),
-                    })
-                    .collect();
-                Ok(Some(result))
+                    let follow_edges: Vec<FollowEdge> = topology
+                        .follow_edges
+                        .into_iter()
+                        .map(|follow_edge| {
+                            let original_from =
+                                identity_map.get(&follow_edge.original_from).cloned();
+                            let original_to = identity_map.get(&follow_edge.original_to).cloned();
+                            let edge = FollowEdge {
+                                follow_edge,
+                                original_from,
+                                original_to,
+                            };
+                            edge
+                        })
+                        .collect();
+                    return Ok(Some(follow_edges));
+                } else {
+                    return Ok(Some(vec![]));
+                }
             }
             Err(err) => {
                 let err_message = format!(

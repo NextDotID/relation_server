@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use uuid::Uuid;
-
     use crate::error::Error;
     use crate::tigergraph::{
         create_contract_to_identity_resolve_record, create_identity_domain_resolve_record,
@@ -16,6 +14,36 @@ mod tests {
         upstream::{Chain, ContractCategory, DataSource, DomainNameSystem, Platform, ProofLevel},
         util::make_http_client,
     };
+    use serde::{Deserialize, Serialize};
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn test_some() -> Result<(), Error> {
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        struct IdentityFilter {
+            platform: String,
+            identity: String,
+        }
+
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        struct IdentityGraphFilter {
+            by_graph_id: Option<Vec<String>>,
+            by_identity: Option<Vec<IdentityFilter>>,
+        }
+
+        let filter = IdentityGraphFilter {
+            by_graph_id: None,
+            by_identity: None,
+        };
+        if let Some(graph_ids) = filter.by_graph_id {
+            println!("some graph_ids : {:?}", graph_ids);
+        } else if let Some(identity_filters) = filter.by_identity {
+            println!("some identity_filters : {:?}", identity_filters);
+        } else {
+            println!("nothing");
+        }
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_create_i2i_proof_two_way_binding() -> Result<(), Error> {
