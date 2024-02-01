@@ -65,6 +65,11 @@ impl IdentityGraph {
 
 #[Object]
 impl IdentityConnection {
+    /// Returns edge type connects start node and end node.
+    async fn edge_type(&self) -> String {
+        self.edge_type.clone()
+    }
+
     /// Returns data sources from upstreams supported by RelationService.
     async fn data_source(&self) -> DataSource {
         self.data_source

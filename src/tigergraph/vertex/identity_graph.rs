@@ -31,6 +31,7 @@ struct IdentityGraphResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IdentityConnection {
+    pub edge_type: String,
     pub data_source: DataSource,
     #[serde(rename = "source_v")]
     pub source: String,
