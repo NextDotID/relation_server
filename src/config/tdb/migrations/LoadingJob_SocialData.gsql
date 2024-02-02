@@ -17,6 +17,15 @@ CREATE LOADING JOB Load_LensSocialFeed FOR GRAPH SocialGraph {
 RUN LOADING JOB Load_LensSocialFeed
 
 
+CREATE LOADING JOB Load_KeybaseSocialFeed FOR GRAPH SocialGraph {
+  LOAD "/home/tigergraph/shared_data/keybase_social_feeds/keybase.proof.tsv"
+    TO EDGE Proof_Forward VALUES ($"from", $"to", $"source", $"created_at", $"uuid", $"level", $"record_id", $"updated_at", $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/keybase_social_feeds/keybase.follow.tsv"
+    TO EDGE Follow VALUES ($"from", $"to", $"original_from", $"original_to", $"source", REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+}
+
+RUN LOADING JOB Load_KeybaseSocialFeed
+
 CREATE LOADING JOB Load_DBExport FOR GRAPH SocialGraph {
 LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Identities.csv"
     TO VERTEX Identities VALUES ($"primary_id", $"id", $"uuid", $"platform", $"identity", $"display_name", $"profile_url", $"avatar_url", $"created_at", $"added_at", $"updated_at", $"uid") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";

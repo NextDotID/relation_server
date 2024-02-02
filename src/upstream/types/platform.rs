@@ -56,6 +56,24 @@ pub enum Platform {
     #[graphql(name = "reddit")]
     Reddit,
 
+    /// Mastodon maintained by Sujitech
+    #[strum(serialize = "mstdn.jp")]
+    #[serde(rename = "mstdn.jp")]
+    #[graphql(name = "mstdn.jp")]
+    MstdnJP,
+
+    /// Lobsters is a computing-focused community centered around link aggregation and discussion
+    #[strum(serialize = "lobste.rs")]
+    #[serde(rename = "lobste.rs")]
+    #[graphql(name = "lobste.rs")]
+    Lobsters,
+
+    /// The Hacker News is the most trusted and popular cybersecurity publication for information security professionals seeking breaking news.
+    #[strum(serialize = "hackernews")]
+    #[serde(rename = "hackernews")]
+    #[graphql(name = "hackernews")]
+    HackerNews,
+
     /// ENS
     #[strum(serialize = "ens")]
     #[serde(rename = "ens")]

@@ -146,7 +146,7 @@ async fn fetch_connections_by_platform_identity(
             return Err(Error::NoResult);
         }
     };
-    let user_id = person_info.id;
+    // let user_id = person_info.id;
     let user_name = person_info.basics.username;
     let cli = make_http_client();
     let mut next_targets: TargetProcessedList = Vec::new();
@@ -155,7 +155,7 @@ async fn fetch_connections_by_platform_identity(
         let from: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
             platform: Platform::Keybase,
-            identity: user_id.clone(),
+            identity: user_name.clone(),
             uid: None,
             created_at: None,
             display_name: Some(user_name.clone()),
@@ -185,7 +185,7 @@ async fn fetch_connections_by_platform_identity(
             uuid: Uuid::new_v4(),
             source: DataSource::Keybase,
             level: ProofLevel::VeryConfident,
-            record_id: Some(p.proof_id.clone()),
+            record_id: Some(p.human_url.clone()),
             created_at: None,
             updated_at: naive_now(),
             fetcher: DataFetcher::RelationService,
@@ -195,7 +195,7 @@ async fn fetch_connections_by_platform_identity(
             uuid: Uuid::new_v4(),
             source: DataSource::Keybase,
             level: ProofLevel::VeryConfident,
-            record_id: Some(p.proof_id.clone()),
+            record_id: Some(p.human_url.clone()),
             created_at: None,
             updated_at: naive_now(),
             fetcher: DataFetcher::RelationService,

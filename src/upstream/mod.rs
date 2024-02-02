@@ -3,7 +3,6 @@ mod aggregation;
 mod dotbit;
 mod ens_reverse;
 mod farcaster;
-mod keybase;
 mod knn3;
 mod lens;
 mod proof_client;
@@ -21,8 +20,8 @@ use crate::{
     error::Error,
     upstream::{
         aggregation::Aggregation, dotbit::DotBit, ens_reverse::ENSReverseLookup,
-        farcaster::Farcaster, keybase::Keybase, knn3::Knn3, lens::Lens, proof_client::ProofClient,
-        rss3::Rss3, space_id::SpaceId, sybil_list::SybilList, the_graph::TheGraph,
+        farcaster::Farcaster, knn3::Knn3, lens::Lens, proof_client::ProofClient, rss3::Rss3,
+        space_id::SpaceId, sybil_list::SybilList, the_graph::TheGraph,
         unstoppable::UnstoppableDomains,
     },
     util::hashset_append,
@@ -65,7 +64,8 @@ pub async fn fetch_all(targets: TargetProcessedList, depth: Option<u16>) -> Resu
 
     let mut fetching = FETCHING.lock().await;
     let mut up_next: HashSet<Target> = HashSet::from_iter(
-        targets.clone()
+        targets
+            .clone()
             .into_iter()
             .filter(|target| !fetching.contains(target)),
     );
@@ -158,7 +158,6 @@ pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
     let mut up_next: TargetProcessedList = join_all(vec![
         Aggregation::fetch(target),
         SybilList::fetch(target),
-        Keybase::fetch(target),
         ProofClient::fetch(target),
         Rss3::fetch(target),
         Knn3::fetch(target),
