@@ -75,9 +75,9 @@ pub enum Platform {
     HackerNews,
 
     /// ENS
-    #[strum(serialize = "ens")]
-    #[serde(rename = "ens")]
-    #[graphql(name = "ens")]
+    #[strum(serialize = "ENS")]
+    #[serde(rename = "ENS")]
+    #[graphql(name = "ENS")]
     ENS,
 
     /// Lens
