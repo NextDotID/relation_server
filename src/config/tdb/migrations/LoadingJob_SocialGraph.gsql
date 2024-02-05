@@ -26,7 +26,7 @@ CREATE OR REPLACE QUERY upsert_isolated_vertex(STRING vertex_str) FOR GRAPH Soci
   IF @@existing_vlist.size() > 0 THEN
     // when it exists: update value
     IF from_type == "Identities" THEN
-      exist_vset (Identities|Contracts) = {@@existing_vlist};
+      exist_vset (ANY) = {@@existing_vlist};
       STRING display_name = from_v.getJsonObject("attributes").getString("display_name");
       STRING profile_url = from_v.getJsonObject("attributes").getString("profile_url");
       STRING avatar_url = from_v.getJsonObject("attributes").getString("avatar_url");
@@ -128,7 +128,7 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
   IF @@existing_vlist.size() > 0 THEN
     // when it exists: update value
     IF from_type == "Identities" THEN
-      exist_vset (Identities|Contracts) = {@@existing_vlist};
+      exist_vset (ANY) = {@@existing_vlist};
       STRING display_name = from_v.getJsonObject("attributes").getString("display_name");
       STRING profile_url = from_v.getJsonObject("attributes").getString("profile_url");
       STRING avatar_url = from_v.getJsonObject("attributes").getString("avatar_url");
@@ -152,7 +152,7 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
                     POST-ACCUM @@from_graph += tgt
                     POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_at, tgt.id);
     ELSE IF from_type == "Contracts" THEN
-      exist_vset (Identities|Contracts) = {@@existing_vlist};
+      exist_vset (ANY) = {@@existing_vlist};
       STRING category = from_v.getJsonObject("attributes").getString("category");
       STRING symbol = from_v.getJsonObject("attributes").getString("symbol");
       STRING updated_at = from_v.getJsonObject("attributes").getString("updated_at");
@@ -203,7 +203,7 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
   IF @@existing_vlist.size() > 0 THEN
     // when it exists: update value
     IF to_type == "Identities" THEN
-      exist_vset (Identities|Contracts) = {@@existing_vlist};
+      exist_vset (ANY) = {@@existing_vlist};
       STRING display_name = to_v.getJsonObject("attributes").getString("display_name");
       STRING profile_url = to_v.getJsonObject("attributes").getString("profile_url");
       STRING avatar_url = to_v.getJsonObject("attributes").getString("avatar_url");
@@ -228,7 +228,7 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
                     POST-ACCUM @@to_graph += tgt
                     POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_at, tgt.id);
     ELSE IF to_type == "Contracts" THEN
-      exist_vset (Identities|Contracts) = {@@existing_vlist};
+      exist_vset (ANY) = {@@existing_vlist};
       STRING category = to_v.getJsonObject("attributes").getString("category");
       STRING symbol = to_v.getJsonObject("attributes").getString("symbol");
       STRING updated_at = to_v.getJsonObject("attributes").getString("updated_at");
