@@ -76,9 +76,10 @@ async fn save_verifications(
     user: &User,
     verification: Verification,
 ) -> Result<TargetProcessedList, Error> {
+    let protocol: Platform = verification.protocol.parse()?;
     let eth_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
-        platform: Platform::Ethereum,
+        platform: protocol,
         identity: verification.address.to_lowercase(),
         uid: None,
         created_at: None,
@@ -112,7 +113,7 @@ async fn save_verifications(
     create_identity_to_identity_hold_record(client, &eth_identity, &farcaster_identity, &hold)
         .await?;
     Ok(vec![Target::Identity(
-        Platform::Ethereum,
+        protocol,
         verification.address.to_lowercase().to_string(),
     )])
 }
@@ -195,6 +196,7 @@ pub struct Verification {
     #[serde(deserialize_with = "naive_datetime_from_milliseconds")]
     #[serde(serialize_with = "naive_datetime_to_milliseconds")]
     pub timestamp: NaiveDateTime,
+    pub protocol: String,
 }
 
 async fn user_by_username(username: &str) -> Result<User, Error> {
