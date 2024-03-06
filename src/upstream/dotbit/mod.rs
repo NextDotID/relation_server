@@ -11,7 +11,8 @@ use crate::upstream::{
     DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
 };
 use crate::util::{
-    make_client, make_http_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive,
+    make_client, make_http_client, naive_now, option_timestamp_to_naive, parse_body,
+    request_with_timeout, timestamp_to_naive,
 };
 use async_trait::async_trait;
 use hyper::{Body, Method, Request};
@@ -127,6 +128,8 @@ pub struct ReverseRecordRequest {
 pub struct AccountItem {
     pub account: String,
     pub account_alias: String,
+    pub registered_at: Option<i64>,
+    pub expired_at: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -286,6 +289,7 @@ async fn fetch_and_save_account_info(
 
     let cli = make_http_client(); // connect server
     let created_at_naive = timestamp_to_naive(account_info.create_at_unix, 0);
+    let expired_at_naive = timestamp_to_naive(account_info.expired_at_unix, 0);
 
     let addr_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -321,6 +325,7 @@ async fn fetch_and_save_account_info(
         created_at: created_at_naive,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: expired_at_naive,
     };
 
     let resolve: Resolve = Resolve {
@@ -485,12 +490,14 @@ async fn fetch_account_list_by_addrs(
     };
 
     for i in resp.result.data.unwrap().account_list.into_iter() {
+        let create_at_naive = option_timestamp_to_naive(i.registered_at, 0);
+        let expired_at_naive = option_timestamp_to_naive(i.expired_at, 0);
         let to: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
             platform: Platform::Dotbit,
             identity: i.account.to_string(),
             uid: None,
-            created_at: None,
+            created_at: create_at_naive,
             display_name: Some(i.account.to_string()),
             added_at: naive_now(),
             avatar_url: None,
@@ -503,9 +510,10 @@ async fn fetch_account_list_by_addrs(
             source: DataSource::Dotbit,
             transaction: None,
             id: "".to_string(),
-            created_at: None,
+            created_at: create_at_naive,
             updated_at: naive_now(),
             fetcher: DataFetcher::RelationService,
+            expired_at: expired_at_naive,
         };
 
         let resolve: Resolve = Resolve {

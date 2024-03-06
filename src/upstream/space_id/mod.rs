@@ -113,6 +113,7 @@ async fn fetch_domain_by_address(
         created_at: None,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: None,
     };
 
     let resolve: Resolve = Resolve {
@@ -186,6 +187,7 @@ async fn fetch_address_by_domain(
         created_at: None,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: None,
     };
     let resolve: Resolve = Resolve {
         uuid: Uuid::new_v4(),

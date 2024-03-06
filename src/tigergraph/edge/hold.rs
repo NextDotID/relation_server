@@ -57,6 +57,9 @@ pub struct Hold {
     /// Who collects this data.
     /// It works as a "data cleansing" or "proxy" between `source`s and us.
     pub fetcher: DataFetcher,
+    #[serde(deserialize_with = "option_naive_datetime_from_string")]
+    #[serde(serialize_with = "option_naive_datetime_to_string")]
+    pub expired_at: Option<NaiveDateTime>,
 }
 
 impl Default for Hold {
@@ -69,6 +72,7 @@ impl Default for Hold {
             created_at: None,
             updated_at: naive_now(),
             fetcher: Default::default(),
+            expired_at: None,
         }
     }
 }
@@ -199,6 +203,24 @@ impl Transfer for HoldRecord {
                 op: None,
             },
         );
+
+        if let Some(expired_at) = self.expired_at {
+            attributes_map.insert(
+                "expired_at".to_string(),
+                Attribute {
+                    value: json!(expired_at),
+                    op: Some(OpCode::Max),
+                },
+            );
+        } else {
+            attributes_map.insert(
+                "expired_at".to_string(),
+                Attribute {
+                    value: json!("1970-01-01 00:00:00"), // default value
+                    op: None,
+                },
+            );
+        }
         attributes_map
     }
 }

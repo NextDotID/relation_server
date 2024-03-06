@@ -3,8 +3,8 @@ pub mod identity;
 use async_trait::async_trait;
 pub use contract::{Contract, ContractLoadFn, ContractRecord};
 pub use identity::{
-    Identity, IdentityLoadFn, IdentityRecord, IdentityWithSource, NeighborReverseLoadFn,
-    NeighborsResponse, OwnerLoadFn,
+    ExpireTimeLoadFn, Identity, IdentityLoadFn, IdentityRecord, IdentityWithSource,
+    NeighborReverseLoadFn, NeighborsResponse, OwnerLoadFn,
 };
 use serde::{Deserialize, Serialize};
 

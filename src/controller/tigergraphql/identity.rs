@@ -3,7 +3,8 @@ use crate::{
     tigergraph::{
         edge::{resolve::ResolveReverse, EdgeUnion, HoldRecord},
         vertex::{
-            Identity, IdentityRecord, IdentityWithSource, NeighborReverseLoadFn, OwnerLoadFn,
+            ExpireTimeLoadFn, Identity, IdentityRecord, IdentityWithSource, NeighborReverseLoadFn,
+            OwnerLoadFn,
         },
     },
     upstream::{fetch_all, ContractCategory, DataSource, Platform, Target},
@@ -11,6 +12,7 @@ use crate::{
 };
 
 use async_graphql::{Context, Object};
+use chrono::NaiveDateTime;
 use dataloader::non_cached::Loader;
 use strum::IntoEnumIterator;
 use tracing::{event, Level};
@@ -193,6 +195,27 @@ impl IdentityRecord {
             ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
         match loader.load(self.v_id.clone()).await {
             Some(value) => Ok(Some(value)),
+            None => Ok(None),
+        }
+    }
+
+    async fn expired_at(&self, ctx: &Context<'_>) -> Result<Option<i64>> {
+        if !vec![
+            Platform::Lens,
+            Platform::Dotbit,
+            Platform::UnstoppableDomains,
+            Platform::SpaceId,
+            Platform::Crossbell,
+            Platform::Ethereum,
+        ]
+        .contains(&self.platform)
+        {
+            return Ok(None);
+        }
+        let loader: &Loader<String, Option<NaiveDateTime>, ExpireTimeLoadFn> =
+            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
+        match loader.load(self.v_id.clone()).await {
+            Some(value) => Ok(Some(value.timestamp())),
             None => Ok(None),
         }
     }

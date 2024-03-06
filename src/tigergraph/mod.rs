@@ -224,10 +224,10 @@ pub struct UpsertGraph {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-struct BaseResponse {
-    error: bool,
-    code: Option<String>,
-    message: Option<String>,
+pub struct BaseResponse {
+    pub error: bool,
+    pub code: Option<String>,
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

@@ -38,6 +38,7 @@ struct Domain {
     /// Creation timestamp (in secods)
     #[serde(rename = "createdAt")]
     created_at: String,
+    registration: Option<Registration>,
     /// ETH event logs for this ENS.
     events: Vec<DomainEvent>,
     /// Reverse resolve record set on this ENS.
@@ -45,6 +46,15 @@ struct Domain {
     resolved_address: Option<Account>,
     /// Owner info
     owner: Account,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct Registration {
+    #[allow(dead_code)]
+    #[serde(rename = "registrationDate")]
+    registration_date: String,
+    #[serde(rename = "expiryDate")]
+    expiry_date: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -71,6 +81,10 @@ const QUERY_BY_ENS: &str = r#"
             domains(where: { name: $target }) {
                 name
                 createdAt
+                registration {
+                    registrationDate
+                    expiryDate
+                }
                 events(first: 1) {
                     transactionID
                 }
@@ -86,6 +100,10 @@ const QUERY_BY_ENS: &str = r#"
               domain {
                 name
                 createdAt
+                registration {
+                    registrationDate
+                    expiryDate
+                }
                 events(first: 1) {
                     transactionID
                 }
@@ -108,6 +126,10 @@ const QUERY_BY_WALLET: &str = r#"
             domains(where: { owner: $target }) {
                 name
                 createdAt
+                registration {
+                    registrationDate
+                    expiryDate
+                }
                 events(first: 1) {
                     transactionID
                 }
@@ -123,6 +145,10 @@ const QUERY_BY_WALLET: &str = r#"
               domain {
                 name
                 createdAt
+                registration {
+                    registrationDate
+                    expiryDate
+                }
                 events(first: 1) {
                     transactionID
                 }
@@ -318,6 +344,10 @@ async fn create_or_update_own(
         .first() // TODO: really?
         .map(|event| event.transaction_id.clone());
     let ens_created_at = parse_timestamp(&domain.created_at).ok();
+    let ens_expired_at = match &domain.registration {
+        Some(registration) => parse_timestamp(&registration.expiry_date).ok(),
+        None => None,
+    };
     let owner = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
@@ -346,6 +376,7 @@ async fn create_or_update_own(
         created_at: ens_created_at,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: ens_expired_at,
     };
     // hold record
     create_identity_to_contract_hold_record(client, &owner, &conrtract, &ownership).await?;

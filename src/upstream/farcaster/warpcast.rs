@@ -109,6 +109,7 @@ async fn save_verifications(
         created_at: Some(verification.timestamp),
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: None,
     };
     create_identity_to_identity_hold_record(client, &eth_identity, &farcaster_identity, &hold)
         .await?;

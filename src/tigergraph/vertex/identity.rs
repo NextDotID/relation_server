@@ -975,6 +975,10 @@ impl IdentityRecord {
     }
 }
 
+pub struct ExpireTimeLoadFn {
+    pub client: Client<HttpConnector>,
+}
+
 pub struct NeighborReverseLoadFn {
     pub client: Client<HttpConnector>,
 }
@@ -1029,6 +1033,18 @@ struct NeighborReverseMapResult {
     reverse_map: HashMap<String, Option<bool>>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct ExpireTimeMapResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<ExpireTimeMapResult>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct ExpireTimeMapResult {
+    expired_time_map: HashMap<String, String>,
+}
+
 #[async_trait::async_trait]
 impl BatchFn<String, Option<IdentityRecord>> for IdentityLoadFn {
     async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<IdentityRecord>> {
@@ -1064,6 +1080,82 @@ impl BatchFn<String, Option<bool>> for NeighborReverseLoadFn {
             Ok(records) => records,
             // HOLD ON: Not sure if `Err` need to return
             Err(_) => ids.iter().map(|k| (k.to_owned(), None)).collect(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl BatchFn<String, Option<NaiveDateTime>> for ExpireTimeLoadFn {
+    async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<NaiveDateTime>> {
+        trace!("Loading ids for expired_time_by_ids {:?}", ids);
+        let records = get_expired_time_by_ids(&self.client, ids.to_vec()).await;
+        match records {
+            Ok(records) => records,
+            // HOLD ON: Not sure if `Err` need to return
+            Err(_) => ids.iter().map(|k| (k.to_owned(), None)).collect(),
+        }
+    }
+}
+
+async fn get_expired_time_by_ids(
+    client: &Client<HttpConnector>,
+    ids: Vec<String>,
+) -> Result<HashMap<String, Option<NaiveDateTime>>, Error> {
+    let uri: http::Uri = format!(
+        "{}/query/{}/expired_time_by_ids",
+        C.tdb.host,
+        Graph::SocialGraph.to_string()
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+    let payload = VertexIds { ids };
+    let json_params = serde_json::to_string(&payload).map_err(|err| Error::JSONParseError(err))?;
+    let req = hyper::Request::builder()
+        .method(Method::POST)
+        .uri(uri)
+        .header("Authorization", Graph::SocialGraph.token())
+        .body(Body::from(json_params))
+        .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+
+    let mut resp = client.request(req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!(
+            "TigerGraph | Fail to request expired_time_by_ids: {:?}",
+            err.to_string()
+        ))
+    })?;
+    match parse_body::<ExpireTimeMapResponse>(&mut resp).await {
+        Ok(r) => {
+            if r.base.error {
+                let err_message = format!(
+                    "TigerGraph expired_time_by_ids error | Code: {:?}, Message: {:?}",
+                    r.base.code, r.base.message
+                );
+                error!(err_message);
+                return Err(Error::General(err_message, resp.status()));
+            }
+            let result = r
+                .results
+                .and_then(|results| results.first().cloned())
+                .map_or(HashMap::new(), |res| res.expired_time_map)
+                .into_iter()
+                .map(|(k, v)| {
+                    let parsed_datetime =
+                        NaiveDateTime::parse_from_str(&v, "%Y-%m-%d %H:%M:%S").ok();
+                    if v == "1970-01-01 00:00:00" {
+                        return (k, None);
+                    }
+                    (k, parsed_datetime)
+                })
+                .collect();
+            Ok(result)
+        }
+        Err(err) => {
+            let err_message = format!(
+                "TigerGraph neighbor_reverse_by_ids parse_body error: {:?}",
+                err
+            );
+            error!(err_message);
+            return Err(err);
         }
     }
 }
