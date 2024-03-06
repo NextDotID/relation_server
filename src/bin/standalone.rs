@@ -10,7 +10,8 @@ use relation_server::{
     controller::tigergraphql::Query,
     error::Result,
     tigergraph::vertex::{
-        ContractLoadFn, IdentityGraphLoadFn, IdentityLoadFn, NeighborReverseLoadFn, OwnerLoadFn,
+        ContractLoadFn, ExpireTimeLoadFn, IdentityGraphLoadFn, IdentityLoadFn,
+        NeighborReverseLoadFn, OwnerLoadFn,
     },
     util::make_http_client,
 };
@@ -52,6 +53,9 @@ async fn main() -> Result<()> {
     let neighbor_reverse_loader_fn = NeighborReverseLoadFn {
         client: client.to_owned(),
     };
+    let expire_time_loader_fn = ExpireTimeLoadFn {
+        client: client.to_owned(),
+    };
     let identity_graph_loader_fn = IdentityGraphLoadFn {
         client: client.to_owned(),
     };
@@ -67,6 +71,9 @@ async fn main() -> Result<()> {
     let neighbor_reverse_loader = Loader::new(neighbor_reverse_loader_fn)
         .with_max_batch_size(500)
         .with_yield_count(100);
+    let expired_time_loader = Loader::new(expire_time_loader_fn)
+        .with_max_batch_size(500)
+        .with_yield_count(100);
 
     let identity_graph_loader = Loader::new(identity_graph_loader_fn)
         .with_max_batch_size(500)
@@ -77,6 +84,7 @@ async fn main() -> Result<()> {
         .data(identity_loader)
         .data(owner_loader)
         .data(neighbor_reverse_loader)
+        .data(expired_time_loader)
         .data(identity_graph_loader)
         .finish();
 

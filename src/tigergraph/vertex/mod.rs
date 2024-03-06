@@ -4,8 +4,8 @@ pub mod identity_graph;
 use async_trait::async_trait;
 pub use contract::{Contract, ContractLoadFn, ContractRecord, VERTEX_NAME as CONTRACTS_NAME};
 pub use identity::{
-    Identity, IdentityLoadFn, IdentityRecord, IdentityWithSource, NeighborReverseLoadFn,
-    NeighborsResponse, OwnerLoadFn, VERTEX_NAME as IDENTITIES_NAME,
+    ExpireTimeLoadFn, Identity, IdentityLoadFn, IdentityRecord, IdentityWithSource,
+    NeighborReverseLoadFn, NeighborsResponse, OwnerLoadFn, VERTEX_NAME as IDENTITIES_NAME,
 };
 pub use identity_graph::{
     query_identity_graph_by_ids, IdentityConnection, IdentityGraph, IdentityGraphLoadFn,

@@ -16,7 +16,7 @@ mod tests {
             make_http_client, option_naive_datetime_from_string, option_naive_datetime_to_string,
         },
     };
-    use chrono::{Duration, NaiveDateTime};
+    use chrono::NaiveDateTime;
     use serde::{Deserialize, Serialize};
     use uuid::Uuid;
 
