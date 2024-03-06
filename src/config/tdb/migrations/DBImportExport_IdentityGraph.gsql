@@ -22,12 +22,16 @@ CREATE OR REPLACE QUERY delete_vertex_and_edge(VERTEX<Identities> p, INT depth=1
     seed (Identities) = {@@pool};
   END;
 
+  ListAccum<STRING> @@keybase_platform = ["twitter", "keybase", "github", "reddit", "mstdn.jp", "lobste.rs", "hackernews"];
   vertex2delete (Identities) = {@@vertices};
   contracts = SELECT v FROM vertex2delete-((Reverse_Resolve_Contract>|<Resolve_Contract):e)-Contracts:v ACCUM DELETE(e);
   contracts = SELECT v FROM vertex2delete-((Hold_Contract>):e)-Contracts:v ACCUM DELETE(e);
   resolved = SELECT v FROM vertex2delete-((Resolve>|<Reverse_Resolve):e)-Identities:v ACCUM DELETE(e);
-  proof2delete = SELECT v FROM vertex2delete-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward|Hold_Identity>|<Hold_Identity):e)-Identities:v ACCUM DELETE(e);
-  result = SELECT v FROM vertex2delete:v POST-ACCUM DELETE(v);
+  proof2delete = SELECT v FROM vertex2delete-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward|Hold_Identity>|<Hold_Identity):e)-Identities:v
+                 WHERE e.source != "keybase" ACCUM DELETE(e);
+  result = SELECT v FROM vertex2delete:v
+            WHERE @@keybase_platform.contains(v.platform) == FALSE
+            POST-ACCUM DELETE(v);
 }
 
 CREATE OR REPLACE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH IdentityGraph { 
