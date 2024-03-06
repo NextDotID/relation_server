@@ -398,7 +398,9 @@ CREATE OR REPLACE QUERY delete_graph_inner_connection(VERTEX<Identities> p, INT 
 
   // only delete connection
   v2c = SELECT v FROM vertex2delete-(:e)-Contracts:v ACCUM DELETE(e);
-  v2v = SELECT v FROM vertex2delete-(:e)-vertex2delete:v ACCUM DELETE(e);
+  v2v = SELECT v FROM vertex2delete-(:e)-vertex2delete:v
+        WHERE e.source != "keybase"
+        ACCUM DELETE(e);
 }
 
 CREATE OR REPLACE QUERY find_identity_graph_by_vertex(VERTEX<Identities> p) FOR GRAPH SocialGraph {
@@ -724,14 +726,33 @@ CREATE OR REPLACE QUERY owners_by_ids(SET<STRING> ids) FOR GRAPH SocialGraph SYN
   END;
 }
 
+CREATE OR REPLACE QUERY query_keybase_connections(STRING p) FOR GRAPH SocialGraph SYNTAX V2 {
+  SetAccum<STRING> @@vlist;
+  SetAccum<VERTEX> @@existing_vlist;
+  @@vlist += p;
+  @@existing_vlist = to_vertex_set(@@vlist, "Identities"); // check existence of a vertex without slowing server
+  seed (ANY) = {@@existing_vlist};
+  ListAccum<STRING> @@keybase_platform = ["twitter", "keybase", "github", "reddit", "mstdn.jp", "lobste.rs", "hackernews"];
+  SetAccum<VERTEX> @@vertices;
+  OrAccum @visited = FALSE;
+
+  WHILE(seed.size()>0) LIMIT 2 DO
+    SetAccum<VERTEX> @@pool;
+    proof = SELECT v FROM seed-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:v-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed
+           WHERE v.@visited == FALSE AND @@keybase_platform.contains(v.platform) == TRUE
+           POST-ACCUM v.@visited = TRUE, @@vertices += v, @@pool += v;
+    seed (Identities) = {@@pool};
+  END;
+  ResultSet (Identities) = {@@vertices};
+  PRINT ResultSet as vertices;
+}
+
 CREATE OR REPLACE QUERY expired_time_by_ids(SET<STRING> ids) FOR GRAPH SocialGraph SYNTAX V2 {
   MapAccum<VERTEX<Identities>, DATETIME> @@expired_time_map;
   VertexSet (Identities) = SELECT s FROM Identities:s WHERE s.id IN ids
                           ACCUM @@expired_time_map += (s -> to_datetime("1970-01-01 00:00:00"));
-  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS"];
 
   address = SELECT addr FROM VertexSet:domain-((<Hold_Identity):h)-Identities:addr
-            WHERE @@domainSystems.contains(r.system) == TRUE
             ACCUM @@expired_time_map += (domain -> h.expired_at);
   PRINT @@expired_time_map as expired_time_map;
 }
