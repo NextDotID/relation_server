@@ -13,7 +13,7 @@ use crate::upstream::{
     Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target,
     TargetProcessedList,
 };
-use crate::util::{make_http_client, naive_now, parse_timestamp, timestamp_to_naive};
+use crate::util::{make_http_client, naive_now, parse_timestamp};
 use async_trait::async_trait;
 use gql_client::Client as GQLClient;
 use hyper::{client::HttpConnector, Client};
@@ -52,10 +52,11 @@ struct Domain {
 
 #[derive(Deserialize, Debug, Clone)]
 struct Registration {
+    #[allow(dead_code)]
     #[serde(rename = "registrationDate")]
-    registration_date: i64,
+    registration_date: String,
     #[serde(rename = "expiryDate")]
-    expiry_date: i64,
+    expiry_date: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -353,7 +354,7 @@ async fn create_or_update_own(
         .map(|event| event.transaction_id.clone());
     let ens_created_at = parse_timestamp(&domain.created_at).ok();
     let ens_expired_at = match &domain.registration {
-        Some(registration) => timestamp_to_naive(registration.expiry_date, 0),
+        Some(registration) => parse_timestamp(&registration.expiry_date).ok(),
         None => None,
     };
     let owner = Identity {
