@@ -228,6 +228,7 @@ async fn save_profile(client: &Client<HttpConnector>, profile: &Profile) -> Resu
         created_at: None,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: None,
     };
     let resolve: Resolve = Resolve {
         uuid: Uuid::new_v4(),

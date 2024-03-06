@@ -13,7 +13,7 @@ use crate::upstream::{
     Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target,
     TargetProcessedList,
 };
-use crate::util::{make_http_client, naive_now, parse_timestamp};
+use crate::util::{make_http_client, naive_now, parse_timestamp, timestamp_to_naive};
 use async_trait::async_trait;
 use gql_client::Client as GQLClient;
 use hyper::{client::HttpConnector, Client};
@@ -40,6 +40,7 @@ struct Domain {
     /// Creation timestamp (in secods)
     #[serde(rename = "createdAt")]
     created_at: String,
+    registration: Option<Registration>,
     /// ETH event logs for this ENS.
     events: Vec<DomainEvent>,
     /// Reverse resolve record set on this ENS.
@@ -47,6 +48,14 @@ struct Domain {
     resolved_address: Option<Account>,
     /// Owner info
     owner: Account,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct Registration {
+    #[serde(rename = "registrationDate")]
+    registration_date: i64,
+    #[serde(rename = "expiryDate")]
+    expiry_date: i64,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -73,6 +82,10 @@ const QUERY_BY_ENS: &str = r#"
             domains(where: { name: $target }) {
                 name
                 createdAt
+                registration {
+                    registrationDate
+                    expiryDate
+                }
                 events(first: 1) {
                     transactionID
                 }
@@ -88,6 +101,10 @@ const QUERY_BY_ENS: &str = r#"
               domain {
                 name
                 createdAt
+                registration {
+                    registrationDate
+                    expiryDate
+                }
                 events(first: 1) {
                     transactionID
                 }
@@ -110,6 +127,10 @@ const QUERY_BY_WALLET: &str = r#"
             domains(where: { owner: $target }) {
                 name
                 createdAt
+                registration {
+                    registrationDate
+                    expiryDate
+                }
                 events(first: 1) {
                     transactionID
                 }
@@ -125,6 +146,10 @@ const QUERY_BY_WALLET: &str = r#"
               domain {
                 name
                 createdAt
+                registration {
+                    registrationDate
+                    expiryDate
+                }
                 events(first: 1) {
                     transactionID
                 }
@@ -327,6 +352,10 @@ async fn create_or_update_own(
         .first() // TODO: really?
         .map(|event| event.transaction_id.clone());
     let ens_created_at = parse_timestamp(&domain.created_at).ok();
+    let ens_expired_at = match &domain.registration {
+        Some(registration) => timestamp_to_naive(registration.expiry_date, 0),
+        None => None,
+    };
     let owner = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
@@ -367,6 +396,7 @@ async fn create_or_update_own(
         created_at: ens_created_at,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: ens_expired_at,
     };
     // hold record
     create_identity_to_contract_hold_record(client, &owner, &contract, &ownership).await?;

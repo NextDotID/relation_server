@@ -12,8 +12,11 @@ mod tests {
             vertex::{Contract, Identity, NeighborsResponse},
         },
         upstream::{Chain, ContractCategory, DataSource, DomainNameSystem, Platform, ProofLevel},
-        util::make_http_client,
+        util::{
+            make_http_client, option_naive_datetime_from_string, option_naive_datetime_to_string,
+        },
     };
+    use chrono::{Duration, NaiveDateTime};
     use serde::{Deserialize, Serialize};
     use uuid::Uuid;
 
@@ -21,27 +24,22 @@ mod tests {
     async fn test_some() -> Result<(), Error> {
         #[derive(Debug, Clone, Serialize, Deserialize)]
         struct IdentityFilter {
-            platform: String,
-            identity: String,
+            #[serde(deserialize_with = "option_naive_datetime_from_string")]
+            #[serde(serialize_with = "option_naive_datetime_to_string")]
+            pub expired_at: Option<NaiveDateTime>,
         }
-
-        #[derive(Clone, Debug, Serialize, Deserialize)]
-        struct IdentityGraphFilter {
-            by_graph_id: Option<Vec<String>>,
-            by_identity: Option<Vec<IdentityFilter>>,
-        }
-
-        let filter = IdentityGraphFilter {
-            by_graph_id: None,
-            by_identity: None,
-        };
-        if let Some(graph_ids) = filter.by_graph_id {
-            println!("some graph_ids : {:?}", graph_ids);
-        } else if let Some(identity_filters) = filter.by_identity {
-            println!("some identity_filters : {:?}", identity_filters);
-        } else {
-            println!("nothing");
-        }
+        // 1970-01-01 00:00:00
+        let json_string = r###"
+            {
+                "expired_at": "1970-01-01 00:00:00"
+            }
+        "###;
+        let record: IdentityFilter = serde_json::from_str(json_string)?;
+        println!("{:?}", record);
+        // let filter = IdentityFilter { expired_at: None };
+        // let json_params =
+        //     serde_json::to_string(&filter).map_err(|err| Error::JSONParseError(err))?;
+        // println!("{}", json_params);
         Ok(())
     }
 

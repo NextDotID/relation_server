@@ -38,6 +38,14 @@ pub fn timestamp_to_naive(ts: i64, ms: u32) -> Option<NaiveDateTime> {
     NaiveDateTime::from_timestamp_opt(ts, ms * 1_000_000)
 }
 
+/// Convert timestamp into NaiveDateTime struct.
+pub fn option_timestamp_to_naive(opt_ts: Option<i64>, ms: u32) -> Option<NaiveDateTime> {
+    match opt_ts {
+        Some(opt_ts) => NaiveDateTime::from_timestamp_opt(opt_ts, ms * 1_000_000),
+        None => None,
+    }
+}
+
 pub fn make_client() -> Client<HttpsConnector<HttpConnector>> {
     let https = HttpsConnector::new();
     // let mut http = HttpConnector::new();
@@ -110,6 +118,10 @@ where
     let opt_s = Option::<String>::deserialize(deserializer)?;
     match opt_s {
         Some(s) => {
+            if s == "1970-01-01 00:00:00" {
+                // tigergraph DATETIME default value
+                return Ok(None);
+            }
             let dt = NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S")
                 .map_err(serde::de::Error::custom)?;
             Ok(Some(dt))

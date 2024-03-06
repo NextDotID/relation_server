@@ -253,6 +253,7 @@ async fn save_domain(
         created_at: None,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: None,
     };
     // hold record
     create_identity_to_identity_hold_record(client, eth_identity, &ud, &hold).await?;
@@ -423,6 +424,7 @@ async fn fetch_account_by_domain(
         created_at: None,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: None,
     };
 
     // hold record

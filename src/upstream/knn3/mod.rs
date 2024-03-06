@@ -151,6 +151,7 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
             created_at: None,
             updated_at: naive_now(),
             fetcher: DataFetcher::RelationService,
+            expired_at: None,
         };
         // hold record
         create_identity_to_contract_hold_record(&cli, &from, &to, &ownership).await?;
@@ -242,6 +243,7 @@ async fn fetch_eth_wallet_by_ens(id: &str) -> Result<TargetProcessedList, Error>
         created_at: None,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: None,
     };
     // hold record
     let cli = make_http_client();

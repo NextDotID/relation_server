@@ -249,6 +249,7 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         created_at: created_at_naive,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: None,
     };
     create_identity_to_contract_hold_record(&cli, &from, &to, &hold).await?;
 

@@ -208,6 +208,7 @@ async fn save_profile_ethereum(
                     created_at: None,
                     updated_at: naive_now(),
                     fetcher: DataFetcher::DataMgrService,
+                    expired_at: None,
                 };
                 // hold record
                 create_identity_to_identity_hold_record(
@@ -268,6 +269,7 @@ async fn save_profile_signer(
         created_at: None,
         updated_at: naive_now(),
         fetcher: DataFetcher::DataMgrService,
+        expired_at: None,
     };
     // hold record
     create_identity_to_identity_hold_record(cli, &eth_identity, &farcaster_identity, &hold).await?;

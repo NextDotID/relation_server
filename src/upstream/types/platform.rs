@@ -32,6 +32,12 @@ pub enum Platform {
     #[graphql(name = "ethereum")]
     Ethereum,
 
+    /// Solana
+    #[strum(serialize = "solana")]
+    #[serde(rename = "solana")]
+    #[graphql(name = "solana")]
+    Solana,
+
     /// NextID
     #[strum(serialize = "nextid")]
     #[serde(rename = "nextid")]
