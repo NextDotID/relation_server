@@ -1,6 +1,7 @@
 use crate::{
     error::{Error, Result},
     tigergraph::{
+        delete_vertex_and_edge,
         edge::{Hold, HoldRecord},
         vertex::{ContractLoadFn, ContractRecord, IdentityLoadFn, IdentityRecord},
     },
@@ -11,6 +12,7 @@ use crate::{
 use async_graphql::{Context, Object};
 use dataloader::non_cached::Loader;
 use strum::IntoEnumIterator;
+use tokio::time::{sleep, Duration};
 use uuid::Uuid;
 
 #[Object]
@@ -50,6 +52,11 @@ impl HoldRecord {
     /// When this HODL™ relation is fetched by us RelationService.
     async fn updated_at(&self) -> i64 {
         self.updated_at.timestamp()
+    }
+
+    /// Domains expired time
+    async fn expired_at(&self) -> Option<i64> {
+        self.expired_at.map(|dt| dt.timestamp())
     }
 
     /// NFT Category. See `availableNftCategories` for all values available.
@@ -175,10 +182,15 @@ impl HoldQuery {
         let target = Target::NFT(chain, category, contract_address.clone(), id.clone());
         match Hold::find_by_id_chain_address(&client, &id, &chain, &contract_address).await? {
             Some(hold) => {
-                // let v_id = hold.from_id.clone();
+                let v_id = hold.from_id.clone();
                 if hold.is_outdated() {
-                    // Refetch in the background
-                    tokio::spawn(fetch_all(vec![target], Some(3)));
+                    tokio::spawn(async move {
+                        // Delete and Refetch in the background
+                        sleep(Duration::from_secs(10)).await;
+                        delete_vertex_and_edge(&client, v_id).await?;
+                        fetch_all(vec![target], Some(3)).await?;
+                        Ok::<_, Error>(())
+                    });
                 }
                 Ok(Some(hold))
             }

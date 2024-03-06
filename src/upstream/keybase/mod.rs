@@ -124,7 +124,7 @@ async fn fake_fetch_connections_by_platform_identity(
     let uri: http::Uri = format!(
         "{}/query/{}/query_keybase_connections?p={}",
         C.tdb.host,
-        Graph::SocialGraph.to_string(),
+        Graph::IdentityGraph.to_string(),
         encoded_vid,
     )
     .parse()
@@ -137,7 +137,7 @@ async fn fake_fetch_connections_by_platform_identity(
     let req = hyper::Request::builder()
         .method(Method::GET)
         .uri(uri)
-        .header("Authorization", Graph::SocialGraph.token())
+        .header("Authorization", Graph::IdentityGraph.token())
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("ParamError Error | {}", _err)))?;
 

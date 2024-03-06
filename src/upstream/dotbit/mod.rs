@@ -73,7 +73,7 @@ pub struct OutPoint {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountInfo {
     pub account: String,
-    pub account_alias: String,
+    pub account_alias: Option<String>,
     pub account_id_hex: String,
     pub create_at_unix: i64,
     pub expired_at_unix: i64,
@@ -127,7 +127,7 @@ pub struct ReverseRecordRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountItem {
     pub account: String,
-    pub account_alias: String,
+    pub account_alias: Option<String>,
     pub registered_at: Option<i64>,
     pub expired_at: Option<i64>,
 }

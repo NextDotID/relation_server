@@ -1,6 +1,7 @@
 use crate::{
     error::{Error, Result},
     tigergraph::{
+        delete_vertex_and_edge,
         edge::{resolve::ResolveReverse, Resolve, ResolveEdge},
         vertex::IdentityRecord,
     },
@@ -11,6 +12,7 @@ use crate::{
 };
 use async_graphql::{Context, Object};
 use strum::IntoEnumIterator;
+use tokio::time::{sleep, Duration};
 use uuid::Uuid;
 
 #[Object]
@@ -151,13 +153,18 @@ impl ResolveQuery {
                     }
                     Some(resolve) => {
                         if resolve.is_outdated() {
-                            let _vid: String = resolve
+                            let v_id: String = resolve
                                 .clone()
                                 .owner
                                 .and_then(|f| Some(f.v_id.clone()))
                                 .unwrap_or("".to_string());
-                            // Refetch in the background
-                            tokio::spawn(fetch_all(vec![target], Some(3)));
+                            tokio::spawn(async move {
+                                // Delete and Refetch in the background
+                                sleep(Duration::from_secs(10)).await;
+                                delete_vertex_and_edge(&client, v_id).await?;
+                                fetch_all(vec![target], Some(3)).await?;
+                                Ok::<_, Error>(())
+                            });
                         }
                         Ok(Some(resolve))
                     }
@@ -176,13 +183,18 @@ impl ResolveQuery {
                     }
                     Some(resolve) => {
                         if resolve.is_outdated() {
-                            let _vid: String = resolve
+                            let v_id: String = resolve
                                 .clone()
                                 .owner
                                 .and_then(|f| Some(f.v_id.clone()))
                                 .unwrap_or("".to_string());
-                            // Refetch in the background
-                            tokio::spawn(fetch_all(vec![target], Some(3)));
+                            tokio::spawn(async move {
+                                // Delete and Refetch in the background
+                                sleep(Duration::from_secs(10)).await;
+                                delete_vertex_and_edge(&client, v_id).await?;
+                                fetch_all(vec![target], Some(3)).await?;
+                                Ok::<_, Error>(())
+                            });
                         }
                         Ok(Some(resolve))
                     }

@@ -1104,7 +1104,7 @@ async fn get_expired_time_by_ids(
     let uri: http::Uri = format!(
         "{}/query/{}/expired_time_by_ids",
         C.tdb.host,
-        Graph::SocialGraph.to_string()
+        Graph::IdentityGraph.to_string()
     )
     .parse()
     .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
@@ -1113,7 +1113,7 @@ async fn get_expired_time_by_ids(
     let req = hyper::Request::builder()
         .method(Method::POST)
         .uri(uri)
-        .header("Authorization", Graph::SocialGraph.token())
+        .header("Authorization", Graph::IdentityGraph.token())
         .body(Body::from(json_params))
         .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
 

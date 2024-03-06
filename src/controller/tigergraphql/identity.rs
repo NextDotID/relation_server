@@ -1,6 +1,7 @@
 use crate::{
     error::{Error, Result},
     tigergraph::{
+        delete_vertex_and_edge,
         edge::{resolve::ResolveReverse, EdgeUnion, HoldRecord},
         vertex::{
             ExpireTimeLoadFn, Identity, IdentityRecord, IdentityWithSource, NeighborReverseLoadFn,
@@ -15,6 +16,7 @@ use async_graphql::{Context, Object};
 use chrono::NaiveDateTime;
 use dataloader::non_cached::Loader;
 use strum::IntoEnumIterator;
+use tokio::time::{sleep, Duration};
 use tracing::{event, Level};
 use uuid::Uuid;
 
@@ -318,9 +320,14 @@ impl IdentityQuery {
                         identity,
                         "Outdated. Delete and Refetching."
                     );
-                    // let v_id = found.v_id.clone();
-                    // Refetch in the background
-                    tokio::spawn(fetch_all(vec![target], Some(3)));
+                    let v_id = found.v_id.clone();
+                    tokio::spawn(async move {
+                        // Delete and Refetch in the background
+                        sleep(Duration::from_secs(10)).await;
+                        delete_vertex_and_edge(&client, v_id).await?;
+                        fetch_all(vec![target], Some(3)).await?;
+                        Ok::<_, Error>(())
+                    });
                 }
                 Ok(Some(found))
             }
