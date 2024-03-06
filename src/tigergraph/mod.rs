@@ -209,9 +209,9 @@ pub async fn upsert_graph(
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UpsertGraph {
-    vertices: HashMap<String, HashMap<String, HashMap<String, Attribute>>>,
+    pub vertices: HashMap<String, HashMap<String, HashMap<String, Attribute>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    edges: Option<
+    pub edges: Option<
         HashMap<
             String,
             HashMap<
@@ -252,7 +252,7 @@ struct NotExist {
 
 // Define `Vertices` struct that wraps a `Vec<T>`.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Vertices<T>(Vec<T>);
+pub struct Vertices<T>(pub Vec<T>);
 
 // Implement the `From` trait for converting `Vertices<T>` into vertices map.
 impl<T: Clone + Vertex> From<Vertices<T>>
@@ -353,6 +353,21 @@ pub async fn create_identity_to_identity_proof_two_way_binding(
     let graph: UpsertGraph = edges.into();
     upsert_graph(client, &graph, Graph::IdentityGraph).await?;
 
+    Ok(())
+}
+
+pub async fn create_vertices(
+    client: &Client<HttpConnector>,
+    vertices: Vertices<Identity>,
+) -> Result<(), Error> {
+    let vertices_map: HashMap<String, HashMap<String, HashMap<String, Attribute>>> =
+        vertices.into();
+    let upsert_vertices = UpsertGraph {
+        vertices: vertices_map,
+        edges: None,
+    };
+    let graph: UpsertGraph = upsert_vertices.into();
+    upsert_graph(client, &graph, Graph::IdentityGraph).await?;
     Ok(())
 }
 
