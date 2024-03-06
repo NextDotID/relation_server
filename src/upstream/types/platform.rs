@@ -65,13 +65,13 @@ pub enum Platform {
     /// Mastodon maintained by Sujitech
     #[strum(serialize = "mstdn.jp")]
     #[serde(rename = "mstdn.jp")]
-    #[graphql(name = "mstdn.jp")]
+    #[graphql(name = "MstdnJP")]
     MstdnJP,
 
     /// Lobsters is a computing-focused community centered around link aggregation and discussion
     #[strum(serialize = "lobste.rs")]
     #[serde(rename = "lobste.rs")]
-    #[graphql(name = "lobste.rs")]
+    #[graphql(name = "Lobsters")]
     Lobsters,
 
     /// The Hacker News is the most trusted and popular cybersecurity publication for information security professionals seeking breaking news.
