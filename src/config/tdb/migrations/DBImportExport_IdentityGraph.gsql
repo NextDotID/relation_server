@@ -229,6 +229,10 @@ CREATE OR REPLACE QUERY expired_time_by_ids(SET<STRING> ids) FOR GRAPH IdentityG
 
   address = SELECT addr FROM VertexSet:domain-((<Hold_Identity):h)-Identities:addr
             ACCUM @@expired_time_map += (domain -> h.expired_at);
+
+  address2 = SELECT addr FROM Contracts:c1-((<Hold_Contract):h)-VertexSet:addr-((Reverse_Resolve_Contract>):r)-Contracts:c2
+            WHERE r.system == "ENS" AND c1 == c2 AND h.id == r.name
+            ACCUM @@expired_time_map += (addr -> h.expired_at);
   PRINT @@expired_time_map as expired_time_map;
 }
 

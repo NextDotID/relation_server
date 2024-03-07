@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 use std::fmt;
-use tracing::{error, trace};
+use tracing::{error, info, trace};
 use uuid::Uuid;
 
 pub const VERTEX_NAME: &str = "Identities";
@@ -1087,7 +1087,7 @@ impl BatchFn<String, Option<bool>> for NeighborReverseLoadFn {
 #[async_trait::async_trait]
 impl BatchFn<String, Option<NaiveDateTime>> for ExpireTimeLoadFn {
     async fn load(&mut self, ids: &[String]) -> HashMap<String, Option<NaiveDateTime>> {
-        trace!("Loading ids for expired_time_by_ids {:?}", ids);
+        info!("Loading ids for expired_time_by_ids {:?}", ids);
         let records = get_expired_time_by_ids(&self.client, ids.to_vec()).await;
         match records {
             Ok(records) => records,

@@ -495,6 +495,7 @@ pub struct ResolveEdge {
     pub reverse_record: Option<IdentityRecord>,
     pub resolved: Option<IdentityRecord>,
     pub owner: Option<IdentityRecord>,
+    pub expired_at: Option<NaiveDateTime>,
 }
 
 impl std::ops::Deref for ResolveEdge {
@@ -516,6 +517,7 @@ impl From<ResolveReverse> for ResolveEdge {
             reverse_record: None,
             resolved: None,
             owner: None,
+            expired_at: None,
         }
     }
 }
@@ -599,6 +601,7 @@ impl Resolve {
                                             resolve_edge.reverse_record = domain
                                                 .reverse_record
                                                 .and_then(|records| records.first().cloned());
+                                            resolve_edge.expired_at = hold.attributes.expired_at;
                                             resolve_edge.owner = domain.owner.first().cloned();
                                             resolve_edge.resolved = None;
                                             resolve_edge
@@ -618,6 +621,7 @@ impl Resolve {
                                             resolve_edge.reverse_record = domain
                                                 .reverse_record
                                                 .and_then(|records| records.first().cloned());
+                                            resolve_edge.expired_at = hold.attributes.expired_at;
                                             resolve_edge.owner = domain.owner.first().cloned();
                                             resolve_edge.resolved = domain
                                                 .resolved
