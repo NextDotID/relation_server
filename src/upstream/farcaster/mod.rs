@@ -187,6 +187,8 @@ async fn save_profile_ethereum(
                     avatar_url: None,
                     profile_url: None,
                     updated_at: naive_now(),
+                    expired_at: None,
+                    reverse: Some(false),
                 };
                 let farcaster_identity: Identity = Identity {
                     uuid: Some(Uuid::new_v4()),
@@ -199,6 +201,8 @@ async fn save_profile_ethereum(
                     avatar_url: None,
                     profile_url: None,
                     updated_at: naive_now(),
+                    expired_at: None,
+                    reverse: Some(false),
                 };
                 let hold: Hold = Hold {
                     uuid: Uuid::new_v4(),
@@ -248,6 +252,8 @@ async fn save_profile_signer(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
     let farcaster_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -260,6 +266,8 @@ async fn save_profile_signer(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
     let hold: Hold = Hold {
         uuid: Uuid::new_v4(),

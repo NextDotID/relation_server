@@ -134,6 +134,8 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
             avatar_url: None,
             profile_url: None,
             updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
         };
         let to: Contract = Contract {
             uuid: Uuid::new_v4(),
@@ -226,6 +228,8 @@ async fn fetch_eth_wallet_by_ens(id: &str) -> Result<TargetProcessedList, Error>
         created_at: None,
         added_at: naive_now(),
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
     let to = Contract {
         uuid: Uuid::new_v4(),

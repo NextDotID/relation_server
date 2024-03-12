@@ -52,6 +52,8 @@ async fn fetch_by_username(
             avatar_url: None,
             profile_url: None,
             updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
         };
         let vertices = Vertices(vec![u]);
         create_vertices(&cli, vertices).await?;
@@ -107,6 +109,8 @@ async fn save_verifications(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
     let farcaster_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -119,6 +123,8 @@ async fn save_verifications(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
     let hold: Hold = Hold {
         uuid: Uuid::new_v4(),

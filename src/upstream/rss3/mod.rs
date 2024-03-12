@@ -184,6 +184,8 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     if p.actions.len() == 0 {

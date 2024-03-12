@@ -254,6 +254,8 @@ async fn fetch_connections_by_platform_identity(
             avatar_url: None,
             profile_url: None,
             updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
         };
 
         if Platform::from_str(p.proof_type.as_str()).is_err() {
@@ -270,6 +272,8 @@ async fn fetch_connections_by_platform_identity(
             avatar_url: None,
             profile_url: None,
             updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
         };
 
         let pf: Proof = Proof {

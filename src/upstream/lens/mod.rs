@@ -194,7 +194,7 @@ async fn fetch_by_lens_profile(target: &Target) -> Result<TargetProcessedList, E
 }
 
 async fn save_profile(client: &Client<HttpConnector>, profile: &Profile) -> Result<(), Error> {
-    let from: Identity = Identity {
+    let mut addr: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: profile.owned_by.clone().to_lowercase(),
@@ -205,9 +205,11 @@ async fn save_profile(client: &Client<HttpConnector>, profile: &Profile) -> Resu
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
-    let to: Identity = Identity {
+    let mut lens: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Lens,
         identity: profile.handle.clone(),
@@ -218,6 +220,8 @@ async fn save_profile(client: &Client<HttpConnector>, profile: &Profile) -> Resu
         avatar_url: profile.metadata.clone(),
         profile_url: Some("https://lenster.xyz/u/".to_owned() + &profile.handle.clone()),
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     let hold: Hold = Hold {
@@ -238,11 +242,9 @@ async fn save_profile(client: &Client<HttpConnector>, profile: &Profile) -> Resu
         fetcher: DataFetcher::RelationService,
         updated_at: naive_now(),
     };
-    create_identity_to_identity_hold_record(client, &from, &to, &hold).await?;
-    create_identity_domain_resolve_record(client, &to, &from, &resolve).await?;
 
     if profile.is_default {
-        let resolve: Resolve = Resolve {
+        let reverse: Resolve = Resolve {
             uuid: Uuid::new_v4(),
             source: DataSource::Lens,
             system: DomainNameSystem::Lens,
@@ -250,7 +252,13 @@ async fn save_profile(client: &Client<HttpConnector>, profile: &Profile) -> Resu
             fetcher: DataFetcher::RelationService,
             updated_at: naive_now(),
         };
-        create_identity_domain_reverse_resolve_record(client, &from, &to, &resolve).await?;
+        addr.reverse = Some(true);
+        lens.reverse = Some(true);
+        create_identity_domain_reverse_resolve_record(client, &addr, &lens, &reverse).await?;
     }
+
+    create_identity_to_identity_hold_record(client, &addr, &lens, &hold).await?;
+    create_identity_domain_resolve_record(client, &lens, &addr, &resolve).await?;
+
     Ok(())
 }
