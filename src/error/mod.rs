@@ -39,6 +39,8 @@ pub enum Error {
     PoolError(String),
     #[error("IsahcError error: {0}")]
     IsahcError(#[from] isahc::error::Error),
+    #[error("StdIOError error: {0}")]
+    StdIOError(#[from] std::io::Error),
 }
 
 impl Error {
@@ -61,6 +63,7 @@ impl Error {
             Error::UuidError(_) => StatusCode::BAD_REQUEST,
             Error::PoolError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::IsahcError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::StdIOError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

@@ -195,9 +195,13 @@ impl IdentityRecord {
         }
         let loader: &Loader<String, Option<bool>, NeighborReverseLoadFn> =
             ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        match loader.load(self.v_id.clone()).await {
-            Some(value) => Ok(Some(value)),
-            None => Ok(None),
+
+        match loader.try_load(self.v_id.clone()).await {
+            Ok(value) => Ok(value),
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::NotFound => Ok(None), // Not found, so return Ok(None)
+                _ => Err(Error::GraphQLError(e.to_string())), // For all other errors, propagate the error
+            },
         }
     }
 
@@ -216,9 +220,16 @@ impl IdentityRecord {
         }
         let loader: &Loader<String, Option<NaiveDateTime>, ExpireTimeLoadFn> =
             ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-        match loader.load(self.v_id.clone()).await {
-            Some(value) => Ok(Some(value.timestamp())),
-            None => Ok(None),
+
+        match loader.try_load(self.v_id.clone()).await {
+            Ok(value) => match value {
+                Some(value) => Ok(Some(value.timestamp())),
+                None => Ok(None),
+            },
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::NotFound => Ok(None), // Not found, so return Ok(None)
+                _ => Err(Error::GraphQLError(e.to_string())), // For all other errors, propagate the error
+            },
         }
     }
 
@@ -240,9 +251,12 @@ impl IdentityRecord {
         let loader: &Loader<String, Option<IdentityRecord>, OwnerLoadFn> =
             ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
 
-        match loader.load(self.v_id.clone()).await {
-            Some(value) => Ok(Some(value)),
-            None => Err(Error::GraphQLError("Record not found.".to_string())),
+        match loader.try_load(self.v_id.clone()).await {
+            Ok(value) => Ok(value),
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::NotFound => Ok(None), // Not found, so return Ok(None)
+                _ => Err(Error::GraphQLError(e.to_string())), // For all other errors, propagate the error
+            },
         }
     }
     /// NFTs owned by this identity.
