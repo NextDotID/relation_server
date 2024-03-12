@@ -16,6 +16,7 @@ use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use serde_json::value::{Map, Value};
 use std::collections::HashMap;
 use tracing::error;
 use uuid::Uuid;
@@ -185,6 +186,16 @@ impl Transfer for ResolveRecord {
             },
         );
         attributes_map
+    }
+    fn to_json_value(&self) -> Value {
+        let mut map = Map::new();
+        map.insert("uuid".to_string(), json!(self.uuid));
+        map.insert("source".to_string(), json!(self.source));
+        map.insert("system".to_string(), json!(self.system));
+        map.insert("name".to_string(), json!(self.name));
+        map.insert("fetcher".to_string(), json!(self.fetcher));
+        map.insert("updated_at".to_string(), json!(self.updated_at));
+        Value::Object(map)
     }
 }
 
