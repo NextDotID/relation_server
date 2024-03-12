@@ -27,6 +27,7 @@ use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use serde_json::value::{Map, Value};
 use std::collections::HashMap;
 use std::fmt;
 use tracing::{error, trace};
@@ -74,6 +75,10 @@ pub struct Identity {
     #[serde(deserialize_with = "naive_datetime_from_string")]
     #[serde(serialize_with = "naive_datetime_to_string")]
     pub updated_at: NaiveDateTime,
+    #[serde(deserialize_with = "option_naive_datetime_from_string")]
+    #[serde(serialize_with = "option_naive_datetime_to_string")]
+    pub expired_at: Option<NaiveDateTime>,
+    pub reverse: Option<bool>,
 }
 
 #[async_trait]
@@ -233,7 +238,85 @@ impl Transfer for Identity {
                 op: Some(OpCode::Max),
             },
         );
+        if let Some(expired_at) = self.expired_at {
+            attributes_map.insert(
+                "expired_at".to_string(),
+                Attribute {
+                    value: json!(expired_at),
+                    op: Some(OpCode::Max),
+                },
+            );
+        } else {
+            attributes_map.insert(
+                "expired_at".to_string(),
+                Attribute {
+                    value: json!("1970-01-01 00:00:00"), // default value
+                    op: None,
+                },
+            );
+        }
+        if let Some(reverse) = self.reverse {
+            attributes_map.insert(
+                "reverse".to_string(),
+                Attribute {
+                    value: json!(reverse),
+                    op: Some(OpCode::Or),
+                },
+            );
+        } else {
+            attributes_map.insert(
+                "reverse".to_string(),
+                Attribute {
+                    value: json!(false), // default value
+                    op: Some(OpCode::Or),
+                },
+            );
+        }
         attributes_map
+    }
+
+    fn to_json_value(&self) -> Value {
+        let mut map = Map::new();
+        map.insert("id".to_string(), json!(self.primary_key()));
+        map.insert(
+            "uuid".to_string(),
+            json!(self.uuid.map_or("".to_string(), |u| u.to_string())),
+        );
+        map.insert("platform".to_string(), json!(self.platform));
+        map.insert("identity".to_string(), json!(self.identity));
+        map.insert(
+            "uid".to_string(),
+            json!(self.uid.clone().unwrap_or("".to_string())),
+        );
+        map.insert(
+            "display_name".to_string(),
+            json!(self.display_name.clone().unwrap_or("".to_string())),
+        );
+        map.insert(
+            "profile_url".to_string(),
+            json!(self.profile_url.clone().unwrap_or("".to_string())),
+        );
+        map.insert(
+            "avatar_url".to_string(),
+            json!(self.avatar_url.clone().unwrap_or("".to_string())),
+        );
+        map.insert(
+            "created_at".to_string(),
+            self.created_at
+                .map_or(json!("1970-01-01 00:00:00"), |created_at| json!(created_at)),
+        );
+        map.insert("added_at".to_string(), json!(self.added_at));
+        map.insert("updated_at".to_string(), json!(self.updated_at));
+        map.insert(
+            "expired_at".to_string(),
+            self.expired_at
+                .map_or(json!("1970-01-01 00:00:00"), |expired_at| json!(expired_at)),
+        );
+        map.insert(
+            "reverse".to_string(),
+            self.reverse.map_or(json!(false), |reverse| json!(reverse)),
+        );
+        Value::Object(map)
     }
 }
 
@@ -250,6 +333,8 @@ impl Default for Identity {
             created_at: None,
             added_at: naive_now(),
             updated_at: naive_now(),
+            expired_at: None,
+            reverse: None,
         }
     }
 }

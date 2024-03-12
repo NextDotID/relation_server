@@ -20,6 +20,7 @@ use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use serde_json::value::{Map, Value};
 use std::collections::HashMap;
 use tracing::error;
 use uuid::Uuid;
@@ -222,6 +223,30 @@ impl Transfer for HoldRecord {
             );
         }
         attributes_map
+    }
+
+    fn to_json_value(&self) -> Value {
+        let mut map = Map::new();
+        map.insert("uuid".to_string(), json!(self.uuid));
+        map.insert("source".to_string(), json!(self.source));
+        map.insert(
+            "transaction".to_string(),
+            json!(self.transaction.clone().unwrap_or("".to_string())),
+        );
+        map.insert("id".to_string(), json!(self.id));
+        map.insert(
+            "created_at".to_string(),
+            self.created_at
+                .map_or(json!("1970-01-01 00:00:00"), |created_at| json!(created_at)),
+        );
+        map.insert("updated_at".to_string(), json!(self.updated_at));
+        map.insert("fetcher".to_string(), json!(self.fetcher));
+        map.insert(
+            "expired_at".to_string(),
+            self.expired_at
+                .map_or(json!("1970-01-01 00:00:00"), |expired_at| json!(expired_at)),
+        );
+        Value::Object(map)
     }
 }
 

@@ -16,6 +16,7 @@ use crate::{
 use chrono::{Duration, NaiveDateTime};
 use hyper::{client::HttpConnector, Client};
 use serde::{Deserialize, Serialize};
+use serde_json::value::{Map, Value};
 use serde_json::{json, to_value};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -188,6 +189,25 @@ impl Transfer for ProofRecord {
             },
         );
         attributes_map
+    }
+
+    fn to_json_value(&self) -> Value {
+        let mut map = Map::new();
+        map.insert("uuid".to_string(), json!(self.uuid));
+        map.insert("source".to_string(), json!(self.source));
+        map.insert("level".to_string(), json!(self.level));
+        map.insert(
+            "record_id".to_string(),
+            json!(self.record_id.clone().unwrap_or("".to_string())),
+        );
+        map.insert(
+            "created_at".to_string(),
+            self.created_at
+                .map_or(json!("1970-01-01 00:00:00"), |created_at| json!(created_at)),
+        );
+        map.insert("updated_at".to_string(), json!(self.updated_at));
+        map.insert("fetcher".to_string(), json!(self.fetcher));
+        Value::Object(map)
     }
 }
 
