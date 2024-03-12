@@ -4,8 +4,7 @@ use crate::{
         delete_vertex_and_edge,
         edge::{resolve::ResolveReverse, EdgeUnion, HoldRecord},
         vertex::{
-            ExpireTimeLoadFn, Identity, IdentityRecord, IdentityWithSource, NeighborReverseLoadFn,
-            OwnerLoadFn,
+            Identity, IdentityRecord, IdentityWithSource, NeighborReverseLoadFn, OwnerLoadFn,
         },
     },
     upstream::{fetch_all, ContractCategory, DataSource, Platform, Target},
@@ -13,7 +12,6 @@ use crate::{
 };
 
 use async_graphql::{Context, Object};
-use chrono::NaiveDateTime;
 use dataloader::non_cached::Loader;
 use strum::IntoEnumIterator;
 use tokio::time::{sleep, Duration};
@@ -198,34 +196,6 @@ impl IdentityRecord {
 
         match loader.try_load(self.v_id.clone()).await {
             Ok(value) => Ok(value),
-            Err(e) => match e.kind() {
-                std::io::ErrorKind::NotFound => Ok(None), // Not found, so return Ok(None)
-                _ => Err(Error::GraphQLError(e.to_string())), // For all other errors, propagate the error
-            },
-        }
-    }
-
-    async fn expired_at(&self, ctx: &Context<'_>) -> Result<Option<i64>> {
-        if !vec![
-            Platform::Lens,
-            Platform::Dotbit,
-            Platform::UnstoppableDomains,
-            Platform::SpaceId,
-            Platform::Crossbell,
-            Platform::Ethereum,
-        ]
-        .contains(&self.platform)
-        {
-            return Ok(None);
-        }
-        let loader: &Loader<String, Option<NaiveDateTime>, ExpireTimeLoadFn> =
-            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-
-        match loader.try_load(self.v_id.clone()).await {
-            Ok(value) => match value {
-                Some(value) => Ok(Some(value.timestamp())),
-                None => Ok(None),
-            },
             Err(e) => match e.kind() {
                 std::io::ErrorKind::NotFound => Ok(None), // Not found, so return Ok(None)
                 _ => Err(Error::GraphQLError(e.to_string())), // For all other errors, propagate the error

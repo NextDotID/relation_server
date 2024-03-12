@@ -111,11 +111,6 @@ impl ResolveEdge {
     async fn reverse_record(&self) -> Option<IdentityRecord> {
         self.reverse_record.clone()
     }
-
-    /// `expiredAt` Expiration time of this domain name
-    async fn expired_at(&self) -> Option<i64> {
-        self.expired_at.map(|dt| dt.timestamp())
-    }
 }
 
 #[derive(Default)]
