@@ -69,6 +69,8 @@ async fn save_item(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     let to: Identity = Identity {
@@ -82,6 +84,8 @@ async fn save_item(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     let create_ms_time: u32 = (item.twitter.timestamp % 1000).try_into().unwrap();
