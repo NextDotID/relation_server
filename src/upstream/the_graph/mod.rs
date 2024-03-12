@@ -4,12 +4,16 @@ mod tests;
 use crate::config::C;
 use crate::error::Error;
 use crate::tigergraph::create_contract_to_identity_resolve_record;
+use crate::tigergraph::create_identity_domain_resolve_record;
+use crate::tigergraph::create_identity_domain_reverse_resolve_record;
 use crate::tigergraph::create_identity_to_contract_hold_record;
+use crate::tigergraph::create_identity_to_contract_reverse_resolve_record;
+use crate::tigergraph::create_identity_to_identity_hold_record;
 use crate::tigergraph::edge::{Hold, Resolve};
 use crate::tigergraph::vertex::{Contract, Identity};
 use crate::upstream::{
-    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target,
-    TargetProcessedList,
+    ens_reverse::fetch_record, Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem,
+    Fetcher, Platform, Target, TargetProcessedList,
 };
 use crate::util::{make_http_client, naive_now, parse_timestamp};
 use async_trait::async_trait;
@@ -263,7 +267,7 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
 
     for domain in merged_domains.into_iter() {
         // Create own record
-        let contract = create_or_update_own(&cli, &domain).await?;
+        let (contract, mut ens_domain) = create_or_update_own(&cli, &domain).await?;
 
         // Deal with resolve target.
         let resolved_address = domain.resolved_address.map(|r| r.id);
@@ -273,7 +277,7 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                 if !address.starts_with("0x000000000000000000000000000000000000") {
                     // Create resolve record
                     debug!(?target, address, domain = domain.name, "TheGraph: Resolved");
-                    let resolve_target = Identity {
+                    let mut resolve_target = Identity {
                         uuid: Some(Uuid::new_v4()),
                         platform: Platform::Ethereum,
                         identity: address.clone(),
@@ -284,6 +288,8 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                         avatar_url: None,
                         profile_url: None,
                         updated_at: naive_now(),
+                        expired_at: None,
+                        reverse: Some(false),
                     };
 
                     let resolve = Resolve {
@@ -295,6 +301,38 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                         updated_at: naive_now(),
                     };
 
+                    // Find reverse resolve target here
+                    let record = fetch_record(&address).await?;
+                    if !record.reverse_record.is_none() {
+                        let reverse_ens = record.reverse_record.clone().unwrap_or("".into());
+                        resolve_target.reverse = Some(true);
+                        resolve_target.display_name = Some(reverse_ens.clone());
+                        ens_domain.reverse = Some(true);
+
+                        let reverse = Resolve {
+                            uuid: Uuid::new_v4(),
+                            source: DataSource::TheGraph,
+                            system: DomainNameSystem::ENS,
+                            name: reverse_ens.clone(),
+                            fetcher: DataFetcher::RelationService,
+                            updated_at: naive_now(),
+                        };
+                        create_identity_to_contract_reverse_resolve_record(
+                            &cli,
+                            &resolve_target,
+                            &contract,
+                            &reverse,
+                        )
+                        .await?;
+                        create_identity_domain_reverse_resolve_record(
+                            &cli,
+                            &resolve_target,
+                            &ens_domain,
+                            &reverse,
+                        )
+                        .await?;
+                    }
+
                     // regular resolved address
                     create_contract_to_identity_resolve_record(
                         &cli,
@@ -303,6 +341,17 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                         &resolve,
                     )
                     .await?;
+                    create_identity_domain_resolve_record(
+                        &cli,
+                        &ens_domain,
+                        &resolve_target,
+                        &resolve,
+                    )
+                    .await?;
+                    // if !record.reverse_record.is_none() {
+                    //     // reverse resolve record
+
+                    // }
                 }
             }
             None => {
@@ -338,7 +387,7 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
 async fn create_or_update_own(
     client: &Client<HttpConnector>,
     domain: &Domain,
-) -> Result<Contract, Error> {
+) -> Result<(Contract, Identity), Error> {
     let creation_tx = domain
         .events
         .first() // TODO: really?
@@ -348,6 +397,7 @@ async fn create_or_update_own(
         Some(registration) => parse_timestamp(&registration.expiry_date).ok(),
         None => None,
     };
+
     let owner = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
@@ -359,8 +409,24 @@ async fn create_or_update_own(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: ens_expired_at,
+        reverse: Some(false),
     };
-    let conrtract = Contract {
+    let ens_domain: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::ENS,
+        identity: domain.name.clone(),
+        uid: None,
+        created_at: ens_created_at,
+        display_name: Some(domain.name.clone()),
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+        expired_at: ens_expired_at,
+        reverse: Some(false),
+    };
+    let contract = Contract {
         uuid: Uuid::new_v4(),
         category: ContractCategory::ENS,
         address: ContractCategory::ENS.default_contract_address().unwrap(),
@@ -379,6 +445,7 @@ async fn create_or_update_own(
         expired_at: ens_expired_at,
     };
     // hold record
-    create_identity_to_contract_hold_record(client, &owner, &conrtract, &ownership).await?;
-    Ok(conrtract)
+    create_identity_to_contract_hold_record(client, &owner, &contract, &ownership).await?;
+    create_identity_to_identity_hold_record(client, &owner, &ens_domain, &ownership).await?;
+    Ok((contract, ens_domain))
 }
