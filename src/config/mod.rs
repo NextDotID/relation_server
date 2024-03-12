@@ -45,6 +45,7 @@ pub struct Upstream {
     pub datamgr_api: ConfigDataMgrAPI,
     pub warpcast_api: ConfigWarpcastAPI,
     pub spaceid_api: ConfigSpaceIdAPI,
+    pub crossbell_api: ConfigCrossbellAPI,
 }
 
 #[derive(Clone, Deserialize, Default)]
@@ -131,6 +132,11 @@ pub struct ConfigWarpcastAPI {
 
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigSpaceIdAPI {
+    pub url: String,
+}
+
+#[derive(Clone, Deserialize, Default)]
+pub struct ConfigCrossbellAPI {
     pub url: String,
 }
 
