@@ -218,7 +218,7 @@ impl Transfer for HoldRecord {
                 "expired_at".to_string(),
                 Attribute {
                     value: json!("1970-01-01 00:00:00"), // default value
-                    op: None,
+                    op: Some(OpCode::Max),
                 },
             );
         }

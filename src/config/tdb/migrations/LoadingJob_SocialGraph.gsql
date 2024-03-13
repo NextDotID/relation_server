@@ -2,6 +2,114 @@ CREATE GRAPH SocialGraph (Identities, Proof_Forward, Proof_Backward, Contracts, 
 
 USE GRAPH SocialGraph
 
+CREATE OR REPLACE QUERY upsert_isolated_vertex(STRING vertex_str) FOR GRAPH SocialGraph SYNTAX v2 {
+  TYPEDEF TUPLE< DATETIME updated_at, STRING id > MinUpdatedTimeTuple;
+  JSONOBJECT from_v = parse_json_object(vertex_str);
+
+  SumAccum<INT> @@created_vertices;
+  SumAccum<INT> @@created_hyper_vertices;
+
+  SetAccum<STRING> @@insert_vlist;
+  SetAccum<VERTEX> @@existing_vlist;
+  SetAccum<VERTEX<IdentitiesGraph>> @@from_graph;
+
+  STRING final_identity_graph;
+
+  MinAccum<MinUpdatedTimeTuple> @@minUpdateTime;
+  OrAccum @@create_from_vertex = false;
+
+  STRING from_type = from_v.getString("v_type");
+  STRING from_id = from_v.getString("v_id");
+  @@insert_vlist += from_id;
+  @@existing_vlist = to_vertex_set(@@insert_vlist, from_type);
+
+  IF @@existing_vlist.size() > 0 THEN
+    // when it exists: update value
+    IF from_type == "Identities" THEN
+      exist_vset (ANY) = {@@existing_vlist};
+      STRING display_name = from_v.getJsonObject("attributes").getString("display_name");
+      STRING profile_url = from_v.getJsonObject("attributes").getString("profile_url");
+      STRING avatar_url = from_v.getJsonObject("attributes").getString("avatar_url");
+      STRING updated_at = from_v.getJsonObject("attributes").getString("updated_at");
+      STRING expired_at = from_v.getJsonObject("attributes").getString("expired_at");
+      BOOL reverse = from_v.getJsonObject("attributes").getBool("reverse");
+      STRING uid = from_v.getJsonObject("attributes").getString("uid");
+
+      R = SELECT v
+        FROM exist_vset:v
+        POST-ACCUM
+              IF display_name != "" THEN
+                v.display_name = display_name
+              END,
+              v.profile_url = profile_url,
+              v.avatar_url = avatar_url,
+              v.updated_at = to_datetime(updated_at),
+              IF datetime_diff(to_datetime(expired_at), v.expired_at) > 0 THEN
+                v.expired_at = to_datetime(expired_at)
+              END,
+              v.reverse = v.reverse OR reverse,
+              IF uid != "" THEN
+                v.uid = uid
+              END;
+      // find the HyperVertex: IdentitiesGraph
+      hyper_vertex = SELECT tgt FROM exist_vset-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt
+                    POST-ACCUM @@from_graph += tgt
+                    POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_at, tgt.id);
+    END;
+  ELSE
+    // if it doesn't exist: insert value
+    IF from_type == "Identities" THEN
+      INSERT INTO Identities VALUES (from_id, from_id,
+                                      from_v.getJsonObject("attributes").getString("uuid"),
+                                      from_v.getJsonObject("attributes").getString("platform"), 
+                                      from_v.getJsonObject("attributes").getString("identity"), 
+                                      from_v.getJsonObject("attributes").getString("display_name"), 
+                                      from_v.getJsonObject("attributes").getString("profile_url"),
+                                      from_v.getJsonObject("attributes").getString("avatar_url"),
+                                      to_datetime(from_v.getJsonObject("attributes").getString("created_at")),
+                                      to_datetime(from_v.getJsonObject("attributes").getString("added_at")),
+                                      to_datetime(from_v.getJsonObject("attributes").getString("updated_at")),
+                                      from_v.getJsonObject("attributes").getString("uid"),
+                                      to_datetime(from_v.getJsonObject("attributes").getString("expired_at")),
+                                      from_v.getJsonObject("attributes").getBool("reverse"));
+      @@create_from_vertex += true;
+      @@created_vertices += 1;
+    END;
+  END;
+
+  IF @@create_from_vertex == true THEN
+    // insert 1 hyper vertex connect isolated vertex
+    STRING primary_uuid = gsql_uuid_v4();
+    final_identity_graph = primary_uuid;
+    INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, now());
+    INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (from_id Identities, primary_uuid IdentitiesGraph);
+    @@created_hyper_vertices += 1;
+  ELSE
+    STRING earliest_uuid = @@minUpdateTime.id;
+    final_identity_graph = earliest_uuid;
+    FOREACH v1 in @@from_graph DO
+      hyper_v (IdentitiesGraph) = { v1 };
+      STRING hyper_vid = v1.id;
+      IF hyper_vid != earliest_uuid THEN
+        combine_v = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-hyper_v
+                    ACCUM DELETE(e)
+                    POST-ACCUM
+                      INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (s Identities, earliest_uuid IdentitiesGraph);
+        // also need to combine the hyper_edge
+        follower = SELECT hv FROM IdentitiesGraph:hv-((Follow>):e1)-hyper_v
+                    ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                          VALUES(hv IdentitiesGraph, earliest_uuid IdentitiesGraph, e1.original_from, e1.original_to, e1.source, now()), DELETE(e1);        
+        following = SELECT hv FROM IdentitiesGraph:hv-((<Follow):e2)-hyper_v
+                    ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                          VALUES(earliest_uuid IdentitiesGraph, hv IdentitiesGraph, e2.original_from, e2.original_to, e2.source, now()), DELETE(e2);
+        tmp = SELECT tgt FROM hyper_v:tgt POST-ACCUM DELETE(tgt);
+      END;
+    END;
+  END;
+
+  PRINT @@created_vertices as created_vertices, @@created_hyper_vertices as created_hyper_vertices, final_identity_graph;
+}
+
 CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR GRAPH SocialGraph SYNTAX v2 {
   TYPEDEF TUPLE< DATETIME updated_at, STRING id > MinUpdatedTimeTuple;
   JSONOBJECT from_v = parse_json_object(from_str);
@@ -116,8 +224,8 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
       STRING profile_url = to_v.getJsonObject("attributes").getString("profile_url");
       STRING avatar_url = to_v.getJsonObject("attributes").getString("avatar_url");
       STRING updated_at = to_v.getJsonObject("attributes").getString("updated_at");
-      STRING expired_at = from_v.getJsonObject("attributes").getString("expired_at");
-      BOOL reverse = from_v.getJsonObject("attributes").getBool("reverse");
+      STRING expired_at = to_v.getJsonObject("attributes").getString("expired_at");
+      BOOL reverse = to_v.getJsonObject("attributes").getBool("reverse");
       STRING uid = to_v.getJsonObject("attributes").getString("uid");
 
       R = SELECT v
@@ -136,7 +244,6 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
               IF uid != "" THEN
                 v.uid = uid
               END;
-      
       // find the HyperVertex: IdentitiesGraph
       hyper_vertex = SELECT tgt FROM exist_vset-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt
                     POST-ACCUM @@to_graph += tgt
@@ -168,8 +275,8 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
                                       to_datetime(to_v.getJsonObject("attributes").getString("added_at")),
                                       to_datetime(to_v.getJsonObject("attributes").getString("updated_at")),
                                       to_v.getJsonObject("attributes").getString("uid"),
-                                      to_datetime(from_v.getJsonObject("attributes").getString("expired_at")),
-                                      from_v.getJsonObject("attributes").getBool("reverse"));
+                                      to_datetime(to_v.getJsonObject("attributes").getString("expired_at")),
+                                      to_v.getJsonObject("attributes").getBool("reverse"));
       @@create_to_vertex += true;
       @@created_vertices += 1;
     ELSE IF to_type == "Contracts" THEN
@@ -303,4 +410,12 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
   END;
 
   PRINT @@created_vertices as created_vertices, @@created_hyper_vertices as created_hyper_vertices, final_identity_graph;
+}
+
+
+CREATE OR REPLACE QUERY identity_by_source(VERTEX<Identities> p, STRING source) FOR GRAPH SocialGraph SYNTAX V2 {
+  start (Identities) = {p};
+  vertices = SELECT v FROM start-((Proof_Forward>|Proof_Backward>):e)-Identities:v
+            WHERE e.source == source;
+  PRINT vertices;
 }

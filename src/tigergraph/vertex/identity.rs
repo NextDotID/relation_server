@@ -251,7 +251,7 @@ impl Transfer for Identity {
                 "expired_at".to_string(),
                 Attribute {
                     value: json!("1970-01-01 00:00:00"), // default value
-                    op: None,
+                    op: Some(OpCode::Max),
                 },
             );
         }
@@ -545,7 +545,7 @@ impl Identity {
         let uri: http::Uri = format!(
             "{}/graph/{}/vertices/{}?filter=uuid=%22{}%22",
             C.tdb.host,
-            Graph::IdentityGraph.to_string(),
+            Graph::SocialGraph.to_string(),
             VERTEX_NAME,
             uuid.to_string(),
         )
@@ -554,7 +554,7 @@ impl Identity {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
 
@@ -597,7 +597,7 @@ impl Identity {
         let uri: http::Uri = format!(
             "{}/graph/{}/vertices/{}?filter=platform=%22{}%22,identity=%22{}%22",
             C.tdb.host,
-            Graph::IdentityGraph.to_string(),
+            Graph::SocialGraph.to_string(),
             VERTEX_NAME,
             platform.to_string(),
             identity.to_string(),
@@ -614,7 +614,7 @@ impl Identity {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error | {}", _err)))?;
 
@@ -804,7 +804,7 @@ impl IdentityRecord {
         let uri: http::Uri = format!(
             "{}/query/{}/identity_by_source?p={}&source={}",
             C.tdb.host,
-            Graph::IdentityGraph.to_string(),
+            Graph::SocialGraph.to_string(),
             self.v_id.to_string(),
             source.to_string()
         )
@@ -813,7 +813,7 @@ impl IdentityRecord {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {

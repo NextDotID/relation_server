@@ -174,6 +174,19 @@ impl IdentityRecord {
         self.resolve_reverse_domains(&client).await
     }
 
+    async fn expired_at(&self) -> Option<i64> {
+        if !vec![
+            Platform::Dotbit,
+            Platform::Ethereum, // ENS
+            Platform::ENS,
+        ]
+        .contains(&self.platform)
+        {
+            return None;
+        }
+        self.expired_at.map(|dt| dt.timestamp())
+    }
+
     /// reverse flag can be used as a filtering for Identity which type is domain system.
     /// If `reverse=None` if omitted, there is no need to filter anything.
     /// When `reverse=true`, just return `primary domain` related identities.
@@ -186,21 +199,13 @@ impl IdentityRecord {
             Platform::SpaceId,
             Platform::Crossbell,
             Platform::Ethereum, // ENS
+            Platform::ENS,
         ]
         .contains(&self.platform)
         {
             return Ok(None);
         }
-        let loader: &Loader<String, Option<bool>, NeighborReverseLoadFn> =
-            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-
-        match loader.try_load(self.v_id.clone()).await {
-            Ok(value) => Ok(value),
-            Err(e) => match e.kind() {
-                std::io::ErrorKind::NotFound => Ok(None), // Not found, so return Ok(None)
-                _ => Err(Error::GraphQLError(e.to_string())), // For all other errors, propagate the error
-            },
-        }
+        Ok(self.reverse)
     }
 
     /// there's only `platform: lens, dotbit, unstoppabledomains, farcaster, space_id` identity `ownedBy` is not null
@@ -297,7 +302,8 @@ impl IdentityQuery {
                 Ok(Identity::find_by_platform_identity(&client, &platform, &identity).await?)
             }
             Some(found) => {
-                if found.is_outdated() {
+                // if found.is_outdated() {
+                if true {
                     event!(
                         Level::DEBUG,
                         ?platform,
