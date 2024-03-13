@@ -16,6 +16,7 @@ use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use serde_json::value::{Map, Value};
 use std::collections::HashMap;
 use tracing::error;
 use uuid::Uuid;
@@ -186,6 +187,16 @@ impl Transfer for ResolveRecord {
         );
         attributes_map
     }
+    fn to_json_value(&self) -> Value {
+        let mut map = Map::new();
+        map.insert("uuid".to_string(), json!(self.uuid));
+        map.insert("source".to_string(), json!(self.source));
+        map.insert("system".to_string(), json!(self.system));
+        map.insert("name".to_string(), json!(self.name));
+        map.insert("fetcher".to_string(), json!(self.fetcher));
+        map.insert("updated_at".to_string(), json!(self.updated_at));
+        Value::Object(map)
+    }
 }
 
 impl Wrapper<ResolveRecord, Contract, Identity> for Resolve {
@@ -252,7 +263,7 @@ impl Edge<Contract, Identity, ResolveRecord> for ResolveRecord {
         let resolve_contract = self.wrapper(from, to, RESOLVE_CONTRACT);
         let edges = Edges(vec![resolve_contract]);
         let graph: UpsertGraph = edges.into();
-        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        upsert_graph(client, &graph, Graph::SocialGraph).await?;
         Ok(())
     }
 
@@ -331,7 +342,7 @@ impl Edge<Identity, Contract, ResolveRecord> for ResolveRecord {
         let resolve_contract = self.wrapper(from, to, REVERSE_RESOLVE_CONTRACT);
         let edges = Edges(vec![resolve_contract]);
         let graph: UpsertGraph = edges.into();
-        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        upsert_graph(client, &graph, Graph::SocialGraph).await?;
         Ok(())
     }
 
@@ -540,7 +551,7 @@ impl Resolve {
         let uri: http::Uri = format!(
             "{}/query/{}/domain2?name={}&system={}",
             C.tdb.host,
-            Graph::IdentityGraph.to_string(),
+            Graph::SocialGraph.to_string(),
             encoded_name,
             domain_system.to_string(),
         )
@@ -549,7 +560,7 @@ impl Resolve {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {

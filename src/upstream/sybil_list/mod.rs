@@ -4,8 +4,8 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::create_identity_to_identity_proof_two_way_binding;
 use crate::tigergraph::edge::Proof;
+use crate::tigergraph::upsert::create_identity_to_identity_proof_two_way_binding;
 use crate::tigergraph::vertex::Identity;
 use crate::upstream::{DataSource, Fetcher, Platform, ProofLevel, TargetProcessedList};
 use crate::util::make_http_client;
@@ -69,6 +69,8 @@ async fn save_item(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     let to: Identity = Identity {
@@ -82,6 +84,8 @@ async fn save_item(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     let create_ms_time: u32 = (item.twitter.timestamp % 1000).try_into().unwrap();

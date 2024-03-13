@@ -27,6 +27,7 @@ use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use serde_json::value::{Map, Value};
 use std::collections::HashMap;
 use std::fmt;
 use tracing::{error, trace};
@@ -74,6 +75,10 @@ pub struct Identity {
     #[serde(deserialize_with = "naive_datetime_from_string")]
     #[serde(serialize_with = "naive_datetime_to_string")]
     pub updated_at: NaiveDateTime,
+    #[serde(deserialize_with = "option_naive_datetime_from_string")]
+    #[serde(serialize_with = "option_naive_datetime_to_string")]
+    pub expired_at: Option<NaiveDateTime>,
+    pub reverse: Option<bool>,
 }
 
 #[async_trait]
@@ -233,7 +238,85 @@ impl Transfer for Identity {
                 op: Some(OpCode::Max),
             },
         );
+        if let Some(expired_at) = self.expired_at {
+            attributes_map.insert(
+                "expired_at".to_string(),
+                Attribute {
+                    value: json!(expired_at),
+                    op: Some(OpCode::Max),
+                },
+            );
+        } else {
+            attributes_map.insert(
+                "expired_at".to_string(),
+                Attribute {
+                    value: json!("1970-01-01 00:00:00"), // default value
+                    op: Some(OpCode::Max),
+                },
+            );
+        }
+        if let Some(reverse) = self.reverse {
+            attributes_map.insert(
+                "reverse".to_string(),
+                Attribute {
+                    value: json!(reverse),
+                    op: Some(OpCode::Or),
+                },
+            );
+        } else {
+            attributes_map.insert(
+                "reverse".to_string(),
+                Attribute {
+                    value: json!(false), // default value
+                    op: Some(OpCode::Or),
+                },
+            );
+        }
         attributes_map
+    }
+
+    fn to_json_value(&self) -> Value {
+        let mut map = Map::new();
+        map.insert("id".to_string(), json!(self.primary_key()));
+        map.insert(
+            "uuid".to_string(),
+            json!(self.uuid.map_or("".to_string(), |u| u.to_string())),
+        );
+        map.insert("platform".to_string(), json!(self.platform));
+        map.insert("identity".to_string(), json!(self.identity));
+        map.insert(
+            "uid".to_string(),
+            json!(self.uid.clone().unwrap_or("".to_string())),
+        );
+        map.insert(
+            "display_name".to_string(),
+            json!(self.display_name.clone().unwrap_or("".to_string())),
+        );
+        map.insert(
+            "profile_url".to_string(),
+            json!(self.profile_url.clone().unwrap_or("".to_string())),
+        );
+        map.insert(
+            "avatar_url".to_string(),
+            json!(self.avatar_url.clone().unwrap_or("".to_string())),
+        );
+        map.insert(
+            "created_at".to_string(),
+            self.created_at
+                .map_or(json!("1970-01-01 00:00:00"), |created_at| json!(created_at)),
+        );
+        map.insert("added_at".to_string(), json!(self.added_at));
+        map.insert("updated_at".to_string(), json!(self.updated_at));
+        map.insert(
+            "expired_at".to_string(),
+            self.expired_at
+                .map_or(json!("1970-01-01 00:00:00"), |expired_at| json!(expired_at)),
+        );
+        map.insert(
+            "reverse".to_string(),
+            self.reverse.map_or(json!(false), |reverse| json!(reverse)),
+        );
+        Value::Object(map)
     }
 }
 
@@ -250,6 +333,8 @@ impl Default for Identity {
             created_at: None,
             added_at: naive_now(),
             updated_at: naive_now(),
+            expired_at: None,
+            reverse: None,
         }
     }
 }
@@ -447,7 +532,7 @@ impl Identity {
             vertices: vertices.into(),
             edges: None,
         };
-        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        upsert_graph(client, &graph, Graph::SocialGraph).await?;
         Ok(())
     }
 
@@ -460,7 +545,7 @@ impl Identity {
         let uri: http::Uri = format!(
             "{}/graph/{}/vertices/{}?filter=uuid=%22{}%22",
             C.tdb.host,
-            Graph::IdentityGraph.to_string(),
+            Graph::SocialGraph.to_string(),
             VERTEX_NAME,
             uuid.to_string(),
         )
@@ -469,7 +554,7 @@ impl Identity {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
 
@@ -512,7 +597,7 @@ impl Identity {
         let uri: http::Uri = format!(
             "{}/graph/{}/vertices/{}?filter=platform=%22{}%22,identity=%22{}%22",
             C.tdb.host,
-            Graph::IdentityGraph.to_string(),
+            Graph::SocialGraph.to_string(),
             VERTEX_NAME,
             platform.to_string(),
             identity.to_string(),
@@ -529,7 +614,7 @@ impl Identity {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error | {}", _err)))?;
 
@@ -593,7 +678,7 @@ impl IdentityRecord {
         let uri: http::Uri = format!(
             "{}/query/{}/neighbors_with_source_reverse?p={}&depth={}&reverse_flag={}",
             C.tdb.host,
-            Graph::IdentityGraph.to_string(),
+            Graph::SocialGraph.to_string(),
             self.v_id,
             depth,
             flag,
@@ -604,7 +689,7 @@ impl IdentityRecord {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {
@@ -658,7 +743,7 @@ impl IdentityRecord {
         let uri: http::Uri = format!(
             "{}/query/{}/neighbors?p={}&depth={}",
             C.tdb.host,
-            Graph::IdentityGraph.to_string(),
+            Graph::SocialGraph.to_string(),
             self.v_id,
             depth,
         )
@@ -673,7 +758,7 @@ impl IdentityRecord {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {
@@ -719,7 +804,7 @@ impl IdentityRecord {
         let uri: http::Uri = format!(
             "{}/query/{}/identity_by_source?p={}&source={}",
             C.tdb.host,
-            Graph::IdentityGraph.to_string(),
+            Graph::SocialGraph.to_string(),
             self.v_id.to_string(),
             source.to_string()
         )
@@ -728,7 +813,7 @@ impl IdentityRecord {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {
@@ -774,7 +859,7 @@ impl IdentityRecord {
         let uri: http::Uri = format!(
             "{}/query/{}/reverse_domains?p={}",
             C.tdb.host,
-            Graph::IdentityGraph.to_string(),
+            Graph::SocialGraph.to_string(),
             self.v_id.to_string(),
         )
         .parse()
@@ -783,7 +868,7 @@ impl IdentityRecord {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
 
@@ -844,7 +929,7 @@ impl IdentityRecord {
         let uri: http::Uri = format!(
             "{}/query/{}/identity_owned_by?p={}&platform={}",
             C.tdb.host,
-            Graph::IdentityGraph.to_string(),
+            Graph::SocialGraph.to_string(),
             encoded_id,
             self.attributes.platform.to_string(),
         )
@@ -860,7 +945,7 @@ impl IdentityRecord {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {
@@ -911,7 +996,7 @@ impl IdentityRecord {
             uri = format!(
                 "{}/query/{}/nfts?p={}&numPerPage={}&pageNum={}",
                 C.tdb.host,
-                Graph::IdentityGraph.to_string(),
+                Graph::SocialGraph.to_string(),
                 self.v_id.to_string(),
                 limit,
                 offset
@@ -928,7 +1013,7 @@ impl IdentityRecord {
             uri = format!(
                 "{}/query/{}/nfts?p={}&{}&numPerPage={}&pageNum={}",
                 C.tdb.host,
-                Graph::IdentityGraph.to_string(),
+                Graph::SocialGraph.to_string(),
                 self.v_id.to_string(),
                 combined,
                 limit,
@@ -940,7 +1025,7 @@ impl IdentityRecord {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {
@@ -1097,6 +1182,7 @@ impl BatchFn<String, Option<NaiveDateTime>> for ExpireTimeLoadFn {
     }
 }
 
+#[allow(dead_code)]
 async fn get_expired_time_by_ids(
     client: &Client<HttpConnector>,
     ids: Vec<String>,
@@ -1104,7 +1190,7 @@ async fn get_expired_time_by_ids(
     let uri: http::Uri = format!(
         "{}/query/{}/expired_time_by_ids",
         C.tdb.host,
-        Graph::IdentityGraph.to_string()
+        Graph::SocialGraph.to_string()
     )
     .parse()
     .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
@@ -1113,7 +1199,7 @@ async fn get_expired_time_by_ids(
     let req = hyper::Request::builder()
         .method(Method::POST)
         .uri(uri)
-        .header("Authorization", Graph::IdentityGraph.token())
+        .header("Authorization", Graph::SocialGraph.token())
         .body(Body::from(json_params))
         .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
 
@@ -1160,6 +1246,7 @@ async fn get_expired_time_by_ids(
     }
 }
 
+#[allow(dead_code)]
 async fn get_neighbor_reverse_by_ids(
     client: &Client<HttpConnector>,
     ids: Vec<String>,
@@ -1167,7 +1254,7 @@ async fn get_neighbor_reverse_by_ids(
     let uri: http::Uri = format!(
         "{}/query/{}/neighbor_reverse_by_ids",
         C.tdb.host,
-        Graph::IdentityGraph.to_string()
+        Graph::SocialGraph.to_string()
     )
     .parse()
     .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
@@ -1176,7 +1263,7 @@ async fn get_neighbor_reverse_by_ids(
     let req = hyper::Request::builder()
         .method(Method::POST)
         .uri(uri)
-        .header("Authorization", Graph::IdentityGraph.token())
+        .header("Authorization", Graph::SocialGraph.token())
         .body(Body::from(json_params))
         .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
     let mut resp = client.request(req).await.map_err(|err| {
@@ -1219,7 +1306,7 @@ async fn get_owners_by_ids(
     let uri: http::Uri = format!(
         "{}/query/{}/owners_by_ids",
         C.tdb.host,
-        Graph::IdentityGraph.to_string()
+        Graph::SocialGraph.to_string()
     )
     .parse()
     .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
@@ -1228,7 +1315,7 @@ async fn get_owners_by_ids(
     let req = hyper::Request::builder()
         .method(Method::POST)
         .uri(uri)
-        .header("Authorization", Graph::IdentityGraph.token())
+        .header("Authorization", Graph::SocialGraph.token())
         .body(Body::from(json_params))
         .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
     let mut resp = client.request(req).await.map_err(|err| {
@@ -1271,7 +1358,7 @@ async fn get_identities_by_ids(
     let uri: http::Uri = format!(
         "{}/query/{}/identities_by_ids",
         C.tdb.host,
-        Graph::IdentityGraph.to_string()
+        Graph::SocialGraph.to_string()
     )
     .parse()
     .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
@@ -1280,7 +1367,7 @@ async fn get_identities_by_ids(
     let req = hyper::Request::builder()
         .method(Method::POST)
         .uri(uri)
-        .header("Authorization", Graph::IdentityGraph.token())
+        .header("Authorization", Graph::SocialGraph.token())
         .body(Body::from(json_params))
         .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
     let mut resp = client.request(req).await.map_err(|err| {

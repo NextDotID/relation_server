@@ -1,5 +1,6 @@
 // Upstreams
 mod aggregation;
+mod crossbell;
 mod dotbit;
 mod ens_reverse;
 mod farcaster;
@@ -65,7 +66,8 @@ pub async fn fetch_all(targets: TargetProcessedList, depth: Option<u16>) -> Resu
 
     let mut fetching = FETCHING.lock().await;
     let mut up_next: HashSet<Target> = HashSet::from_iter(
-        targets.clone()
+        targets
+            .clone()
             .into_iter()
             .filter(|target| !fetching.contains(target)),
     );

@@ -1,13 +1,11 @@
 use crate::{
     error::{Error, Result},
     tigergraph::{
-        delete_vertex_and_edge,
         edge::{resolve::ResolveReverse, EdgeUnion, HoldRecord},
-        vertex::{
-            Identity, IdentityRecord, IdentityWithSource, NeighborReverseLoadFn, OwnerLoadFn,
-        },
+        upsert::delete_graph_inner_connection,
+        vertex::{Identity, IdentityGraph, IdentityRecord, IdentityWithSource, OwnerLoadFn},
     },
-    upstream::{fetch_all, ContractCategory, DataSource, Platform, Target},
+    upstream::{fetch_all, Chain, ContractCategory, DataSource, Platform, Target},
     util::make_http_client,
 };
 
@@ -168,17 +166,85 @@ impl IdentityRecord {
             .await
     }
 
+    /// Identity graph from current.
+    async fn identity_graph(
+        &self,
+        _ctx: &Context<'_>,
+        #[graphql(
+            desc = "This reverse flag can be used as a filtering for Identity which type is domain system .
+    If `reverse=None` if omitted, there is no need to filter anything.
+    When `reverse=true`, just return `primary domain` related identities.
+    When `reverse=false`, Only `non-primary domain` will be returned, which is the inverse set of reverse=true."
+        )]
+        reverse: Option<bool>,
+    ) -> Result<Option<IdentityGraph>> {
+        let client = make_http_client();
+        match IdentityGraph::find_by_platform_identity(
+            &client,
+            &self.platform,
+            &self.identity,
+            reverse,
+        )
+        .await?
+        {
+            None => {
+                tracing::info!("Identity graph inner fetch_all");
+                let target = match self.platform {
+                    Platform::ENS => Target::NFT(
+                        Chain::Ethereum,
+                        ContractCategory::ENS,
+                        ContractCategory::ENS.default_contract_address().unwrap(),
+                        self.identity.clone(),
+                    ),
+                    _ => Target::Identity(self.platform.clone(), self.identity.clone()),
+                };
+                let fetch_result = fetch_all(vec![target], Some(3)).await;
+                if fetch_result.is_err() {
+                    event!(
+                        Level::WARN,
+                        ?self.platform,
+                        self.identity,
+                        err = fetch_result.unwrap_err().to_string(),
+                        "Failed to fetch_all"
+                    );
+                }
+                Ok(IdentityGraph::find_by_platform_identity(
+                    &client,
+                    &self.platform,
+                    &self.identity,
+                    reverse,
+                )
+                .await?)
+            }
+            Some(identity_graph) => Ok(Some(identity_graph)),
+        }
+    }
+
     /// Return primary domain names where they would typically only show addresses.
     async fn reverse_records(&self, _ctx: &Context<'_>) -> Result<Vec<ResolveReverse>> {
         let client = make_http_client();
         self.resolve_reverse_domains(&client).await
     }
 
+    /// The expiry date for the domain, from either the registration, or the wrapped domain if PCC is burned
+    async fn expired_at(&self) -> Option<i64> {
+        if !vec![
+            Platform::Dotbit,
+            Platform::Ethereum, // ENS
+            Platform::ENS,
+        ]
+        .contains(&self.platform)
+        {
+            return None;
+        }
+        self.expired_at.map(|dt| dt.timestamp())
+    }
+
     /// reverse flag can be used as a filtering for Identity which type is domain system.
     /// If `reverse=None` if omitted, there is no need to filter anything.
     /// When `reverse=true`, just return `primary domain` related identities.
     /// When `reverse=false`, Only `non-primary domain` will be returned, which is the inverse set of reverse=true.
-    async fn reverse(&self, ctx: &Context<'_>) -> Result<Option<bool>> {
+    async fn reverse(&self) -> Result<Option<bool>> {
         if !vec![
             Platform::Lens,
             Platform::Dotbit,
@@ -186,21 +252,13 @@ impl IdentityRecord {
             Platform::SpaceId,
             Platform::Crossbell,
             Platform::Ethereum, // ENS
+            Platform::ENS,
         ]
         .contains(&self.platform)
         {
             return Ok(None);
         }
-        let loader: &Loader<String, Option<bool>, NeighborReverseLoadFn> =
-            ctx.data().map_err(|err| Error::GraphQLError(err.message))?;
-
-        match loader.try_load(self.v_id.clone()).await {
-            Ok(value) => Ok(value),
-            Err(e) => match e.kind() {
-                std::io::ErrorKind::NotFound => Ok(None), // Not found, so return Ok(None)
-                _ => Err(Error::GraphQLError(e.to_string())), // For all other errors, propagate the error
-            },
-        }
+        Ok(self.reverse)
     }
 
     /// there's only `platform: lens, dotbit, unstoppabledomains, farcaster, space_id` identity `ownedBy` is not null
@@ -212,6 +270,7 @@ impl IdentityRecord {
             Platform::Farcaster,
             Platform::SpaceId,
             Platform::Crossbell,
+            Platform::ENS,
         ]
         .contains(&self.platform)
         {
@@ -280,8 +339,18 @@ impl IdentityQuery {
         let client = make_http_client();
 
         let platform: Platform = platform.parse()?;
-        let target = Target::Identity(platform, identity.clone());
+
+        let target = match platform {
+            Platform::ENS => Target::NFT(
+                Chain::Ethereum,
+                ContractCategory::ENS,
+                ContractCategory::ENS.default_contract_address().unwrap(),
+                identity.clone(),
+            ),
+            _ => Target::Identity(platform, identity.clone()),
+        };
         // FIXME: Still kinda dirty. Should be in an background queue/worker-like shape.
+
         match Identity::find_by_platform_identity(&client, &platform, &identity).await? {
             None => {
                 let fetch_result = fetch_all(vec![target], Some(3)).await;
@@ -308,7 +377,7 @@ impl IdentityQuery {
                     tokio::spawn(async move {
                         // Delete and Refetch in the background
                         sleep(Duration::from_secs(10)).await;
-                        delete_vertex_and_edge(&client, v_id).await?;
+                        delete_graph_inner_connection(&client, v_id).await?;
                         fetch_all(vec![target], Some(3)).await?;
                         Ok::<_, Error>(())
                     });

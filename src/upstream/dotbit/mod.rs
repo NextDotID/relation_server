@@ -2,10 +2,10 @@
 mod tests;
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::create_identity_domain_resolve_record;
-use crate::tigergraph::create_identity_domain_reverse_resolve_record;
-use crate::tigergraph::create_identity_to_identity_hold_record;
 use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::upsert::create_identity_domain_resolve_record;
+use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
+use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::Identity;
 use crate::upstream::{
     DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
@@ -302,6 +302,8 @@ async fn fetch_and_save_account_info(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     let dotbit_identity: Identity = Identity {
@@ -315,6 +317,8 @@ async fn fetch_and_save_account_info(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: expired_at_naive,
+        reverse: Some(false),
     };
 
     let hold: Hold = Hold {
@@ -402,6 +406,8 @@ async fn fetch_reverse_record(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(true),
     };
 
     let reverse: Resolve = Resolve {
@@ -418,15 +424,10 @@ async fn fetch_reverse_record(
     if addr_identity.is_none() {
         return Ok(None);
     }
-
+    let mut addr = addr_identity.unwrap();
+    addr.reverse = Some(true);
     // das_reverseRecord: 'reverse' resolution maps from an address back to a name.
-    create_identity_domain_reverse_resolve_record(
-        &cli,
-        &addr_identity.unwrap(),
-        &reverse_dotbit,
-        &reverse,
-    )
-    .await?;
+    create_identity_domain_reverse_resolve_record(&cli, &addr, &reverse_dotbit, &reverse).await?;
 
     return Ok(Some(reverse_dotbit));
 }
@@ -487,6 +488,8 @@ async fn fetch_account_list_by_addrs(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     for i in resp.result.data.unwrap().account_list.into_iter() {
@@ -503,6 +506,8 @@ async fn fetch_account_list_by_addrs(
             avatar_url: None,
             profile_url: None,
             updated_at: naive_now(),
+            expired_at: expired_at_naive,
+            reverse: Some(false),
         };
 
         let hold: Hold = Hold {

@@ -9,9 +9,7 @@ use relation_server::{
     config::C,
     controller::tigergraphql::Query,
     error::Result,
-    tigergraph::vertex::{
-        ContractLoadFn, ExpireTimeLoadFn, IdentityLoadFn, NeighborReverseLoadFn, OwnerLoadFn,
-    },
+    tigergraph::vertex::{ContractLoadFn, IdentityLoadFn, OwnerLoadFn},
     util::make_http_client,
 };
 use std::{convert::Infallible, net::SocketAddr};
@@ -49,12 +47,6 @@ async fn main() -> Result<()> {
     let owner_loader_fn = OwnerLoadFn {
         client: client.to_owned(),
     };
-    let neighbor_reverse_loader_fn = NeighborReverseLoadFn {
-        client: client.to_owned(),
-    };
-    let expire_time_loader_fn = ExpireTimeLoadFn {
-        client: client.to_owned(),
-    };
     let contract_loader = Loader::new(contract_loader_fn)
         .with_max_batch_size(500)
         .with_yield_count(100);
@@ -64,19 +56,11 @@ async fn main() -> Result<()> {
     let owner_loader = Loader::new(owner_loader_fn)
         .with_max_batch_size(500)
         .with_yield_count(100);
-    let neighbor_reverse_loader = Loader::new(neighbor_reverse_loader_fn)
-        .with_max_batch_size(500)
-        .with_yield_count(100);
-    let expired_time_loader = Loader::new(expire_time_loader_fn)
-        .with_max_batch_size(500)
-        .with_yield_count(100);
 
     let schema = Schema::build(Query::default(), EmptyMutation, EmptySubscription)
         .data(contract_loader)
         .data(identity_loader)
         .data(owner_loader)
-        .data(neighbor_reverse_loader)
-        .data(expired_time_loader)
         .finish();
 
     let graphql_post = async_graphql_warp::graphql(schema)

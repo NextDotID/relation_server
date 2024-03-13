@@ -2,8 +2,8 @@ mod tests;
 mod warpcast;
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::create_identity_to_identity_hold_record;
 use crate::tigergraph::edge::Hold;
+use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::Identity;
 use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
 use crate::util::{make_http_client, naive_now};
@@ -187,6 +187,8 @@ async fn save_profile_ethereum(
                     avatar_url: None,
                     profile_url: None,
                     updated_at: naive_now(),
+                    expired_at: None,
+                    reverse: Some(false),
                 };
                 let farcaster_identity: Identity = Identity {
                     uuid: Some(Uuid::new_v4()),
@@ -199,6 +201,8 @@ async fn save_profile_ethereum(
                     avatar_url: None,
                     profile_url: None,
                     updated_at: naive_now(),
+                    expired_at: None,
+                    reverse: Some(false),
                 };
                 let hold: Hold = Hold {
                     uuid: Uuid::new_v4(),
@@ -248,6 +252,8 @@ async fn save_profile_signer(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
     let farcaster_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -260,6 +266,8 @@ async fn save_profile_signer(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
     let hold: Hold = Hold {
         uuid: Uuid::new_v4(),

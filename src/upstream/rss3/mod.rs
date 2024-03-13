@@ -3,8 +3,8 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::create_identity_to_contract_hold_record;
 use crate::tigergraph::edge::Hold;
+use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
 use crate::tigergraph::vertex::{Contract, Identity};
 use crate::upstream::{
     Chain, ContractCategory, DataSource, Fetcher, Platform, Target, TargetProcessedList,
@@ -184,6 +184,8 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     if p.actions.len() == 0 {

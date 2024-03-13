@@ -3,8 +3,8 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::create_identity_to_identity_proof_two_way_binding;
 use crate::tigergraph::edge::Proof;
+use crate::tigergraph::upsert::create_identity_to_identity_proof_two_way_binding;
 use crate::tigergraph::vertex::{Identity, IdentityRecord};
 use crate::tigergraph::{BaseResponse, Graph};
 use crate::upstream::{DataSource, Fetcher, Platform, ProofLevel, TargetProcessedList};
@@ -254,6 +254,8 @@ async fn fetch_connections_by_platform_identity(
             avatar_url: None,
             profile_url: None,
             updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
         };
 
         if Platform::from_str(p.proof_type.as_str()).is_err() {
@@ -270,6 +272,8 @@ async fn fetch_connections_by_platform_identity(
             avatar_url: None,
             profile_url: None,
             updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
         };
 
         let pf: Proof = Proof {

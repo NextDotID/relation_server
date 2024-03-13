@@ -11,7 +11,7 @@ mod tests {
     use crate::{
         tigergraph::{
             edge::{Hold, Proof, Resolve},
-            vertex::{Contract, Identity, NeighborsResponse},
+            vertex::{Contract, Identity, IdentityGraph, NeighborsResponse},
         },
         upstream::{Chain, ContractCategory, DataSource, DomainNameSystem, Platform, ProofLevel},
         util::make_http_client,
@@ -250,6 +250,28 @@ mod tests {
             println!("neighbors_with_source: {}", json_raw);
         } else {
             return Err(Error::NoResult);
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_identity_graph() -> Result<(), Error> {
+        let client = make_http_client();
+        if let Some(found) = IdentityGraph::find_by_platform_identity(
+            &client,
+            &Platform::ENS,
+            "yisiliu.eth",
+            Some(false),
+        )
+        .await?
+        {
+            // println!("found = {:?}", found);
+            let json_raw =
+                serde_json::to_string(&found).map_err(|err| Error::JSONParseError(err))?;
+            println!("test_identity_graph: {}", json_raw);
+        } else {
+            // return Err(Error::NoResult);
+            println!("identity_graph not exists.");
         }
         Ok(())
     }

@@ -28,9 +28,9 @@ prepare:
 
 # Do database migration.
 migrate:
-	{{gsql}} $DB_MIGRATIONS/global.gsql
-	{{gsql}} $DB_MIGRATIONS/SCHEMA_CHANGE.gsql
-	{{gsql}} $DB_MIGRATIONS/DBImportExport_IdentityGraph.gsql
+	# {{gsql}} $DB_MIGRATIONS/global.gsql
+	# {{gsql}} $DB_MIGRATIONS/SCHEMA_CHANGE.gsql
+	{{gsql}} $DB_MIGRATIONS/LoadingJob_SocialGraph.gsql
 
 # Create token for GraphName
 create-token SECRET="secret" GRAPH="graph":

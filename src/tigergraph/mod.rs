@@ -1,5 +1,6 @@
 pub mod edge;
 mod tests;
+pub mod upsert;
 pub mod vertex;
 
 use crate::{
@@ -277,6 +278,7 @@ where
 
 pub trait Transfer {
     fn to_attributes_map(&self) -> HashMap<String, Attribute>;
+    fn to_json_value(&self) -> Value;
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

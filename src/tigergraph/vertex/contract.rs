@@ -17,6 +17,7 @@ use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use serde_json::value::{Map, Value};
 use std::collections::HashMap;
 use tracing::{error, trace};
 use uuid::Uuid;
@@ -181,6 +182,21 @@ impl Transfer for Contract {
 
         attributes_map
     }
+
+    fn to_json_value(&self) -> Value {
+        let mut map = Map::new();
+        map.insert("id".to_string(), json!(self.primary_key()));
+        map.insert("uuid".to_string(), json!(self.uuid));
+        map.insert("chain".to_string(), json!(self.chain));
+        map.insert("address".to_string(), json!(self.address));
+        map.insert("category".to_string(), json!(self.category));
+        map.insert(
+            "symbol".to_string(),
+            json!(self.symbol.clone().unwrap_or("".to_string())),
+        );
+        map.insert("updated_at".to_string(), json!(self.updated_at));
+        Value::Object(map)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -213,7 +229,7 @@ impl Contract {
             vertices: vertices.into(),
             edges: None,
         };
-        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        upsert_graph(client, &graph, Graph::SocialGraph).await?;
         Ok(())
     }
 
@@ -226,7 +242,7 @@ impl Contract {
         let uri: http::Uri = format!(
             "{}/graph/{}/vertices/{}?filter=uuid=%22{}%22",
             C.tdb.host,
-            Graph::IdentityGraph.to_string(),
+            Graph::SocialGraph.to_string(),
             VERTEX_NAME,
             uuid.to_string(),
         )
@@ -235,7 +251,7 @@ impl Contract {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {
@@ -276,7 +292,7 @@ impl Contract {
         let uri: http::Uri = format!(
             "{}/graph/{}/vertices/{}?filter=chain=%22{}%22,address=%22{}%22",
             C.tdb.host,
-            Graph::IdentityGraph.to_string(),
+            Graph::SocialGraph.to_string(),
             VERTEX_NAME,
             chain.to_string(),
             address.to_string(),
@@ -286,7 +302,7 @@ impl Contract {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {
@@ -360,7 +376,7 @@ async fn get_contracts_by_ids(
     let uri: http::Uri = format!(
         "{}/query/{}/contracts_by_ids",
         C.tdb.host,
-        Graph::IdentityGraph.to_string()
+        Graph::SocialGraph.to_string()
     )
     .parse()
     .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
@@ -369,7 +385,7 @@ async fn get_contracts_by_ids(
     let req = hyper::Request::builder()
         .method(Method::POST)
         .uri(uri)
-        .header("Authorization", Graph::IdentityGraph.token())
+        .header("Authorization", Graph::SocialGraph.token())
         .body(Body::from(json_params))
         .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
     let mut resp = client.request(req).await.map_err(|err| {

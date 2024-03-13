@@ -2,11 +2,11 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::create_identity_domain_resolve_record;
-use crate::tigergraph::create_identity_domain_reverse_resolve_record;
-use crate::tigergraph::create_identity_to_identity_hold_record;
 use crate::tigergraph::edge::Hold;
 use crate::tigergraph::edge::Resolve;
+use crate::tigergraph::upsert::create_identity_domain_resolve_record;
+use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
+use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::Identity;
 // use crate::graph::{new_db_connection, vertex::Identity};
 use crate::upstream::{
@@ -230,10 +230,25 @@ async fn fetch_reverse(owner: &str) -> Result<ReverseResponse, Error> {
 
 async fn save_domain(
     client: &Client<HttpConnector>,
-    eth_identity: &Identity,
+    identity: &str,
     item: Item,
 ) -> Result<TargetProcessedList, Error> {
-    let ud: Identity = Identity {
+    let mut eth_identity: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Ethereum,
+        identity: identity.to_string().to_lowercase().clone(),
+        uid: None,
+        created_at: None,
+        display_name: None,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
+    };
+
+    let mut ud: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::UnstoppableDomains,
         identity: item.id.clone(),
@@ -244,6 +259,8 @@ async fn save_domain(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
     let hold: Hold = Hold {
         uuid: Uuid::new_v4(),
@@ -255,8 +272,6 @@ async fn save_domain(
         fetcher: DataFetcher::RelationService,
         expired_at: None,
     };
-    // hold record
-    create_identity_to_identity_hold_record(client, eth_identity, &ud, &hold).await?;
 
     let resolve: Resolve = Resolve {
         uuid: Uuid::new_v4(),
@@ -266,9 +281,6 @@ async fn save_domain(
         fetcher: DataFetcher::RelationService,
         updated_at: naive_now(),
     };
-
-    // 'regular' resolution involves mapping from a name to an address.
-    create_identity_domain_resolve_record(client, &ud, eth_identity, &resolve).await?;
 
     if item.attributes.meta.reverse {
         // reverse = true
@@ -281,12 +293,20 @@ async fn save_domain(
             fetcher: DataFetcher::RelationService,
             updated_at: naive_now(),
         };
-        create_identity_domain_reverse_resolve_record(client, eth_identity, &ud, &reverse).await?;
+        eth_identity.reverse = Some(true);
+        ud.reverse = Some(false);
+        create_identity_domain_reverse_resolve_record(client, &eth_identity, &ud, &reverse).await?;
         return Ok(vec![Target::Identity(
             Platform::UnstoppableDomains,
             item.attributes.meta.domain.clone(),
         )]);
     }
+
+    // hold record
+    create_identity_to_identity_hold_record(client, &eth_identity, &ud, &hold).await?;
+    // 'regular' resolution involves mapping from a name to an address.
+    create_identity_domain_resolve_record(client, &ud, &eth_identity, &resolve).await?;
+
     Ok(vec![])
 }
 
@@ -302,22 +322,10 @@ async fn fetch_domains_by_account(
         let cli = make_http_client();
         cnt += result.data.len() as u32;
 
-        let eth_identity: Identity = Identity {
-            uuid: Some(Uuid::new_v4()),
-            platform: Platform::Ethereum,
-            identity: identity.to_string().to_lowercase().clone(),
-            uid: None,
-            created_at: None,
-            display_name: None,
-            added_at: naive_now(),
-            avatar_url: None,
-            profile_url: None,
-            updated_at: naive_now(),
-        };
         let futures: Vec<_> = result
             .data
             .into_iter()
-            .map(|item| save_domain(&cli, &eth_identity, item))
+            .map(|item| save_domain(&cli, identity, item))
             .collect();
 
         let targets: TargetProcessedList = join_all(futures)
@@ -390,7 +398,7 @@ async fn fetch_account_by_domain(
         return Err(Error::NoResult);
     }
 
-    let eth: Identity = Identity {
+    let mut eth: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: result.meta.owner.clone().unwrap().to_lowercase(),
@@ -401,9 +409,11 @@ async fn fetch_account_by_domain(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
-    let ud: Identity = Identity {
+    let mut ud: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::UnstoppableDomains,
         identity: result.meta.domain.clone(),
@@ -414,6 +424,8 @@ async fn fetch_account_by_domain(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     let hold: Hold = Hold {
@@ -427,9 +439,6 @@ async fn fetch_account_by_domain(
         expired_at: None,
     };
 
-    // hold record
-    create_identity_to_identity_hold_record(&cli, &eth, &ud, &hold).await?;
-
     let resolve: Resolve = Resolve {
         uuid: Uuid::new_v4(),
         source: DataSource::UnstoppableDomains,
@@ -438,9 +447,6 @@ async fn fetch_account_by_domain(
         fetcher: DataFetcher::RelationService,
         updated_at: naive_now(),
     };
-
-    // 'regular' resolution involves mapping from a name to an address.
-    create_identity_domain_resolve_record(&cli, &ud, &eth, &resolve).await?;
 
     if result.meta.reverse {
         // reverse = true
@@ -453,8 +459,15 @@ async fn fetch_account_by_domain(
             fetcher: DataFetcher::RelationService,
             updated_at: naive_now(),
         };
+        eth.reverse = Some(true);
+        ud.reverse = Some(true);
         create_identity_domain_reverse_resolve_record(&cli, &eth, &ud, &resolve).await?;
     }
+
+    // hold record
+    create_identity_to_identity_hold_record(&cli, &eth, &ud, &hold).await?;
+    // 'regular' resolution involves mapping from a name to an address.
+    create_identity_domain_resolve_record(&cli, &ud, &eth, &resolve).await?;
 
     Ok(vec![Target::Identity(
         Platform::Ethereum,

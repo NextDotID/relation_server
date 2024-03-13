@@ -2,10 +2,10 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::create_identity_domain_resolve_record;
-use crate::tigergraph::create_identity_domain_reverse_resolve_record;
-use crate::tigergraph::create_identity_to_identity_hold_record;
 use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::upsert::create_identity_domain_resolve_record;
+use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
+use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::Identity;
 use crate::upstream::{
     DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
@@ -90,6 +90,8 @@ async fn fetch_domain_by_address(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(true),
     };
 
     let sid: Identity = Identity {
@@ -103,6 +105,8 @@ async fn fetch_domain_by_address(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(true),
     };
 
     let hold: Hold = Hold {
@@ -153,7 +157,7 @@ async fn fetch_address_by_domain(
     let cli = make_http_client();
     let address = get_address(identity).await?;
 
-    let eth: Identity = Identity {
+    let mut eth: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: address.clone().to_lowercase(),
@@ -164,9 +168,11 @@ async fn fetch_address_by_domain(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
-    let sid: Identity = Identity {
+    let mut sid: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::SpaceId,
         identity: identity.to_string(),
@@ -177,6 +183,8 @@ async fn fetch_address_by_domain(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     let hold: Hold = Hold {
@@ -214,6 +222,8 @@ async fn fetch_address_by_domain(
             fetcher: DataFetcher::RelationService,
             updated_at: naive_now(),
         };
+        eth.reverse = Some(true);
+        sid.reverse = Some(true);
         create_identity_domain_reverse_resolve_record(&cli, &eth, &sid, &reverse).await?;
     }
 
