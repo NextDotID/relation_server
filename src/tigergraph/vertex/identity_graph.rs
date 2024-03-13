@@ -39,20 +39,30 @@ impl IdentityGraph {
         client: &Client<HttpConnector>,
         platform: &Platform,
         identity: &str,
+        reverse: Option<bool>,
     ) -> Result<Option<IdentityGraph>, Error> {
+        // This reverse flag can be used as a filtering for Identity which type is domain system .
+        // flag = 0, If `reverse=None` if omitted, there is no need to filter anything.
+        // flag = 1, When `reverse=true`, just return `primary domain` related identities.
+        // flag = 2, When `reverse=false`, Only `non-primary domain` will be returned, which is the inverse set of reverse=true.
+        let flag = reverse.map_or(0, |r| match r {
+            true => 1,
+            false => 2,
+        });
         let p = format!("{},{}", platform, identity);
         let encoded_p = urlencoding::encode(&p);
         let uri: http::Uri = format!(
-            "{}/query/{}/find_identity_graph?p={}",
+            "{}/query/{}/find_identity_graph?p={}&reverse_flag={}",
             C.tdb.host,
             Graph::SocialGraph.to_string(),
             encoded_p,
+            flag,
         )
         .parse()
         .map_err(|_err: InvalidUri| {
             Error::ParamError(format!(
-                "query find_identity_graph?p={} Uri format Error | {}",
-                p, _err
+                "query find_identity_graph?p={}&reverse_flag={} Uri format Error | {}",
+                p, flag, _err
             ))
         })?;
 

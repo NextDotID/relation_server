@@ -257,8 +257,13 @@ mod tests {
     #[tokio::test]
     async fn test_identity_graph() -> Result<(), Error> {
         let client = make_http_client();
-        if let Some(found) =
-            IdentityGraph::find_by_platform_identity(&client, &Platform::ENS, "yisiliu.eth").await?
+        if let Some(found) = IdentityGraph::find_by_platform_identity(
+            &client,
+            &Platform::ENS,
+            "yisiliu.eth",
+            Some(false),
+        )
+        .await?
         {
             // println!("found = {:?}", found);
             let json_raw =

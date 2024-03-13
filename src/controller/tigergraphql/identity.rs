@@ -167,10 +167,25 @@ impl IdentityRecord {
     }
 
     /// Identity graph from current.
-    async fn identity_graph(&self, _ctx: &Context<'_>) -> Result<Option<IdentityGraph>> {
+    async fn identity_graph(
+        &self,
+        _ctx: &Context<'_>,
+        #[graphql(
+            desc = "This reverse flag can be used as a filtering for Identity which type is domain system .
+    If `reverse=None` if omitted, there is no need to filter anything.
+    When `reverse=true`, just return `primary domain` related identities.
+    When `reverse=false`, Only `non-primary domain` will be returned, which is the inverse set of reverse=true."
+        )]
+        reverse: Option<bool>,
+    ) -> Result<Option<IdentityGraph>> {
         let client = make_http_client();
-        match IdentityGraph::find_by_platform_identity(&client, &self.platform, &self.identity)
-            .await?
+        match IdentityGraph::find_by_platform_identity(
+            &client,
+            &self.platform,
+            &self.identity,
+            reverse,
+        )
+        .await?
         {
             None => {
                 tracing::info!("Identity graph inner fetch_all");
@@ -197,6 +212,7 @@ impl IdentityRecord {
                     &client,
                     &self.platform,
                     &self.identity,
+                    reverse,
                 )
                 .await?)
             }
@@ -254,6 +270,7 @@ impl IdentityRecord {
             Platform::Farcaster,
             Platform::SpaceId,
             Platform::Crossbell,
+            Platform::ENS,
         ]
         .contains(&self.platform)
         {

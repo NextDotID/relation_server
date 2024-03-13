@@ -1,34 +1,11 @@
 use crate::{
-    error::Result,
     tigergraph::vertex::{IdentityConnection, IdentityGraph, IdentityRecord},
-    upstream::{DataSource, Platform},
-    util::make_http_client,
+    upstream::DataSource,
 };
-use async_graphql::{Context, Object};
+use async_graphql::Object;
 
 #[derive(Default)]
 pub struct IdentityGraphQuery;
-
-#[Object]
-impl IdentityGraphQuery {
-    /// Identity graph from current.
-    async fn identity_graph(
-        &self,
-        _ctx: &Context<'_>,
-        #[graphql(desc = "Platform to query")] platform: String,
-        #[graphql(desc = "Identity on target Platform")] identity: String,
-    ) -> Result<Option<IdentityGraph>> {
-        let client = make_http_client();
-        let platform: Platform = platform.parse()?;
-        match IdentityGraph::find_by_platform_identity(&client, &platform, &identity).await? {
-            None => {
-                // TODO: fetch_all
-                Ok(None)
-            }
-            Some(identity_graph) => Ok(Some(identity_graph)),
-        }
-    }
-}
 
 #[Object]
 impl IdentityGraph {
