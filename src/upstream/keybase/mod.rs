@@ -107,8 +107,7 @@ impl Fetcher for Keybase {
     }
 
     fn can_fetch(target: &Target) -> bool {
-        false
-        // target.in_platform_supported(vec![Platform::Twitter, Platform::Github, Platform::Reddit])
+        target.in_platform_supported(vec![Platform::Twitter, Platform::Github, Platform::Reddit])
     }
 }
 

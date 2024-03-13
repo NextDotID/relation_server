@@ -3,9 +3,8 @@ use crate::{
     error::Error,
     tigergraph::{vertex::IdentityRecord, BaseResponse, Graph},
     upstream::{DataSource, Platform},
-    util::{naive_now, parse_body},
+    util::parse_body,
 };
-use chrono::{Duration, NaiveDateTime};
 use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};

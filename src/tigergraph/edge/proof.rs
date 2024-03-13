@@ -292,7 +292,7 @@ impl Edge<Identity, Identity, ProofRecord> for ProofRecord {
         let pf = self.wrapper(from, to, EDGE_NAME);
         let edges = Edges(vec![pf]);
         let graph: UpsertGraph = edges.into();
-        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        upsert_graph(client, &graph, Graph::SocialGraph).await?;
         Ok(())
     }
 
@@ -306,7 +306,7 @@ impl Edge<Identity, Identity, ProofRecord> for ProofRecord {
         let pf = self.wrapper(from, to, REVERSE_EDGE_NAME);
         let edges = Edges(vec![pf]);
         let graph: UpsertGraph = edges.into();
-        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        upsert_graph(client, &graph, Graph::SocialGraph).await?;
         Ok(())
     }
 }

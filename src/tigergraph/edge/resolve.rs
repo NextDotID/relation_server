@@ -263,7 +263,7 @@ impl Edge<Contract, Identity, ResolveRecord> for ResolveRecord {
         let resolve_contract = self.wrapper(from, to, RESOLVE_CONTRACT);
         let edges = Edges(vec![resolve_contract]);
         let graph: UpsertGraph = edges.into();
-        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        upsert_graph(client, &graph, Graph::SocialGraph).await?;
         Ok(())
     }
 
@@ -342,7 +342,7 @@ impl Edge<Identity, Contract, ResolveRecord> for ResolveRecord {
         let resolve_contract = self.wrapper(from, to, REVERSE_RESOLVE_CONTRACT);
         let edges = Edges(vec![resolve_contract]);
         let graph: UpsertGraph = edges.into();
-        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        upsert_graph(client, &graph, Graph::SocialGraph).await?;
         Ok(())
     }
 
@@ -551,7 +551,7 @@ impl Resolve {
         let uri: http::Uri = format!(
             "{}/query/{}/domain2?name={}&system={}",
             C.tdb.host,
-            Graph::IdentityGraph.to_string(),
+            Graph::SocialGraph.to_string(),
             encoded_name,
             domain_system.to_string(),
         )
@@ -560,7 +560,7 @@ impl Resolve {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {

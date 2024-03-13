@@ -64,6 +64,7 @@ struct Content {
     avatars: Option<Vec<String>>,
 }
 
+#[allow(dead_code)]
 const QUERY_BY_HANDLE: &str = r#"
   query QueryByHandle($target: String!) {
     characters(where: {handle: {equals: $target}}) {
@@ -155,7 +156,8 @@ async fn fetch_by_wallet(target: &Target) -> Result<TargetProcessedList, Error> 
     )])
 }
 
-async fn fetch_by_crossbell_handle(target: &Target) -> Result<TargetProcessedList, Error> {
+#[allow(dead_code)]
+async fn fetch_by_crossbell_handle(_target: &Target) -> Result<TargetProcessedList, Error> {
     todo!()
 }
 

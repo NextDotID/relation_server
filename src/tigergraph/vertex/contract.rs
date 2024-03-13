@@ -229,7 +229,7 @@ impl Contract {
             vertices: vertices.into(),
             edges: None,
         };
-        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        upsert_graph(client, &graph, Graph::SocialGraph).await?;
         Ok(())
     }
 
@@ -376,7 +376,7 @@ async fn get_contracts_by_ids(
     let uri: http::Uri = format!(
         "{}/query/{}/contracts_by_ids",
         C.tdb.host,
-        Graph::IdentityGraph.to_string()
+        Graph::SocialGraph.to_string()
     )
     .parse()
     .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
@@ -385,7 +385,7 @@ async fn get_contracts_by_ids(
     let req = hyper::Request::builder()
         .method(Method::POST)
         .uri(uri)
-        .header("Authorization", Graph::IdentityGraph.token())
+        .header("Authorization", Graph::SocialGraph.token())
         .body(Body::from(json_params))
         .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
     let mut resp = client.request(req).await.map_err(|err| {

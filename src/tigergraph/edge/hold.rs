@@ -314,7 +314,7 @@ impl Edge<Identity, Identity, HoldRecord> for HoldRecord {
         let hold_identity = self.wrapper(from, to, HOLD_IDENTITY);
         let edges = Edges(vec![hold_identity]);
         let graph: UpsertGraph = edges.into();
-        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        upsert_graph(client, &graph, Graph::SocialGraph).await?;
         Ok(())
     }
 
@@ -393,7 +393,7 @@ impl Edge<Identity, Contract, HoldRecord> for HoldRecord {
         let hold_contract = self.wrapper(from, to, HOLD_CONTRACT);
         let edges = Edges(vec![hold_contract]);
         let graph: UpsertGraph = edges.into();
-        upsert_graph(client, &graph, Graph::IdentityGraph).await?;
+        upsert_graph(client, &graph, Graph::SocialGraph).await?;
         Ok(())
     }
 
@@ -443,7 +443,7 @@ impl Hold {
         to: &VertexRecord<T>,
         filters: Option<HashMap<String, String>>,
     ) -> Result<Option<Vec<HoldRecord>>, Error> {
-        // http://host/graph/IdentityGraph/edges/
+        // http://host/graph/SocialGraph/edges/
         // <source_vtype>/<source_vid>/<e_type>/<target_vtype>/<target_vid>?filter=a="b"
         let e_type = if to.v_type == CONTRACTS {
             HOLD_CONTRACT
@@ -463,7 +463,7 @@ impl Hold {
                 uri = format!(
                     "{}/graph/{}/edges/{}/{}/{}/{}/{}?filter={}",
                     C.tdb.host,
-                    Graph::IdentityGraph.to_string(),
+                    Graph::SocialGraph.to_string(),
                     from.v_type,
                     from.v_id,
                     e_type,
@@ -480,7 +480,7 @@ impl Hold {
                 uri = format!(
                     "{}/graph/{}/edges/{}/{}/{}/{}/{}",
                     C.tdb.host,
-                    Graph::IdentityGraph.to_string(),
+                    Graph::SocialGraph.to_string(),
                     from.v_type,
                     from.v_id,
                     e_type,
@@ -497,7 +497,7 @@ impl Hold {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {
@@ -542,7 +542,7 @@ impl Hold {
         let uri: http::Uri = format!(
             "{}/query/{}/hold_nft?id={}&chain={}&address={}",
             C.tdb.host,
-            Graph::IdentityGraph.to_string(),
+            Graph::SocialGraph.to_string(),
             encoded_id,
             chain.to_string(),
             address.to_string(),
@@ -552,7 +552,7 @@ impl Hold {
         let req = hyper::Request::builder()
             .method(Method::GET)
             .uri(uri)
-            .header("Authorization", Graph::IdentityGraph.token())
+            .header("Authorization", Graph::SocialGraph.token())
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
         let mut resp = client.request(req).await.map_err(|err| {

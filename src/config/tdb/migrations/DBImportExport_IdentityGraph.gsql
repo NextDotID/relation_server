@@ -45,12 +45,12 @@ CREATE OR REPLACE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH Ide
     SetAccum<VERTEX> @@pool;
     proof = SELECT v FROM seed-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:v-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed
            WHERE v.@visited == FALSE
-           ACCUM @@edges += pf, @@edges += pw
-           POST-ACCUM v.@visited = TRUE, @@vertices += v, @@pool += v;
+           ACCUM v.@visited = TRUE, @@edges += pf, @@edges += pw
+           POST-ACCUM @@vertices += v, @@pool += v;
     hold = SELECT v FROM seed-((Hold_Identity>|<Hold_Identity):e)-Identities:v
            WHERE v.@visited2 == FALSE
-           ACCUM @@edges += e
-           POST-ACCUM v.@visited2 = TRUE, @@vertices += v, @@pool += v;
+           ACCUM v.@visited2 = TRUE, @@edges += e
+           POST-ACCUM @@vertices += v, @@pool += v;
     seed (Identities) = {@@pool};
   END;
   PRINT @@vertices AS vertices, @@edges AS edges;
