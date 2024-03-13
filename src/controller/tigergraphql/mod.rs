@@ -1,6 +1,7 @@
 mod contract;
 mod hold;
 mod identity;
+mod identity_graph;
 mod proof;
 mod relation;
 mod resolve;

@@ -1,11 +1,13 @@
 pub mod contract;
 pub mod identity;
+pub mod identity_graph;
 use async_trait::async_trait;
 pub use contract::{Contract, ContractLoadFn, ContractRecord};
 pub use identity::{
     ExpireTimeLoadFn, Identity, IdentityLoadFn, IdentityRecord, IdentityWithSource,
     NeighborReverseLoadFn, NeighborsResponse, OwnerLoadFn,
 };
+pub use identity_graph::{IdentityConnection, IdentityGraph};
 use serde::{Deserialize, Serialize};
 use serde_json::value::Value;
 
