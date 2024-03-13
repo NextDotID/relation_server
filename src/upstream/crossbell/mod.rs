@@ -3,10 +3,10 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::create_identity_domain_resolve_record;
-use crate::tigergraph::create_identity_domain_reverse_resolve_record;
-use crate::tigergraph::create_identity_to_identity_hold_record;
 use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::upsert::create_identity_domain_resolve_record;
+use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
+use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::Identity;
 use crate::upstream::{
     DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
@@ -15,7 +15,6 @@ use crate::util::{make_http_client, naive_now, option_naive_datetime_from_utc_st
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use gql_client::Client as GQLClient;
-use hyper::{client::HttpConnector, Client};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 

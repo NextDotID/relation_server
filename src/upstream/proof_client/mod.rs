@@ -4,8 +4,8 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::create_identity_to_identity_proof_two_way_binding;
 use crate::tigergraph::edge::Proof;
+use crate::tigergraph::upsert::create_identity_to_identity_proof_two_way_binding;
 use crate::tigergraph::vertex::Identity;
 use crate::upstream::{DataSource, Fetcher, Platform, ProofLevel, Target, TargetProcessedList};
 use crate::util::make_http_client;

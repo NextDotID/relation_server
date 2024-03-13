@@ -2,11 +2,11 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::create_identity_domain_resolve_record;
-use crate::tigergraph::create_identity_domain_reverse_resolve_record;
-use crate::tigergraph::create_identity_to_identity_hold_record;
 use crate::tigergraph::edge::Hold;
 use crate::tigergraph::edge::Resolve;
+use crate::tigergraph::upsert::create_identity_domain_resolve_record;
+use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
+use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::Identity;
 // use crate::graph::{new_db_connection, vertex::Identity};
 use crate::upstream::{

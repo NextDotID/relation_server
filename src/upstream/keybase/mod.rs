@@ -3,8 +3,8 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::create_identity_to_identity_proof_two_way_binding;
 use crate::tigergraph::edge::Proof;
+use crate::tigergraph::upsert::create_identity_to_identity_proof_two_way_binding;
 use crate::tigergraph::vertex::{Identity, IdentityRecord};
 use crate::tigergraph::{BaseResponse, Graph};
 use crate::upstream::{DataSource, Fetcher, Platform, ProofLevel, TargetProcessedList};
@@ -107,7 +107,8 @@ impl Fetcher for Keybase {
     }
 
     fn can_fetch(target: &Target) -> bool {
-        target.in_platform_supported(vec![Platform::Twitter, Platform::Github, Platform::Reddit])
+        false
+        // target.in_platform_supported(vec![Platform::Twitter, Platform::Github, Platform::Reddit])
     }
 }
 

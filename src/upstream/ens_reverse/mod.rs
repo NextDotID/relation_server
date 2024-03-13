@@ -3,9 +3,9 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::create_identity_domain_reverse_resolve_record;
-use crate::tigergraph::create_identity_to_contract_reverse_resolve_record;
 use crate::tigergraph::edge::Resolve;
+use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
+use crate::tigergraph::upsert::create_identity_to_contract_reverse_resolve_record;
 use crate::tigergraph::vertex::{Contract, Identity};
 use crate::upstream::{Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem};
 use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};
@@ -40,7 +40,9 @@ impl Fetcher for ENSReverseLookup {
         // our cache should also be cleared.
         // Reach this by setting `display_name` into `Some("")`.
         let reverse_ens = record.reverse_record.clone().unwrap_or("".into());
-
+        if reverse_ens == "" {
+            return Ok(vec![]);
+        }
         info!("ENS Reverse record: {} => {}", wallet, reverse_ens);
 
         let mut identity = Identity::default();
@@ -88,9 +90,9 @@ impl Fetcher for ENSReverseLookup {
             updated_at: naive_now(),
         };
         // reverse resolve record
-        create_identity_to_contract_reverse_resolve_record(&cli, &identity, &contract, &resolve)
-            .await?;
         create_identity_domain_reverse_resolve_record(&cli, &identity, &ens_domain, &resolve)
+            .await?;
+        create_identity_to_contract_reverse_resolve_record(&cli, &identity, &contract, &resolve)
             .await?;
         Ok(vec![])
     }

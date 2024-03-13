@@ -1,10 +1,8 @@
 use crate::{
     config::C,
     error::Error,
-    tigergraph::{
-        create_identity_to_identity_hold_record, create_vertices, edge::Hold, vertex::Identity,
-        Vertices,
-    },
+    tigergraph::upsert::{create_identity_to_identity_hold_record, create_isolated_vertex},
+    tigergraph::{edge::Hold, vertex::Identity},
     upstream::{DataFetcher, DataSource, Platform, Target, TargetProcessedList},
     util::{
         make_client, make_http_client, naive_datetime_from_milliseconds,
@@ -55,8 +53,8 @@ async fn fetch_by_username(
             expired_at: None,
             reverse: Some(false),
         };
-        let vertices = Vertices(vec![u]);
-        create_vertices(&cli, vertices).await?;
+        // let vertices = Vertices(vec![u]);
+        create_isolated_vertex(&cli, &u).await?;
     }
     let furtures: Vec<_> = verifications
         .into_iter()

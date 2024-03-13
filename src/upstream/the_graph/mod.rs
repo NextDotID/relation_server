@@ -3,13 +3,13 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::create_contract_to_identity_resolve_record;
-use crate::tigergraph::create_identity_domain_resolve_record;
-use crate::tigergraph::create_identity_domain_reverse_resolve_record;
-use crate::tigergraph::create_identity_to_contract_hold_record;
-use crate::tigergraph::create_identity_to_contract_reverse_resolve_record;
-use crate::tigergraph::create_identity_to_identity_hold_record;
 use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::upsert::create_contract_to_identity_resolve_record;
+use crate::tigergraph::upsert::create_identity_domain_resolve_record;
+use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
+use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
+use crate::tigergraph::upsert::create_identity_to_contract_reverse_resolve_record;
+use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::{Contract, Identity};
 use crate::upstream::{
     ens_reverse::fetch_record, Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem,
@@ -305,42 +305,35 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                     let record = fetch_record(&address).await?;
                     if !record.reverse_record.is_none() {
                         let reverse_ens = record.reverse_record.clone().unwrap_or("".into());
-                        resolve_target.reverse = Some(true);
-                        resolve_target.display_name = Some(reverse_ens.clone());
-                        ens_domain.reverse = Some(true);
-
-                        let reverse = Resolve {
-                            uuid: Uuid::new_v4(),
-                            source: DataSource::TheGraph,
-                            system: DomainNameSystem::ENS,
-                            name: reverse_ens.clone(),
-                            fetcher: DataFetcher::RelationService,
-                            updated_at: naive_now(),
-                        };
-                        create_identity_to_contract_reverse_resolve_record(
-                            &cli,
-                            &resolve_target,
-                            &contract,
-                            &reverse,
-                        )
-                        .await?;
-                        create_identity_domain_reverse_resolve_record(
-                            &cli,
-                            &resolve_target,
-                            &ens_domain,
-                            &reverse,
-                        )
-                        .await?;
+                        if reverse_ens == domain.name {
+                            resolve_target.reverse = Some(true);
+                            resolve_target.display_name = Some(reverse_ens.clone());
+                            ens_domain.reverse = Some(true);
+                            let reverse = Resolve {
+                                uuid: Uuid::new_v4(),
+                                source: DataSource::TheGraph,
+                                system: DomainNameSystem::ENS,
+                                name: reverse_ens.clone(),
+                                fetcher: DataFetcher::RelationService,
+                                updated_at: naive_now(),
+                            };
+                            create_identity_domain_reverse_resolve_record(
+                                &cli,
+                                &resolve_target,
+                                &ens_domain,
+                                &reverse,
+                            )
+                            .await?;
+                            create_identity_to_contract_reverse_resolve_record(
+                                &cli,
+                                &resolve_target,
+                                &contract,
+                                &reverse,
+                            )
+                            .await?;
+                        }
                     }
-
                     // regular resolved address
-                    create_contract_to_identity_resolve_record(
-                        &cli,
-                        &contract,
-                        &resolve_target,
-                        &resolve,
-                    )
-                    .await?;
                     create_identity_domain_resolve_record(
                         &cli,
                         &ens_domain,
@@ -348,15 +341,18 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                         &resolve,
                     )
                     .await?;
-                    // if !record.reverse_record.is_none() {
-                    //     // reverse resolve record
-
-                    // }
+                    create_contract_to_identity_resolve_record(
+                        &cli,
+                        &contract,
+                        &resolve_target,
+                        &resolve,
+                    )
+                    .await?;
                 }
             }
             None => {
                 // Resolve record not existed anymore. Maybe deleted by user.
-                // TODO: Should find existed connection and delete it.
+                tracing::trace!("TheGraph Resolve address not existed.")
             }
         }
 
@@ -445,7 +441,7 @@ async fn create_or_update_own(
         expired_at: ens_expired_at,
     };
     // hold record
-    create_identity_to_contract_hold_record(client, &owner, &contract, &ownership).await?;
     create_identity_to_identity_hold_record(client, &owner, &ens_domain, &ownership).await?;
+    create_identity_to_contract_hold_record(client, &owner, &contract, &ownership).await?;
     Ok((contract, ens_domain))
 }

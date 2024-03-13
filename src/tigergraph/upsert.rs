@@ -23,6 +23,59 @@ use tracing::{error, trace};
 
 use super::vertex::VertexRecord;
 
+pub async fn delete_graph_inner_connection(
+    client: &Client<HttpConnector>,
+    v_id: String,
+) -> Result<(), Error> {
+    if v_id == "" {
+        return Err(Error::ParamError("v_id is required".to_string()));
+    }
+    let uri: http::Uri = format!(
+        "{}/query/{}/delete_graph_inner_connection?p={}&depth={}",
+        C.tdb.host,
+        Graph::SocialGraph.to_string(),
+        v_id.clone(),
+        10, // max depth
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+    let req = hyper::Request::builder()
+        .method(Method::GET)
+        .uri(uri)
+        .header("Authorization", Graph::IdentityGraph.token())
+        .body(Body::empty())
+        .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+    let mut resp = client.request(req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!(
+            "delete_graph_inner_connection | Fail to request: {:?}",
+            err.to_string()
+        ))
+    })?;
+
+    let _result = match parse_body::<BaseResponse>(&mut resp).await {
+        Ok(r) => {
+            if r.error {
+                let err_message = format!(
+                    "delete_graph_inner_connection error | Code: {:?}, Message: {:?}",
+                    r.code, r.message
+                );
+                error!(err_message);
+                return Err(Error::General(err_message, resp.status()));
+            }
+        }
+        Err(err) => {
+            let err_message = format!("delete_graph_inner_connection parse_body error: {:?}", err);
+            error!(err_message);
+            return Err(err);
+        }
+    };
+    // let json_raw = serde_json::to_string(&result).map_err(|err| Error::JSONParseError(err))?;
+    // println!("{}", json_raw);
+    trace!("TigerGraph delete_graph_inner_connection...");
+
+    Ok(())
+}
+
 ////////////////////////////////// Upsert Only Edge Start //////////////////////////////////
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -123,7 +176,7 @@ async fn upsert_edge(
     };
     // let json_raw = serde_json::to_string(&result).map_err(|err| Error::JSONParseError(err))?;
     // println!("{}", json_raw);
-    trace!("TigerGraph UpsertEdge ...");
+    // trace!("TigerGraph upsert_edge ...");
     Ok(())
 }
 
@@ -287,8 +340,8 @@ async fn upsert_hyper_vertex(
         Ok(result) => {
             if result.base.error {
                 let err_message = format!(
-                    "TigerGraph upsert_hyper_vertex error, Code: {:?}, Message: {:?}",
-                    result.base.code, result.base.message
+                    "TigerGraph upsert_hyper_vertex error, Code: {:?}, Message: {:?} Request: {:?}",
+                    result.base.code, result.base.message, payload,
                 );
                 error!(err_message);
                 return Err(Error::General(err_message, resp.status()));
@@ -302,7 +355,7 @@ async fn upsert_hyper_vertex(
         }
     };
     let json_raw = serde_json::to_string(&result).map_err(|err| Error::JSONParseError(err))?;
-    trace!("TigerGraph UpsertGraph {}", json_raw);
+    trace!("TigerGraph upsert_hyper_vertex {}", json_raw);
     Ok(())
 }
 
