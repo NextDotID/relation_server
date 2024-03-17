@@ -188,7 +188,6 @@ impl IdentityRecord {
         .await?
         {
             None => {
-                tracing::info!("Identity graph inner fetch_all");
                 let target = match self.platform {
                     Platform::ENS => Target::NFT(
                         Chain::Ethereum,
@@ -228,13 +227,7 @@ impl IdentityRecord {
 
     /// The expiry date for the domain, from either the registration, or the wrapped domain if PCC is burned
     async fn expired_at(&self) -> Option<i64> {
-        if !vec![
-            Platform::Dotbit,
-            Platform::Ethereum, // ENS
-            Platform::ENS,
-        ]
-        .contains(&self.platform)
-        {
+        if !vec![Platform::Dotbit, Platform::ENS].contains(&self.platform) {
             return None;
         }
         self.expired_at.map(|dt| dt.timestamp())
@@ -251,7 +244,6 @@ impl IdentityRecord {
             Platform::UnstoppableDomains,
             Platform::SpaceId,
             Platform::Crossbell,
-            Platform::Ethereum, // ENS
             Platform::ENS,
         ]
         .contains(&self.platform)

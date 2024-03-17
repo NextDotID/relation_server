@@ -306,7 +306,6 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                     if !record.reverse_record.is_none() {
                         let reverse_ens = record.reverse_record.clone().unwrap_or("".into());
                         if reverse_ens == domain.name {
-                            resolve_target.reverse = Some(true);
                             resolve_target.display_name = Some(reverse_ens.clone());
                             ens_domain.reverse = Some(true);
                             let reverse = Resolve {
@@ -405,7 +404,7 @@ async fn create_or_update_own(
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
-        expired_at: ens_expired_at,
+        expired_at: None,
         reverse: Some(false),
     };
     let ens_domain: Identity = Identity {

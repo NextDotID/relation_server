@@ -44,10 +44,8 @@ CREATE OR REPLACE QUERY upsert_isolated_vertex(STRING vertex_str) FOR GRAPH Soci
               v.profile_url = profile_url,
               v.avatar_url = avatar_url,
               v.updated_at = to_datetime(updated_at),
-              IF datetime_diff(to_datetime(expired_at), v.expired_at) > 0 THEN
-                v.expired_at = to_datetime(expired_at)
-              END,
-              v.reverse = v.reverse OR reverse,
+              v.expired_at = to_datetime(expired_at),
+              v.reverse = reverse,
               IF uid != "" THEN
                 v.uid = uid
               END;
@@ -154,10 +152,8 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
               v.profile_url = profile_url,
               v.avatar_url = avatar_url,
               v.updated_at = to_datetime(updated_at),
-              IF datetime_diff(to_datetime(expired_at), v.expired_at) > 0 THEN
-                v.expired_at = to_datetime(expired_at)
-              END,
-              v.reverse = v.reverse OR reverse,
+              v.expired_at = to_datetime(expired_at),
+              v.reverse = reverse,
               IF uid != "" THEN
                 v.uid = uid
               END;
@@ -237,10 +233,8 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
               v.profile_url = profile_url,
               v.avatar_url = avatar_url,
               v.updated_at = to_datetime(updated_at),
-              IF datetime_diff(to_datetime(expired_at), v.expired_at) > 0 THEN
-                v.expired_at = to_datetime(expired_at)
-              END,
-              v.reverse = v.reverse OR reverse,
+              v.expired_at = to_datetime(expired_at),
+              v.reverse = reverse,
               IF uid != "" THEN
                 v.uid = uid
               END;
@@ -419,9 +413,7 @@ CREATE OR REPLACE QUERY delete_graph_inner_connection(VERTEX<Identities> p, INT 
 
   // only delete connection
   v2c = SELECT v FROM vertex2delete-(:e)-Contracts:v ACCUM DELETE(e);
-  v2v = SELECT v FROM vertex2delete-(:e)-vertex2delete:v
-        WHERE e.source != "keybase"
-        ACCUM DELETE(e);
+  v2v = SELECT v FROM vertex2delete-(:e)-vertex2delete:v ACCUM DELETE(e);
 }
 
 CREATE OR REPLACE QUERY find_identity_graph(STRING p, INT reverse_flag=0) FOR GRAPH SocialGraph {

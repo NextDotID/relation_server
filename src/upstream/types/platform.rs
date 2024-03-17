@@ -62,15 +62,21 @@ pub enum Platform {
     #[graphql(name = "reddit")]
     Reddit,
 
+    /// Facebook
+    #[strum(serialize = "facebook")]
+    #[serde(rename = "facebook")]
+    #[graphql(name = "facebook")]
+    Facebook,
+
     /// Mastodon maintained by Sujitech
-    #[strum(serialize = "mstdn.jp")]
-    #[serde(rename = "mstdn.jp")]
+    #[strum(serialize = "mstdnjp")]
+    #[serde(rename = "mstdnjp")]
     #[graphql(name = "mstdnjp")]
     MstdnJP,
 
     /// Lobsters is a computing-focused community centered around link aggregation and discussion
-    #[strum(serialize = "lobste.rs")]
-    #[serde(rename = "lobste.rs")]
+    #[strum(serialize = "lobsters")]
+    #[serde(rename = "lobsters")]
     #[graphql(name = "lobsters")]
     Lobsters,
 

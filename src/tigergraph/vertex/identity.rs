@@ -243,7 +243,7 @@ impl Transfer for Identity {
                 "expired_at".to_string(),
                 Attribute {
                     value: json!(expired_at),
-                    op: Some(OpCode::Max),
+                    op: None,
                 },
             );
         } else {
@@ -251,7 +251,7 @@ impl Transfer for Identity {
                 "expired_at".to_string(),
                 Attribute {
                     value: json!("1970-01-01 00:00:00"), // default value
-                    op: Some(OpCode::Max),
+                    op: None,
                 },
             );
         }
@@ -260,7 +260,7 @@ impl Transfer for Identity {
                 "reverse".to_string(),
                 Attribute {
                     value: json!(reverse),
-                    op: Some(OpCode::Or),
+                    op: None,
                 },
             );
         } else {
@@ -268,7 +268,7 @@ impl Transfer for Identity {
                 "reverse".to_string(),
                 Attribute {
                     value: json!(false), // default value
-                    op: Some(OpCode::Or),
+                    op: None,
                 },
             );
         }
