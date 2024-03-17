@@ -21,10 +21,10 @@ mod types;
 use crate::{
     error::Error,
     upstream::{
-        aggregation::Aggregation, dotbit::DotBit, ens_reverse::ENSReverseLookup,
-        farcaster::Farcaster, keybase::Keybase, knn3::Knn3, lens::Lens, proof_client::ProofClient,
-        rss3::Rss3, space_id::SpaceId, sybil_list::SybilList, the_graph::TheGraph,
-        unstoppable::UnstoppableDomains,
+        aggregation::Aggregation, crossbell::Crossbell, dotbit::DotBit,
+        ens_reverse::ENSReverseLookup, farcaster::Farcaster, keybase::Keybase, knn3::Knn3,
+        lens::Lens, proof_client::ProofClient, rss3::Rss3, space_id::SpaceId,
+        sybil_list::SybilList, the_graph::TheGraph, unstoppable::UnstoppableDomains,
     },
     util::hashset_append,
 };
@@ -171,6 +171,7 @@ pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
         Farcaster::fetch(target),
         SpaceId::fetch(target),
         Lens::fetch(target),
+        Crossbell::fetch(target),
     ])
     .await
     .into_iter()

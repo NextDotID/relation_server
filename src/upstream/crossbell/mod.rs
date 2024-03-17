@@ -124,7 +124,9 @@ async fn fetch_by_wallet(target: &Target) -> Result<TargetProcessedList, Error> 
     let query = QUERY_BY_WALLET.to_string();
     let target_var = target.identity()?;
     let client = GQLClient::new(&C.upstream.crossbell_api.url);
-    let vars = QueryVars { target: target_var };
+    let vars = QueryVars {
+        target: target_var.to_lowercase(),
+    };
     let resp = client.query_with_vars::<QueryResponse, QueryVars>(&query, vars);
 
     let data: Option<QueryResponse> =
@@ -149,21 +151,60 @@ async fn fetch_by_wallet(target: &Target) -> Result<TargetProcessedList, Error> 
     let res = data.unwrap();
     debug!(?target, characters = res.characters.len(), "Records found.");
 
-    let _: Vec<_> = res.characters.into_iter().map(save_character).collect();
+    for p in res.characters.iter() {
+        save_character(p).await?;
+    }
     Ok(vec![Target::Identity(
         Platform::Ethereum,
         target.identity()?,
     )])
 }
 
-#[allow(dead_code)]
-async fn fetch_by_crossbell_handle(_target: &Target) -> Result<TargetProcessedList, Error> {
-    todo!()
+async fn fetch_by_crossbell_handle(target: &Target) -> Result<TargetProcessedList, Error> {
+    let query = QUERY_BY_HANDLE.to_string();
+    let target_var = target.identity()?;
+    let handle = target_var.trim_end_matches(".csb");
+    let client = GQLClient::new(&C.upstream.crossbell_api.url);
+    let vars = QueryVars {
+        target: handle.to_string(),
+    };
+    let resp = client.query_with_vars::<QueryResponse, QueryVars>(&query, vars);
+
+    let data: Option<QueryResponse> =
+        match tokio::time::timeout(std::time::Duration::from_secs(5), resp).await {
+            Ok(resp) => match resp {
+                Ok(resp) => resp,
+                Err(err) => {
+                    warn!(?target, ?err, "Crossbell: Failed to fetch");
+                    None
+                }
+            },
+            Err(_) => {
+                warn!(?target, "Crossbell timeout: no response in 5 seconds.");
+                None
+            }
+        };
+
+    if data.is_none() {
+        info!(?target, "Crossbell: No result");
+        return Ok(vec![]);
+    }
+    let res = data.unwrap();
+    debug!(?target, characters = res.characters.len(), "Records found.");
+
+    let owner = res.characters.first().unwrap().owner.clone().to_lowercase();
+
+    for p in res.characters.iter() {
+        save_character(p).await?;
+    }
+    Ok(vec![Target::Identity(Platform::Ethereum, owner)])
 }
 
-async fn save_character(profile: Character) -> Result<(), Error> {
+async fn save_character(profile: &Character) -> Result<(), Error> {
     let client = make_http_client();
     let handle = profile.handle.clone();
+    let csb = format!("{}.csb", handle);
+    tracing::info!("csb: {:?}", csb);
     let display_name = profile.metadata.clone().map_or(handle.clone(), |res| {
         res.content.map_or(handle.clone(), |content| {
             content.name.map_or(handle.clone(), |name| name)
@@ -179,7 +220,7 @@ async fn save_character(profile: Character) -> Result<(), Error> {
     let mut crossbell = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Crossbell,
-        identity: profile.handle.clone(),
+        identity: csb.clone(),
         uid: Some(profile.character_id.clone()),
         created_at: profile.created_at,
         display_name: Some(display_name),
@@ -220,7 +261,7 @@ async fn save_character(profile: Character) -> Result<(), Error> {
         uuid: Uuid::new_v4(),
         source: DataSource::Crossbell,
         system: DomainNameSystem::Crossbell,
-        name: profile.handle.clone(),
+        name: csb.clone(),
         fetcher: DataFetcher::RelationService,
         updated_at: naive_now(),
     };
@@ -230,7 +271,7 @@ async fn save_character(profile: Character) -> Result<(), Error> {
             uuid: Uuid::new_v4(),
             source: DataSource::Crossbell,
             system: DomainNameSystem::Crossbell,
-            name: profile.handle.clone(),
+            name: csb.clone(),
             fetcher: DataFetcher::RelationService,
             updated_at: naive_now(),
         };
