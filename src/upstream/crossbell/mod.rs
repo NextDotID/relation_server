@@ -204,7 +204,6 @@ async fn save_character(profile: &Character) -> Result<(), Error> {
     let client = make_http_client();
     let handle = profile.handle.clone();
     let csb = format!("{}.csb", handle);
-    tracing::info!("csb: {:?}", csb);
     let display_name = profile.metadata.clone().map_or(handle.clone(), |res| {
         res.content.map_or(handle.clone(), |content| {
             content.name.map_or(handle.clone(), |name| name)

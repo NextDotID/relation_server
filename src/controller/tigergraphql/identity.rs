@@ -188,7 +188,6 @@ impl IdentityRecord {
         .await?
         {
             None => {
-                tracing::info!("Identity graph inner fetch_all");
                 let target = match self.platform {
                     Platform::ENS => Target::NFT(
                         Chain::Ethereum,
