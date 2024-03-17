@@ -71,6 +71,7 @@ pub struct ConfigProofService {
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigKeybaseService {
     pub url: String,
+    pub stable_url: String,
 }
 
 #[derive(Clone, Deserialize, Default)]

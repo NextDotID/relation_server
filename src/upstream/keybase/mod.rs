@@ -8,9 +8,14 @@ use crate::tigergraph::upsert::create_identity_to_identity_proof_two_way_binding
 use crate::tigergraph::vertex::{Identity, IdentityRecord};
 use crate::tigergraph::{BaseResponse, Graph};
 use crate::upstream::{DataSource, Fetcher, Platform, ProofLevel, TargetProcessedList};
-use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};
+use crate::util::{
+    make_client, make_http_client, naive_now, option_naive_datetime_from_string,
+    option_naive_datetime_to_string, parse_body, request_with_timeout,
+};
 use async_trait::async_trait;
+use chrono::NaiveDateTime;
 use http::uri::InvalidUri;
+use http::StatusCode;
 use hyper::{Body, Method};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -88,6 +93,26 @@ struct KeybaseConnections {
     vertices: Vec<IdentityRecord>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct StableKeybaseResponse {
+    code: i32,
+    msg: String,
+    data: Option<Vec<KeybaseProof>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct KeybaseProof {
+    keybase_username: String,
+    platform: String,
+    username: String,
+    display_name: Option<String>,
+    proof_type: i32,
+    proof_state: i32,
+    #[serde(deserialize_with = "option_naive_datetime_from_string")]
+    #[serde(serialize_with = "option_naive_datetime_to_string")]
+    created_time: Option<NaiveDateTime>,
+}
+
 #[derive(Default)]
 pub struct Keybase {}
 
@@ -100,17 +125,28 @@ impl Fetcher for Keybase {
 
         match target {
             Target::Identity(platform, identity) => {
-                fake_fetch_connections_by_platform_identity(platform, identity).await
+                stable_fetch_connections_by_platform_identity(platform, identity).await
             }
             Target::NFT(_, _, _, _) => todo!(),
         }
     }
 
     fn can_fetch(target: &Target) -> bool {
-        target.in_platform_supported(vec![Platform::Twitter, Platform::Github, Platform::Reddit])
+        target.in_platform_supported(vec![
+            Platform::Twitter,
+            Platform::Github,
+            Platform::Reddit,
+            Platform::Keybase,
+            Platform::DNS,
+            Platform::MstdnJP,
+            Platform::Lobsters,
+            Platform::HackerNews,
+            Platform::Facebook,
+        ])
     }
 }
 
+#[allow(dead_code)]
 async fn fake_fetch_connections_by_platform_identity(
     platform: &Platform,
     identity: &str,
@@ -185,6 +221,126 @@ async fn fake_fetch_connections_by_platform_identity(
     });
 
     Ok(next_targets)
+}
+
+async fn stable_fetch_connections_by_platform_identity(
+    platform: &Platform,
+    identity: &str,
+) -> Result<TargetProcessedList, Error> {
+    let mut next_targets: TargetProcessedList = Vec::new();
+    let client = make_http_client();
+    let uri: http::Uri = format!(
+        "{}/proofs_summary?platform={}&username={}",
+        C.upstream.keybase_service.stable_url, platform, identity
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| {
+        Error::ParamError(format!(
+            "{}={} Uri format Error | {}",
+            platform, identity, _err
+        ))
+    })?;
+    let req = hyper::Request::builder()
+        .method(Method::GET)
+        .uri(uri)
+        .body(Body::empty())
+        .map_err(|_err| Error::ParamError(format!("ParamError Error | {}", _err)))?;
+
+    let mut resp = client.request(req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!(
+            "Keybase proofs_summary?platform={}&identity={} error | Fail to request: {:?}",
+            platform,
+            identity,
+            err.to_string()
+        ))
+    })?;
+
+    let proofs = match parse_body::<StableKeybaseResponse>(&mut resp).await {
+        Ok(r) => {
+            if r.code != 0 {
+                let err_message = format!(
+                    "Keybase proofs_summary error | Code: {:?}, Message: {:?}",
+                    r.code, r.msg
+                );
+                error!(err_message);
+                return Err(Error::General(
+                    err_message,
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                ));
+            }
+            let result = r.data.map_or(vec![], |res| res);
+            tracing::info!("proofs_summary result {:?}", result);
+            result
+        }
+        Err(err) => {
+            let err_message = format!("Keybase proofs_summary error parse_body error: {:?}", err);
+            error!(err_message);
+            return Err(Error::General(err_message, resp.status()));
+        }
+    };
+
+    let cli = make_http_client(); // db connection
+    for p in proofs.into_iter() {
+        let to_platform = Platform::from_str(&p.platform.as_str()).unwrap_or(Platform::Unknown);
+        if to_platform == Platform::Unknown {
+            continue;
+        }
+        let from: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Keybase,
+            identity: p.keybase_username.clone(),
+            uid: None,
+            created_at: None,
+            display_name: Some(p.keybase_username.clone()),
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
+        };
+
+        let to: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: to_platform.clone(),
+            identity: p.username.clone(),
+            uid: None,
+            created_at: None,
+            display_name: p.display_name,
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
+        };
+
+        let pf: Proof = Proof {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Keybase,
+            level: ProofLevel::VeryConfident,
+            record_id: None,
+            created_at: p.created_time.clone(),
+            updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
+        };
+
+        let pb: Proof = Proof {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Keybase,
+            level: ProofLevel::VeryConfident,
+            record_id: None,
+            created_at: p.created_time.clone(),
+            updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
+        };
+
+        create_identity_to_identity_proof_two_way_binding(&cli, &from, &to, &pf, &pb).await?;
+
+        next_targets.push(Target::Identity(to_platform, p.username.clone()));
+    }
+
+    Ok(vec![])
 }
 
 #[allow(dead_code)]
