@@ -244,6 +244,7 @@ impl IdentityRecord {
             Platform::UnstoppableDomains,
             Platform::SpaceId,
             Platform::Crossbell,
+            Platform::Ethereum,
             Platform::ENS,
         ]
         .contains(&self.platform)
