@@ -307,6 +307,7 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                         let reverse_ens = record.reverse_record.clone().unwrap_or("".into());
                         if reverse_ens == domain.name {
                             resolve_target.display_name = Some(reverse_ens.clone());
+                            resolve_target.reverse = Some(true);
                             ens_domain.reverse = Some(true);
                             let reverse = Resolve {
                                 uuid: Uuid::new_v4(),

@@ -1,4 +1,4 @@
-# CREATE GRAPH SocialGraph (Identities, Proof_Forward, Proof_Backward, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Resolve_Contract, Reverse_Resolve_Contract, IdentitiesGraph, PartOfIdentitiesGraph, Follow)
+CREATE GRAPH SocialGraph (Identities, Proof_Forward, Proof_Backward, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Resolve_Contract, Reverse_Resolve_Contract, IdentitiesGraph, PartOfIdentitiesGraph, Follow)
 
 USE GRAPH SocialGraph
 

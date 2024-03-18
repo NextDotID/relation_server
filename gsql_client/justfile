@@ -28,8 +28,8 @@ prepare:
 
 # Do database migration.
 migrate:
-	# {{gsql}} $DB_MIGRATIONS/global.gsql
-	# {{gsql}} $DB_MIGRATIONS/SCHEMA_CHANGE.gsql
+	{{gsql}} $DB_MIGRATIONS/global.gsql
+	{{gsql}} $DB_MIGRATIONS/SCHEMA_CHANGE.gsql
 	{{gsql}} $DB_MIGRATIONS/LoadingJob_SocialGraph.gsql
 
 # Create token for GraphName

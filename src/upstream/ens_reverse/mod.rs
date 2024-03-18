@@ -6,6 +6,7 @@ use crate::error::Error;
 use crate::tigergraph::edge::Resolve;
 use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_contract_reverse_resolve_record;
+use crate::tigergraph::upsert::create_isolated_vertex;
 use crate::tigergraph::vertex::{Contract, Identity};
 use crate::upstream::{Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem};
 use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};
@@ -45,19 +46,20 @@ impl Fetcher for ENSReverseLookup {
         }
         info!("ENS Reverse record: {} => {}", wallet, reverse_ens);
 
-        let mut identity = Identity::default();
-        identity.uuid = Some(Uuid::new_v4());
-        identity.platform = Platform::Ethereum;
-        identity.identity = wallet.clone();
-        identity.display_name = Some(reverse_ens.clone());
+        let mut eth_identity = Identity::default();
+        eth_identity.uuid = Some(Uuid::new_v4());
+        eth_identity.platform = Platform::Ethereum;
+        eth_identity.identity = wallet.clone();
+        eth_identity.display_name = Some(reverse_ens.clone());
         let cli = make_http_client();
-        identity.create_or_update(&cli).await?;
+        create_isolated_vertex(&cli, &eth_identity).await?;
 
         // If reverse lookup record reverse_record is None
         // Do not save the reverse_resolve_record
         if record.reverse_record.is_none() {
             return Ok(vec![]);
         }
+        eth_identity.reverse = Some(true); // ethereum and primary ens remain same value
         let ens_domain = Identity {
             uuid: Some(Uuid::new_v4()),
             platform: Platform::ENS,
@@ -90,10 +92,15 @@ impl Fetcher for ENSReverseLookup {
             updated_at: naive_now(),
         };
         // reverse resolve record
-        create_identity_domain_reverse_resolve_record(&cli, &identity, &ens_domain, &resolve)
+        create_identity_domain_reverse_resolve_record(&cli, &eth_identity, &ens_domain, &resolve)
             .await?;
-        create_identity_to_contract_reverse_resolve_record(&cli, &identity, &contract, &resolve)
-            .await?;
+        create_identity_to_contract_reverse_resolve_record(
+            &cli,
+            &eth_identity,
+            &contract,
+            &resolve,
+        )
+        .await?;
         Ok(vec![])
     }
 
