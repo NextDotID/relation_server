@@ -45,7 +45,7 @@ CREATE OR REPLACE QUERY upsert_isolated_vertex(STRING vertex_str) FOR GRAPH Soci
               v.avatar_url = avatar_url,
               v.updated_at = to_datetime(updated_at),
               v.expired_at = to_datetime(expired_at),
-              v.reverse = reverse,
+              v.reverse = v.reverse OR reverse,
               IF uid != "" THEN
                 v.uid = uid
               END;
@@ -153,7 +153,7 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
               v.avatar_url = avatar_url,
               v.updated_at = to_datetime(updated_at),
               v.expired_at = to_datetime(expired_at),
-              v.reverse = reverse,
+              v.reverse = v.reverse OR reverse,
               IF uid != "" THEN
                 v.uid = uid
               END;
@@ -234,7 +234,7 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
               v.avatar_url = avatar_url,
               v.updated_at = to_datetime(updated_at),
               v.expired_at = to_datetime(expired_at),
-              v.reverse = reverse,
+              v.reverse = v.reverse OR reverse,
               IF uid != "" THEN
                 v.uid = uid
               END;

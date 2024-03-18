@@ -260,7 +260,7 @@ impl Transfer for Identity {
                 "reverse".to_string(),
                 Attribute {
                     value: json!(reverse),
-                    op: None,
+                    op: Some(OpCode::Or),
                 },
             );
         } else {
@@ -268,7 +268,7 @@ impl Transfer for Identity {
                 "reverse".to_string(),
                 Attribute {
                     value: json!(false), // default value
-                    op: None,
+                    op: Some(OpCode::Or),
                 },
             );
         }
