@@ -594,20 +594,21 @@ impl Identity {
         identity: &str,
     ) -> Result<Option<IdentityRecord>, Error> {
         // Builtins: http://server:9000/graph/{GraphName}/vertices/{VertexName}/filter=field1="a",field2="b"
+        let encoded_identity = urlencoding::encode(identity);
         let uri: http::Uri = format!(
             "{}/graph/{}/vertices/{}?filter=platform=%22{}%22,identity=%22{}%22",
             C.tdb.host,
             Graph::SocialGraph.to_string(),
             VERTEX_NAME,
             platform.to_string(),
-            identity.to_string(),
+            encoded_identity,
         )
         .parse()
         .map_err(|_err: InvalidUri| {
             Error::ParamError(format!(
                 "QUERY filter=platform=%22{}%22,identity=%22{}%22 Uri format Error | {}",
                 platform.to_string(),
-                identity.to_string(),
+                encoded_identity,
                 _err
             ))
         })?;
@@ -622,7 +623,7 @@ impl Identity {
             Error::ManualHttpClientError(format!(
                 "query filter=platform=%22{}%22,identity=%22{}%22 error | Fail to request: {:?}",
                 platform.to_string(),
-                identity.to_string(),
+                encoded_identity,
                 err.to_string()
             ))
         })?;

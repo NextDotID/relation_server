@@ -27,7 +27,7 @@ async fn test_fetch_all_ens() -> Result<(), Error> {
             Chain::Ethereum,
             ContractCategory::ENS,
             ContractCategory::ENS.default_contract_address().unwrap(),
-            "yisiliu.eth".to_string(),
+            "аррӏе.eth".to_string(),
         )],
         Some(3),
     )
