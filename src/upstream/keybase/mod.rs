@@ -19,7 +19,7 @@ use http::StatusCode;
 use hyper::{Body, Method};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use tracing::error;
+use tracing::{debug, error};
 use uuid::Uuid;
 
 use super::{DataFetcher, Target};
@@ -270,6 +270,7 @@ async fn stable_fetch_connections_by_platform_identity(
             }
             let result = r.data.map_or(vec![], |res| res);
             tracing::info!("proofs_summary result {:?}", result);
+            debug!("Keybase proofs_summary = {} Records found.", result.len(),);
             result
         }
         Err(err) => {
