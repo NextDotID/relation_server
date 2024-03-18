@@ -54,6 +54,11 @@ impl HoldRecord {
         self.updated_at.timestamp()
     }
 
+    /// When the transaction happened. May not be provided by upstream.
+    async fn expired_at(&self) -> Option<i64> {
+        self.expired_at.map(|dt| dt.timestamp())
+    }
+
     /// NFT Category. See `availableNftCategories` for all values available.
     async fn category(&self, ctx: &Context<'_>) -> Result<ContractCategory> {
         let loader: &Loader<String, Option<ContractRecord>, ContractLoadFn> =
