@@ -41,11 +41,6 @@ impl Fetcher for ENSReverseLookup {
         // our cache should also be cleared.
         // Reach this by setting `display_name` into `Some("")`.
         let reverse_ens = record.reverse_record.clone().unwrap_or("".into());
-        if reverse_ens == "" {
-            return Ok(vec![]);
-        }
-        info!("ENS Reverse record: {} => {}", wallet, reverse_ens);
-
         let mut eth_identity = Identity::default();
         eth_identity.uuid = Some(Uuid::new_v4());
         eth_identity.platform = Platform::Ethereum;
@@ -53,12 +48,11 @@ impl Fetcher for ENSReverseLookup {
         eth_identity.display_name = Some(reverse_ens.clone());
         let cli = make_http_client();
         create_isolated_vertex(&cli, &eth_identity).await?;
-
-        // If reverse lookup record reverse_record is None
-        // Do not save the reverse_resolve_record
-        if record.reverse_record.is_none() {
+        if reverse_ens == "" {
             return Ok(vec![]);
         }
+        info!("ENS Reverse record: {} => {}", wallet, reverse_ens);
+
         eth_identity.reverse = Some(true); // ethereum and primary ens remain same value
         let ens_domain = Identity {
             uuid: Some(Uuid::new_v4()),

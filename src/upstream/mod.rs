@@ -158,20 +158,20 @@ pub async fn fetch_many(targets: Vec<Target>, round: Option<u16>) -> Result<Vec<
 /// Returns amount of identities just fetched for next iter.
 pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
     let mut up_next: TargetProcessedList = join_all(vec![
+        Farcaster::fetch(target),
         Aggregation::fetch(target),
         SybilList::fetch(target),
         Keybase::fetch(target),
         ProofClient::fetch(target),
         Rss3::fetch(target),
         Knn3::fetch(target),
-        TheGraph::fetch(target),
         ENSReverseLookup::fetch(target),
         DotBit::fetch(target),
         UnstoppableDomains::fetch(target),
-        Farcaster::fetch(target),
         SpaceId::fetch(target),
         Lens::fetch(target),
         Crossbell::fetch(target),
+        TheGraph::fetch(target),
     ])
     .await
     .into_iter()
