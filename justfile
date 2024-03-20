@@ -34,4 +34,4 @@ clean:
 # Get latest schema file.
 # npm install -g get-graphql-schema
 get-schema:
-    get-graphql-schema https://api.lens.dev/playground > src/upstream/lens/schema.graphql
+    get-graphql-schema https://api-v2.lens.dev/playground > src/upstream/lensv2/schema.graphql

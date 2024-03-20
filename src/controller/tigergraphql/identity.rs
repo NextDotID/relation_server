@@ -364,6 +364,7 @@ impl IdentityQuery {
             }
             Some(found) => {
                 if found.is_outdated() {
+                    // if true {
                     event!(
                         Level::DEBUG,
                         ?platform,

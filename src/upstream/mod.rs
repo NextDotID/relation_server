@@ -6,7 +6,7 @@ mod ens_reverse;
 mod farcaster;
 mod keybase;
 mod knn3;
-mod lens;
+mod lensv2;
 mod proof_client;
 mod rss3;
 mod space_id;
@@ -23,8 +23,8 @@ use crate::{
     upstream::{
         aggregation::Aggregation, crossbell::Crossbell, dotbit::DotBit,
         ens_reverse::ENSReverseLookup, farcaster::Farcaster, keybase::Keybase, knn3::Knn3,
-        lens::Lens, proof_client::ProofClient, rss3::Rss3, space_id::SpaceId,
-        sybil_list::SybilList, the_graph::TheGraph, unstoppable::UnstoppableDomains,
+        proof_client::ProofClient, rss3::Rss3, space_id::SpaceId, sybil_list::SybilList,
+        the_graph::TheGraph, unstoppable::UnstoppableDomains,
     },
     util::hashset_append,
 };
@@ -169,7 +169,6 @@ pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
         DotBit::fetch(target),
         UnstoppableDomains::fetch(target),
         SpaceId::fetch(target),
-        Lens::fetch(target),
         Crossbell::fetch(target),
         TheGraph::fetch(target),
     ])
