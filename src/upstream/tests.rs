@@ -12,7 +12,10 @@ async fn test_fetch_one_result() -> Result<(), Error> {
 #[tokio::test]
 async fn test_fetch_all() -> Result<(), Error> {
     fetch_all(
-        vec![Target::Identity(Platform::Lens, "sujiyan.lens".into())],
+        vec![Target::Identity(
+            Platform::Ethereum,
+            "0x3ddfa8ec3052539b6c9549f12cea2c295cff5296".into(),
+        )],
         Some(3),
     )
     .await?;
@@ -22,12 +25,13 @@ async fn test_fetch_all() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_fetch_all_ens() -> Result<(), Error> {
+    // аррӏе.eth
     fetch_all(
         vec![Target::NFT(
             Chain::Ethereum,
             ContractCategory::ENS,
             ContractCategory::ENS.default_contract_address().unwrap(),
-            "аррӏе.eth".to_string(),
+            "brantly.eth".to_string(),
         )],
         Some(3),
     )
