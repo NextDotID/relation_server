@@ -535,7 +535,7 @@ impl From<ResolveReverse> for ResolveEdge {
 
 impl Resolve {
     pub fn is_outdated(&self) -> bool {
-        let outdated_in = Duration::days(1);
+        let outdated_in = Duration::try_days(1).unwrap();
         self.updated_at
             .checked_add_signed(outdated_in)
             .unwrap()

@@ -32,7 +32,7 @@ url = "2.2"
 lambda_runtime = "0.8.0"
 lambda_http = "0.8.0"
 hyper = { version = "0.14.17", features = ["full"] }
-hyper-tls = "0.5"
+hyper-tls = "*"
 warp = { version = "0.3" }
 typetag = "0.2"
 

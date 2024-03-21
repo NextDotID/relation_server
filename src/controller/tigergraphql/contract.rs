@@ -32,6 +32,6 @@ impl ContractRecord {
 
     /// When this connection is fetched by us RelationService.
     async fn updated_at(&self) -> i64 {
-        self.updated_at.timestamp()
+        self.updated_at.and_utc().timestamp()
     }
 }

@@ -14,7 +14,7 @@ const DEFAULT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Returns current UNIX timestamp (unit: second).
 pub fn timestamp() -> i64 {
-    naive_now().timestamp()
+    naive_now().and_utc().timestamp()
 }
 
 /// Work as `NaiveDateTime::now()`
@@ -35,15 +35,27 @@ pub fn parse_timestamp(timestamp: &str) -> Result<NaiveDateTime, Error> {
 
 /// Convert timestamp into NaiveDateTime struct.
 pub fn timestamp_to_naive(ts: i64, ms: u32) -> Option<NaiveDateTime> {
-    NaiveDateTime::from_timestamp_opt(ts, ms * 1_000_000)
+    match DateTime::from_timestamp(ts, ms * 1_000_000) {
+        None => None,
+        Some(dt_utc) => Some(dt_utc.naive_utc()),
+    }
 }
 
 /// Convert timestamp into NaiveDateTime struct.
 pub fn option_timestamp_to_naive(opt_ts: Option<i64>, ms: u32) -> Option<NaiveDateTime> {
     match opt_ts {
-        Some(opt_ts) => NaiveDateTime::from_timestamp_opt(opt_ts, ms * 1_000_000),
         None => None,
+        Some(opt_ts) => match DateTime::from_timestamp(opt_ts, ms * 1_000_000) {
+            None => None,
+            Some(dt_utc) => Some(dt_utc.naive_utc()),
+        },
     }
+}
+
+pub fn utc_to_naive(s: String) -> Result<NaiveDateTime, Error> {
+    // The format "%Y-%m-%dT%H:%M:%S%.3fZ"
+    let dt = DateTime::parse_from_rfc3339(&s).map_err(|err| Error::DatetimeParseError(err))?;
+    Ok(dt.naive_utc())
 }
 
 pub fn make_client() -> Client<HttpsConnector<HttpConnector>> {
@@ -136,7 +148,7 @@ pub fn option_naive_datetime_from_utc_string<'de, D>(
 where
     D: Deserializer<'de>,
 {
-    let opt_s = Option::<String>::deserialize(deserializer)?;
+    let opt_s: Option<String> = Option::<String>::deserialize(deserializer)?;
 
     match opt_s {
         Some(s) => {
@@ -185,11 +197,18 @@ where
     D: Deserializer<'de>,
 {
     let timestamp_ms: i64 = Deserialize::deserialize(deserializer)?;
-    NaiveDateTime::from_timestamp_opt(
+    // NaiveDateTime::from_timestamp_opt(
+    //     timestamp_ms / 1000,                      // Convert milliseconds to seconds
+    //     (timestamp_ms % 1000) as u32 * 1_000_000, // Convert remainder to nanoseconds
+    // )
+    // .ok_or_else(|| serde::de::Error::custom("Invalid timestamp"))
+    match DateTime::from_timestamp(
         timestamp_ms / 1000,                      // Convert milliseconds to seconds
         (timestamp_ms % 1000) as u32 * 1_000_000, // Convert remainder to nanoseconds
-    )
-    .ok_or_else(|| serde::de::Error::custom("Invalid timestamp"))
+    ) {
+        None => Err(serde::de::Error::custom("Invalid timestamp")),
+        Some(dt_utc) => Ok(dt_utc.naive_utc()),
+    }
 }
 
 pub fn naive_datetime_to_milliseconds<S>(
@@ -199,6 +218,7 @@ pub fn naive_datetime_to_milliseconds<S>(
 where
     S: Serializer,
 {
-    let timestamp_ms = dt.timestamp() * 1000 + (dt.timestamp_subsec_millis() as i64);
+    let timestamp_ms =
+        dt.and_utc().timestamp() * 1000 + (dt.and_utc().timestamp_subsec_millis() as i64);
     Serialize::serialize(&timestamp_ms, serializer)
 }

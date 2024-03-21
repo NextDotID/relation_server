@@ -518,7 +518,7 @@ impl Identity {
 
     /// Judge if this record is outdated and should be refetched.
     pub fn is_outdated(&self) -> bool {
-        let outdated_in = Duration::hours(1);
+        let outdated_in = Duration::try_hours(1).unwrap();
         self.updated_at
             .checked_add_signed(outdated_in)
             .unwrap()
