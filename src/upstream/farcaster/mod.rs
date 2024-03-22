@@ -1,5 +1,5 @@
 mod tests;
-mod warpcast;
+pub mod warpcast;
 use crate::config::C;
 use crate::error::Error;
 use crate::tigergraph::edge::Hold;

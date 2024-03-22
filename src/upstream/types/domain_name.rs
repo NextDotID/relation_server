@@ -65,10 +65,12 @@ pub enum DomainNameSystem {
 impl From<DomainNameSystem> for Platform {
     fn from(domain: DomainNameSystem) -> Self {
         match domain {
+            DomainNameSystem::ENS => Platform::ENS,
             DomainNameSystem::DotBit => Platform::Dotbit,
             DomainNameSystem::UnstoppableDomains => Platform::UnstoppableDomains,
             DomainNameSystem::Lens => Platform::Lens,
             DomainNameSystem::SpaceId => Platform::SpaceId,
+            DomainNameSystem::Crossbell => Platform::Crossbell,
             _ => Platform::Unknown,
         }
     }
