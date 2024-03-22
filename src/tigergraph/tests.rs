@@ -253,11 +253,27 @@ mod tests {
         }
         Ok(())
     }
+    #[tokio::test]
+    async fn test_find_expand_identity() -> Result<(), Error> {
+        let client = make_http_client();
+        if let Some(found) =
+            IdentityGraph::find_expand_identity(&client, &Platform::ENS, "niconico.eth").await?
+        {
+            // println!("found = {:?}", found);
+            let json_raw =
+                serde_json::to_string(&found).map_err(|err| Error::JSONParseError(err))?;
+            println!("find_expand_identity: {}", json_raw);
+        } else {
+            // return Err(Error::NoResult);
+            println!("find_expand_identity not exists.");
+        }
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_identity_graph() -> Result<(), Error> {
         let client = make_http_client();
-        if let Some(found) = IdentityGraph::find_by_platform_identity(
+        if let Some(found) = IdentityGraph::find_graph_by_platform_identity(
             &client,
             &Platform::ENS,
             "yisiliu.eth",

@@ -33,12 +33,12 @@ impl ProofRecord {
 
     /// When this connection is recorded in upstream platform (if platform gives such data).
     async fn created_at(&self) -> Option<i64> {
-        self.created_at.map(|ca| ca.timestamp())
+        self.created_at.map(|ca| ca.and_utc().timestamp())
     }
 
     /// When this connection is fetched by us RelationService.
     async fn updated_at(&self) -> i64 {
-        self.updated_at.timestamp()
+        self.updated_at.and_utc().timestamp()
     }
 
     /// Who collects this data.

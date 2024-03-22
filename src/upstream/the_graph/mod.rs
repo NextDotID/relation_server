@@ -5,6 +5,7 @@ use crate::config::C;
 use crate::error::Error;
 use crate::tigergraph::edge::{Hold, Resolve};
 use crate::tigergraph::upsert::create_contract_to_identity_resolve_record;
+use crate::tigergraph::upsert::create_ens_identity_ownership;
 use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
 use crate::tigergraph::vertex::{Contract, Identity};
@@ -325,10 +326,6 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
             expired_at: ens_expired_at,
         };
 
-        // create owner-hold-ens(contract)
-        // ENS ownership does not require `Hold_Identity` connection
-        create_identity_to_contract_hold_record(&cli, &owner, &contract, &ownership).await?;
-
         let resolved_address = domain.resolved_address.map(|r| r.id);
         match resolved_address.clone() {
             None => {
@@ -382,6 +379,11 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                 }
             }
         }
+
+        // create owner-hold-ens(contract)
+        // ENS ownership create `Hold_Identity` connection but only EvmAddress connected to HyperVertex
+        create_ens_identity_ownership(&cli, &owner, &ens_domain, &ownership).await?;
+        create_identity_to_contract_hold_record(&cli, &owner, &contract, &ownership).await?;
 
         // Append up_next
         match target {

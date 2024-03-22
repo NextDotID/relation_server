@@ -215,7 +215,7 @@ impl Contract {
     /// Outdated in 1 hour
     #[allow(dead_code)]
     fn is_outdated(&self) -> bool {
-        let outdated_in = Duration::hours(1);
+        let outdated_in = Duration::try_hours(1).unwrap();
         self.updated_at
             .checked_add_signed(outdated_in)
             .unwrap()

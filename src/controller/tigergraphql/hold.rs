@@ -46,17 +46,17 @@ impl HoldRecord {
 
     /// When the transaction happened. May not be provided by upstream.
     async fn created_at(&self) -> Option<i64> {
-        self.created_at.map(|dt| dt.timestamp())
+        self.created_at.map(|dt| dt.and_utc().timestamp())
     }
 
     /// When this HODL™ relation is fetched by us RelationService.
     async fn updated_at(&self) -> i64 {
-        self.updated_at.timestamp()
+        self.updated_at.and_utc().timestamp()
     }
 
     /// When the transaction happened. May not be provided by upstream.
     async fn expired_at(&self) -> Option<i64> {
-        self.expired_at.map(|dt| dt.timestamp())
+        self.expired_at.map(|dt| dt.and_utc().timestamp())
     }
 
     /// NFT Category. See `availableNftCategories` for all values available.

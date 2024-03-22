@@ -79,6 +79,92 @@ pub async fn delete_graph_inner_connection(
 ////////////////////////////////// Upsert Only Edge Start //////////////////////////////////
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UpsertVertices {
+    pub vertices: HashMap<String, HashMap<String, HashMap<String, Attribute>>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct UpsertVerticesResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<UpsertVerticesResult>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct UpsertVerticesResult {
+    accepted_vertices: i32,
+}
+
+// Define `Vertices` struct that wraps a `Vec<T>`.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Vertices<T>(pub Vec<T>);
+
+// Implement the `From` trait for converting `Vertices<T>` into vertices map.
+impl<T: Clone + Vertex> From<Vertices<T>>
+    for HashMap<String, HashMap<String, HashMap<String, Attribute>>>
+where
+    T: Transfer + Vertex,
+{
+    /// Convert each element in the `Vec<T>` into a key-value pair and insert it into the map.
+    fn from(vertices: Vertices<T>) -> Self {
+        let mut vertices_map: HashMap<String, HashMap<String, HashMap<String, Attribute>>> =
+            HashMap::new();
+        for (_, value) in vertices.0.into_iter().enumerate() {
+            let outer_map_key = value.vertex_type().clone();
+            let inner_map_key = value.primary_key().clone();
+
+            let inner_map = vertices_map.entry(outer_map_key).or_insert(HashMap::new());
+            inner_map.insert(inner_map_key, value.to_attributes_map()); // Insert inner data
+        }
+        vertices_map
+    }
+}
+
+pub async fn upsert_vertices(
+    client: &Client<HttpConnector>,
+    payload: &UpsertVertices,
+    graph_name: Graph,
+) -> Result<(), Error> {
+    let uri: http::Uri = format!(
+        "{}/graph/{}?vertex_must_exist=true",
+        C.tdb.host,
+        graph_name.to_string()
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+
+    let json_params = serde_json::to_string(&payload).map_err(|err| Error::JSONParseError(err))?;
+    let req = hyper::Request::builder()
+        .method(Method::POST)
+        .uri(uri)
+        .header("Authorization", graph_name.token())
+        .body(Body::from(json_params))
+        .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+    let mut resp = client.request(req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!(
+            "TigerGraph | Fail to request upsert vertices: {:?}",
+            err.to_string()
+        ))
+    })?;
+    let _result = match parse_body::<UpsertVerticesResponse>(&mut resp).await {
+        Ok(result) => result,
+        Err(_) => {
+            let err_resp: UpsertVerticesResponse = parse_body(&mut resp).await?;
+            let err_message = format!(
+                "TigerGraph upsert vertices error, Code: {:?}, Message: {:?}",
+                err_resp.base.code, err_resp.base.message
+            );
+            error!(err_message);
+            return Err(Error::General(err_message, resp.status()));
+        }
+    };
+    // let json_raw = serde_json::to_string(&result).map_err(|err| Error::JSONParseError(err))?;
+    // println!("{}", json_raw);
+    trace!("TigerGraph UpsertVertices ...");
+    Ok(())
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UpsertEdge {
     edges: HashMap<
         String,
@@ -210,8 +296,12 @@ where
         let from_str =
             serde_json::to_string(&from_record).map_err(|err| Error::JSONParseError(err))?;
         let to_str = serde_json::to_string(&to_record).map_err(|err| Error::JSONParseError(err))?;
-
-        Ok(UpsertHyperVertex { from_str, to_str })
+        let updated_nanosecond = chrono::Utc::now().naive_utc().and_utc().timestamp_micros();
+        Ok(UpsertHyperVertex {
+            from_str,
+            to_str,
+            updated_nanosecond,
+        })
     }
 }
 
@@ -233,20 +323,25 @@ where
         );
         let vertex_str =
             serde_json::to_string(&vertex_record).map_err(|err| Error::JSONParseError(err))?;
-
-        Ok(UpsertIsolatedVertex { vertex_str })
+        let updated_nanosecond = chrono::Utc::now().naive_utc().and_utc().timestamp_micros();
+        Ok(UpsertIsolatedVertex {
+            vertex_str,
+            updated_nanosecond,
+        })
     }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UpsertHyperVertex {
-    pub from_str: String, // STRING TO GSQL JSONObject
-    pub to_str: String,   // STRING TO GSQL JSONObject
+    pub from_str: String,        // STRING TO GSQL JSONObject
+    pub to_str: String,          // STRING TO GSQL JSONObject
+    pub updated_nanosecond: i64, // nanosecond
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UpsertIsolatedVertex {
-    pub vertex_str: String, // STRING TO GSQL JSONObject
+    pub vertex_str: String,      // STRING TO GSQL JSONObject
+    pub updated_nanosecond: i64, // nanosecond
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -373,6 +468,18 @@ pub async fn create_isolated_vertex(
     Ok(())
 }
 
+pub async fn create_vertex(client: &Client<HttpConnector>, v: &Identity) -> Result<(), Error> {
+    let vertices = Vertices(vec![v.to_owned()]);
+    let vertices_map: HashMap<String, HashMap<String, HashMap<String, Attribute>>> =
+        vertices.into();
+    let upsert_vertices_map = UpsertVertices {
+        vertices: vertices_map,
+    };
+    let upsert_vertices_req: UpsertVertices = upsert_vertices_map.into();
+    upsert_vertices(client, &upsert_vertices_req, Graph::SocialGraph).await?;
+    Ok(())
+}
+
 pub async fn create_identity_to_identity_proof_two_way_binding(
     client: &Client<HttpConnector>,
     from: &Identity,
@@ -414,6 +521,36 @@ pub async fn create_identity_to_identity_hold_record(
     let upsert_edge_req: UpsertEdge = edges.into();
 
     upsert_hyper_vertex(&client, &upsert_hyper_vertex_req, Graph::SocialGraph).await?;
+    upsert_edge(&client, &upsert_edge_req, Graph::SocialGraph).await?;
+    Ok(())
+}
+
+pub async fn create_ens_identity_ownership(
+    client: &Client<HttpConnector>,
+    evm_address: &Identity,
+    ens_identity: &Identity,
+    hold: &Hold,
+) -> Result<(), Error> {
+    let hold_identity = hold.wrapper(evm_address, ens_identity, HOLD_IDENTITY);
+    let edges = Edges(vec![hold_identity]);
+    let upsert_edge_req: UpsertEdge = edges.into();
+
+    // Only create EvmAddress as an Identity connect to HyperVertex
+    let vertex_wrapper = IsolatedVertexWrapper {
+        vertex: evm_address.to_owned(),
+    };
+    let upsert_isolated_vertex_req: UpsertIsolatedVertex = vertex_wrapper.try_into()?;
+
+    let vertices = Vertices(vec![ens_identity.to_owned()]);
+    let vertices_map: HashMap<String, HashMap<String, HashMap<String, Attribute>>> =
+        vertices.into();
+    let ens_wrapper = UpsertVertices {
+        vertices: vertices_map,
+    };
+    let upsert_ens_req: UpsertVertices = ens_wrapper.into();
+
+    upsert_isolated_vertex(&client, &upsert_isolated_vertex_req, Graph::SocialGraph).await?;
+    upsert_vertices(client, &upsert_ens_req, Graph::SocialGraph).await?;
     upsert_edge(&client, &upsert_edge_req, Graph::SocialGraph).await?;
     Ok(())
 }

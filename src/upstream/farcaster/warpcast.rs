@@ -10,7 +10,6 @@ use crate::{
     },
 };
 use chrono::NaiveDateTime;
-use futures::future::join_all;
 use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Client};
 use regex::Regex;
@@ -29,7 +28,7 @@ pub async fn fetch_connections_by_platform_identity(
     }
 }
 
-async fn fetch_by_username(
+pub async fn fetch_by_username(
     _platform: &Platform,
     username: &str,
 ) -> Result<TargetProcessedList, Error> {
@@ -56,45 +55,44 @@ async fn fetch_by_username(
         // let vertices = Vertices(vec![u]);
         create_isolated_vertex(&cli, &u).await?;
     }
-    let furtures: Vec<_> = verifications
-        .into_iter()
-        .map(|verification: Verification| save_verifications(&cli, &user, verification))
-        .collect();
-
-    let targets: TargetProcessedList = join_all(furtures)
-        .await
-        .into_iter()
-        .flat_map(|result| result.unwrap_or_default())
-        .collect();
+    let mut targets: Vec<Target> = Vec::new();
+    for verification in verifications.iter() {
+        let target = save_verifications(&cli, &user, verification).await?;
+        targets.push(target);
+    }
     Ok(targets)
 }
 
-async fn fetch_by_signer(
-    _platform: &Platform,
+pub async fn fetch_by_signer(
+    platform: &Platform,
     address: &str,
 ) -> Result<TargetProcessedList, Error> {
+    if platform.to_owned() == Platform::Solana {
+        // Wrapcast not supported user-by-verification?address=solana format
+        return Ok(vec![]);
+    }
     let cli = make_http_client();
     let user = user_by_verification(address).await?;
+    if user.is_none() {
+        return Ok(vec![]);
+    }
+    let mut targets: Vec<Target> = Vec::new();
+    let user = user.unwrap();
     let fid = user.fid;
     let verifications = get_verifications(fid).await?;
-    let furtures: Vec<_> = verifications
-        .into_iter()
-        .map(|verification: Verification| save_verifications(&cli, &user, verification))
-        .collect();
-
-    let targets: TargetProcessedList = join_all(furtures)
-        .await
-        .into_iter()
-        .flat_map(|result| result.unwrap_or_default())
-        .collect();
+    for verification in verifications.iter() {
+        let target = save_verifications(&cli, &user, verification).await?;
+        targets.push(target);
+    }
+    targets.push(Target::Identity(Platform::Farcaster, user.username.clone()));
     Ok(targets)
 }
 
 async fn save_verifications(
     client: &Client<HttpConnector>,
     user: &User,
-    verification: Verification,
-) -> Result<TargetProcessedList, Error> {
+    verification: &Verification,
+) -> Result<Target, Error> {
     let protocol: Platform = verification.protocol.parse()?;
     let eth_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
@@ -136,10 +134,10 @@ async fn save_verifications(
     };
     create_identity_to_identity_hold_record(client, &eth_identity, &farcaster_identity, &hold)
         .await?;
-    Ok(vec![Target::Identity(
+    Ok(Target::Identity(
         protocol,
         verification.address.to_lowercase().to_string(),
-    )])
+    ))
 }
 
 // {"errors":[{"message":"No FID associated with username checkyou"}]}
@@ -278,14 +276,17 @@ async fn user_by_username(username: &str) -> Result<User, Error> {
     Ok(result.result.user)
 }
 
-async fn user_by_verification(address: &str) -> Result<User, Error> {
+async fn user_by_verification(address: &str) -> Result<Option<User>, Error> {
     // ^0[xX][0-9a-fA-F]{40}$
     let pattern = r"^0[xX][0-9a-fA-F]{40}$";
     let re = Regex::new(pattern)
         .map_err(|err| Error::ParamError(format!("Regex pattern error: {}", err)))?;
     if !re.is_match(address) {
         // If the address does not match the pattern, return an error
-        return Err(Error::ParamError("Address must match pattern".into()));
+        // return Err(Error::ParamError("Address must match pattern".into()));
+        let err_message = format!("Wrapcaster user-by-verification: address must match pattern");
+        error!(err_message);
+        return Ok(None);
     }
 
     let client = make_client();
@@ -338,7 +339,7 @@ async fn user_by_verification(address: &str) -> Result<User, Error> {
             return Err(Error::ManualHttpClientError(err_message));
         }
     };
-    Ok(result.result.user)
+    Ok(Some(result.result.user))
 }
 
 async fn get_verifications(fid: i64) -> Result<Vec<Verification>, Error> {

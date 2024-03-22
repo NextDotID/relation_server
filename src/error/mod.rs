@@ -33,6 +33,8 @@ pub enum Error {
     EnumParseError(#[from] strum::ParseError),
     #[error("Parse Int error: {0}")]
     ParseIntError(#[from] std::num::ParseIntError),
+    #[error("Parse Datetime error: {0}")]
+    DatetimeParseError(#[from] chrono::ParseError),
     #[error("GraphQL error: {0}")]
     GraphQLError(String),
     #[error("PoolError error: {0}")]
@@ -60,6 +62,7 @@ impl Error {
             Error::EnumParseError(_) => StatusCode::BAD_REQUEST,
             Error::GraphQLError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::ParseIntError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::DatetimeParseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::UuidError(_) => StatusCode::BAD_REQUEST,
             Error::PoolError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::IsahcError(_) => StatusCode::INTERNAL_SERVER_ERROR,
