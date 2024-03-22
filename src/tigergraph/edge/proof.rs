@@ -237,7 +237,7 @@ impl Wrapper<ProofRecord, Identity, Identity> for Proof {
 
 impl Proof {
     pub fn is_outdated(&self) -> bool {
-        let outdated_in = Duration::days(1);
+        let outdated_in = Duration::try_days(1).unwrap();
         self.updated_at
             .checked_add_signed(outdated_in)
             .unwrap()

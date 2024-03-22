@@ -35,14 +35,11 @@ async fn test_parse_timestamp() -> Result<(), Error> {
     let ns_time: u32 = (ct_time.parse::<i64>().unwrap() % 1000).try_into().unwrap();
     println!("nt_time {}", ns_time);
 
-    let created_at = timestamp_to_naive(
-        ct_time.parse::<i64>().unwrap() / 1000,
-        ns_time,
-    );
+    let created_at = timestamp_to_naive(ct_time.parse::<i64>().unwrap() / 1000, ns_time);
     let updated_at = timestamp_to_naive(ct_time.parse::<i64>().unwrap() / 1000, ns_time).unwrap();
     println!("{}", ct_time.parse::<i64>().unwrap());
     println!("{:?}", created_at);
-    println!("{}", updated_at.timestamp());
+    println!("{}", updated_at.and_utc().timestamp());
 
     Ok(())
 }

@@ -429,7 +429,7 @@ struct NftHolder {
 
 impl Hold {
     pub fn is_outdated(&self) -> bool {
-        let outdated_in = Duration::hours(8);
+        let outdated_in = Duration::try_hours(8).unwrap();
         self.updated_at
             .checked_add_signed(outdated_in)
             .unwrap()

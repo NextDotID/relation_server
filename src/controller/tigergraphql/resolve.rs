@@ -46,7 +46,7 @@ impl ResolveReverse {
 
     /// When this connection is fetched by us RelationService.
     async fn updated_at(&self) -> i64 {
-        self.updated_at.timestamp()
+        self.updated_at.and_utc().timestamp()
     }
 
     /// `reverse`: Return `True` or `False`. Show domain is primary domain or not.
@@ -86,7 +86,7 @@ impl ResolveEdge {
 
     /// When this connection is fetched by us RelationService.
     async fn updated_at(&self) -> i64 {
-        self.updated_at.timestamp()
+        self.updated_at.and_utc().timestamp()
     }
 
     /// `resolved`: Find an Ethereum wallet using ENS name or .bit alias.
@@ -114,7 +114,7 @@ impl ResolveEdge {
 
     /// `expiredAt` Expiration time of this domain name
     async fn expired_at(&self) -> Option<i64> {
-        self.expired_at.map(|dt| dt.timestamp())
+        self.expired_at.map(|dt| dt.and_utc().timestamp())
     }
 }
 

@@ -9,9 +9,10 @@ use crate::tigergraph::vertex::{Contract, Identity};
 use crate::upstream::{
     Chain, ContractCategory, DataSource, Fetcher, Platform, Target, TargetProcessedList,
 };
-use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};
+use crate::util::{
+    make_client, make_http_client, naive_now, parse_body, request_with_timeout, utc_to_naive,
+};
 use async_trait::async_trait;
-use chrono::{DateTime, NaiveDateTime};
 use futures::future::join_all;
 use http::uri::InvalidUri;
 use hyper::{Body, Method};
@@ -168,8 +169,15 @@ async fn fetch_nfts_by_account(
 }
 
 async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
-    let creataed_at = DateTime::parse_from_rfc3339(&p.timestamp).unwrap();
-    let created_at_naive = NaiveDateTime::from_timestamp_opt(creataed_at.timestamp(), 0);
+    // let creataed_at = DateTime::parse_from_rfc3339(&p.timestamp).unwrap();
+    // let created_at_naive = NaiveDateTime::from_timestamp_opt(creataed_at.timestamp(), 0);
+    let created_at_naive = match p.timestamp.as_ref() {
+        "" => None,
+        timestamp => match utc_to_naive(timestamp.to_string()) {
+            Ok(naive_dt) => Some(naive_dt),
+            Err(_) => None, // You may want to handle this error differently
+        },
+    };
     let cli = make_http_client();
 
     let from: Identity = Identity {

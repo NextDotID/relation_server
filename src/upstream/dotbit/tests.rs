@@ -53,7 +53,10 @@ async fn test_dotbit_reverse_record() -> Result<(), Error> {
             .await?
             .expect("Record not found");
     tracing::debug!("found {:?}", found);
-    assert_eq!(found.updated_at.timestamp(), naive_now().timestamp());
+    assert_eq!(
+        found.updated_at.and_utc().timestamp(),
+        naive_now().and_utc().timestamp()
+    );
 
     Ok(())
 }
