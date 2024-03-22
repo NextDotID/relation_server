@@ -38,7 +38,7 @@ url = "https://ens.fafrd.workers.dev/ens/"
 url = "https://indexer-v1.did.id"
 
 [upstream.lens_api]
-url = "https://api.lens.dev/playground"
+url = "https://api-v2.lens.dev/playground"
 
 [upstream.unstoppable_api]
 url = "https://resolve.unstoppabledomains.com"

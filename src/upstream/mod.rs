@@ -23,8 +23,8 @@ use crate::{
     upstream::{
         aggregation::Aggregation, crossbell::Crossbell, dotbit::DotBit,
         ens_reverse::ENSReverseLookup, farcaster::Farcaster, keybase::Keybase, knn3::Knn3,
-        proof_client::ProofClient, rss3::Rss3, space_id::SpaceId, sybil_list::SybilList,
-        the_graph::TheGraph, unstoppable::UnstoppableDomains,
+        lensv2::LensV2, proof_client::ProofClient, rss3::Rss3, space_id::SpaceId,
+        sybil_list::SybilList, the_graph::TheGraph, unstoppable::UnstoppableDomains,
     },
     util::hashset_append,
 };
@@ -159,6 +159,7 @@ pub async fn fetch_many(targets: Vec<Target>, round: Option<u16>) -> Result<Vec<
 pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
     let mut up_next: TargetProcessedList = join_all(vec![
         Farcaster::fetch(target),
+        LensV2::fetch(target),
         Aggregation::fetch(target),
         SybilList::fetch(target),
         Keybase::fetch(target),
