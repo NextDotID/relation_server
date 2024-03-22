@@ -3,7 +3,9 @@ use crate::{
     tigergraph::{
         edge::{resolve::ResolveReverse, EdgeUnion, HoldRecord},
         upsert::delete_graph_inner_connection,
-        vertex::{Identity, IdentityGraph, IdentityRecord, IdentityWithSource, OwnerLoadFn},
+        vertex::{
+            ExpandIdentityRecord, IdentityGraph, IdentityRecord, IdentityWithSource, OwnerLoadFn,
+        },
     },
     upstream::{fetch_all, Chain, ContractCategory, DataSource, Platform, Target},
     util::make_http_client,
@@ -18,7 +20,7 @@ use uuid::Uuid;
 
 /// Status for a record in RelationService DB
 #[derive(Default, Copy, Clone, PartialEq, Eq, async_graphql::Enum)]
-enum DataStatus {
+pub enum DataStatus {
     /// Fetched or not in Database.
     #[default]
     #[graphql(name = "cached")]
@@ -183,7 +185,7 @@ impl IdentityRecord {
         reverse: Option<bool>,
     ) -> Result<Option<IdentityGraph>> {
         let client = make_http_client();
-        match IdentityGraph::find_by_platform_identity(
+        match IdentityGraph::find_graph_by_platform_identity(
             &client,
             &self.platform,
             &self.identity,
@@ -211,7 +213,7 @@ impl IdentityRecord {
                         "Failed to fetch_all"
                     );
                 }
-                Ok(IdentityGraph::find_by_platform_identity(
+                Ok(IdentityGraph::find_graph_by_platform_identity(
                     &client,
                     &self.platform,
                     &self.identity,
@@ -332,7 +334,7 @@ impl IdentityQuery {
         _ctx: &Context<'_>,
         #[graphql(desc = "Platform to query")] platform: String,
         #[graphql(desc = "Identity on target Platform")] identity: String,
-    ) -> Result<Option<IdentityRecord>> {
+    ) -> Result<Option<ExpandIdentityRecord>> {
         let client = make_http_client();
 
         let platform: Platform = platform.parse()?;
@@ -348,7 +350,7 @@ impl IdentityQuery {
         };
         // FIXME: Still kinda dirty. Should be in an background queue/worker-like shape.
 
-        match Identity::find_by_platform_identity(&client, &platform, &identity).await? {
+        match IdentityGraph::find_expand_identity(&client, &platform, &identity).await? {
             None => {
                 let fetch_result = fetch_all(vec![target], Some(3)).await;
                 if fetch_result.is_err() {
@@ -360,11 +362,10 @@ impl IdentityQuery {
                         "Failed to fetch"
                     );
                 }
-                Ok(Identity::find_by_platform_identity(&client, &platform, &identity).await?)
+                Ok(IdentityGraph::find_expand_identity(&client, &platform, &identity).await?)
             }
             Some(found) => {
                 if found.is_outdated() {
-                    // if true {
                     event!(
                         Level::DEBUG,
                         ?platform,
