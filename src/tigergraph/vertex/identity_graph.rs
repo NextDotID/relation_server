@@ -1,12 +1,16 @@
 use crate::{
     config::C,
     error::Error,
-    tigergraph::{vertex::IdentityRecord, BaseResponse, Graph},
-    upstream::{DataSource, Platform},
+    tigergraph::{
+        vertex::{Identity, IdentityRecord, VertexRecord},
+        BaseResponse, Graph,
+    },
+    upstream::{Chain, DataSource, Platform},
     util::parse_body,
 };
 use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
+use serde::de::{self, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use tracing::error;
 
@@ -23,7 +27,7 @@ pub struct IdentityConnection {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IdentityGraph {
     pub graph_id: String,
-    pub vertices: Vec<IdentityRecord>,
+    pub vertices: Vec<ExpandIdentityRecord>,
     pub edges: Vec<IdentityConnection>,
 }
 
@@ -34,8 +38,90 @@ struct IdentityGraphResponse {
     results: Option<Vec<IdentityGraph>>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct SingleExpandIdentityResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<ExpandVerticesList>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct ExpandVerticesList {
+    expand_vlist: Vec<ExpandIdentityRecord>,
+}
+
 impl IdentityGraph {
-    pub async fn find_by_platform_identity(
+    pub async fn find_expand_identity(
+        client: &Client<HttpConnector>,
+        platform: &Platform,
+        identity: &str,
+    ) -> Result<Option<ExpandIdentityRecord>, Error> {
+        let encoded_identity = urlencoding::encode(identity);
+        let uri: http::Uri = format!(
+            "{}/query/{}/find_expand_identity?platform={}&identity={}",
+            C.tdb.host,
+            Graph::SocialGraph.to_string(),
+            platform.to_string(),
+            encoded_identity,
+        )
+        .parse()
+        .map_err(|_err: InvalidUri| {
+            Error::ParamError(format!(
+                "query find_expand_identity?platform={}&identity={} Uri format Error | {}",
+                platform.to_string(),
+                encoded_identity,
+                _err
+            ))
+        })?;
+
+        let req: http::Request<Body> = hyper::Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .header("Authorization", Graph::SocialGraph.token())
+            .body(Body::empty())
+            .map_err(|_err| {
+                Error::ParamError(format!(
+                    "query find_expand_identity ParamError Error {}",
+                    _err
+                ))
+            })?;
+
+        let mut resp = client.request(req).await.map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "query find_expand_identity | Fail to request: {:?}",
+                err.to_string()
+            ))
+        })?;
+
+        match parse_body::<SingleExpandIdentityResponse>(&mut resp).await {
+            Ok(r) => {
+                if r.base.error {
+                    let err_message = format!(
+                        "TigerGraph query find_expand_identity error | Code: {:?}, Message: {:?}",
+                        r.base.code, r.base.message
+                    );
+                    error!(err_message);
+                    return Err(Error::General(err_message, resp.status()));
+                }
+
+                let result = r
+                    .results
+                    .and_then(|results| results.first().cloned())
+                    .map(|result: ExpandVerticesList| result.expand_vlist)
+                    .and_then(|res| res.first().cloned());
+                Ok(result)
+            }
+            Err(err) => {
+                let err_message = format!(
+                    "TigerGraph query find_identity_graph parse_body error: {:?}",
+                    err
+                );
+                error!(err_message);
+                return Err(err);
+            }
+        }
+    }
+    pub async fn find_graph_by_platform_identity(
         client: &Client<HttpConnector>,
         platform: &Platform,
         identity: &str,
@@ -129,5 +215,119 @@ impl IdentityGraph {
                 return Err(err);
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExpandIdentityRecord {
+    pub record: IdentityRecord,
+    pub owner_address: Option<Vec<Address>>,
+    pub resolve_address: Option<Vec<Address>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Address {
+    pub chain: Chain,
+    pub address: String,
+}
+
+impl std::ops::DerefMut for ExpandIdentityRecord {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.record
+    }
+}
+
+impl std::ops::Deref for ExpandIdentityRecord {
+    type Target = IdentityRecord;
+    fn deref(&self) -> &Self::Target {
+        &self.record
+    }
+}
+
+impl<'de> Deserialize<'de> for ExpandIdentityRecord {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct ExpandIdentityRecordVisitor;
+        impl<'de> Visitor<'de> for ExpandIdentityRecordVisitor {
+            type Value = ExpandIdentityRecord;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("struct ExpandIdentityRecord")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut v_type: Option<String> = None;
+                let mut v_id: Option<String> = None;
+                let mut attributes: Option<serde_json::Map<String, serde_json::Value>> = None;
+
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        "v_type" => v_type = Some(map.next_value()?),
+                        "v_id" => v_id = Some(map.next_value()?),
+                        "attributes" => attributes = Some(map.next_value()?),
+                        _ => {}
+                    }
+                }
+
+                let mut attributes =
+                    attributes.ok_or_else(|| de::Error::missing_field("attributes"))?;
+
+                let return_owner_address: Option<Vec<Address>> = attributes
+                    .remove("@owner_address")
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(de::Error::custom)?;
+
+                let return_resolve_address: Option<Vec<Address>> = attributes
+                    .remove("@resolve_address")
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(de::Error::custom)?;
+
+                let attributes: Identity =
+                    serde_json::from_value(serde_json::Value::Object(attributes))
+                        .map_err(de::Error::custom)?;
+
+                let v_type = v_type.ok_or_else(|| de::Error::missing_field("v_type"))?;
+                let v_id = v_id.ok_or_else(|| de::Error::missing_field("v_id"))?;
+
+                let owner_address = match return_owner_address {
+                    None => None,
+                    Some(vec_address) => {
+                        if vec_address.is_empty() {
+                            None
+                        } else {
+                            Some(vec_address)
+                        }
+                    }
+                };
+                let resolve_address = match return_resolve_address {
+                    None => None,
+                    Some(vec_address) => {
+                        if vec_address.is_empty() {
+                            None
+                        } else {
+                            Some(vec_address)
+                        }
+                    }
+                };
+                let expand_identity = ExpandIdentityRecord {
+                    record: IdentityRecord(VertexRecord {
+                        v_type,
+                        v_id,
+                        attributes,
+                    }),
+                    owner_address,
+                    resolve_address,
+                };
+                Ok(expand_identity)
+            }
+        }
+        deserializer.deserialize_map(ExpandIdentityRecordVisitor)
     }
 }
