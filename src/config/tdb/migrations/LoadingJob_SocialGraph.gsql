@@ -2,8 +2,8 @@ CREATE GRAPH SocialGraph (Identities, Proof_Forward, Proof_Backward, Contracts, 
 
 USE GRAPH SocialGraph
 
-CREATE OR REPLACE QUERY upsert_isolated_vertex(STRING vertex_str) FOR GRAPH SocialGraph SYNTAX v2 {
-  TYPEDEF TUPLE< DATETIME updated_at, STRING id > MinUpdatedTimeTuple;
+CREATE OR REPLACE QUERY upsert_isolated_vertex(STRING vertex_str, INT updated_nanosecond) FOR GRAPH SocialGraph SYNTAX v2 {
+  TYPEDEF TUPLE< INT updated_nanosecond, STRING id > MinUpdatedTimeTuple;
   JSONOBJECT from_v = parse_json_object(vertex_str);
 
   SumAccum<INT> @@created_vertices;
@@ -81,7 +81,7 @@ CREATE OR REPLACE QUERY upsert_isolated_vertex(STRING vertex_str) FOR GRAPH Soci
     // insert 1 hyper vertex connect isolated vertex
     STRING primary_uuid = gsql_uuid_v4();
     final_identity_graph = primary_uuid;
-    INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, now());
+    INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, updated_nanosecond);
     INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (from_id Identities, primary_uuid IdentitiesGraph);
     @@created_hyper_vertices += 1;
   ELSE
@@ -110,8 +110,8 @@ CREATE OR REPLACE QUERY upsert_isolated_vertex(STRING vertex_str) FOR GRAPH Soci
   PRINT @@created_vertices as created_vertices, @@created_hyper_vertices as created_hyper_vertices, final_identity_graph;
 }
 
-CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR GRAPH SocialGraph SYNTAX v2 {
-  TYPEDEF TUPLE< DATETIME updated_at, STRING id > MinUpdatedTimeTuple;
+CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str, INT updated_nanosecond) FOR GRAPH SocialGraph SYNTAX v2 {
+  TYPEDEF TUPLE< INT updated_nanosecond, STRING id > MinUpdatedTimeTuple;
   JSONOBJECT from_v = parse_json_object(from_str);
   JSONOBJECT to_v = parse_json_object(to_str);
 
@@ -164,7 +164,7 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
       // find the HyperVertex: IdentitiesGraph
       hyper_vertex = SELECT tgt FROM exist_vset-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt
                     POST-ACCUM @@from_graph += tgt
-                    POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_at, tgt.id);
+                    POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_nanosecond, tgt.id);
     ELSE IF from_type == "Contracts" THEN
       exist_vset (ANY) = {@@existing_vlist};
       STRING category = from_v.getJsonObject("attributes").getString("category");
@@ -247,7 +247,7 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
       // find the HyperVertex: IdentitiesGraph
       hyper_vertex = SELECT tgt FROM exist_vset-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt
                     POST-ACCUM @@to_graph += tgt
-                    POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_at, tgt.id);
+                    POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_nanosecond, tgt.id);
     ELSE IF to_type == "Contracts" THEN
       exist_vset (ANY) = {@@existing_vlist};
       STRING category = to_v.getJsonObject("attributes").getString("category");
@@ -310,7 +310,7 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
       // insert 1 hyper vertex connect from & to
       STRING primary_uuid = gsql_uuid_v4();
       final_identity_graph = primary_uuid;
-      INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, now());
+      INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, updated_nanosecond);
       INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (from_id Identities, primary_uuid IdentitiesGraph);
       INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (to_id Identities, primary_uuid IdentitiesGraph);
       @@created_hyper_vertices += 1;
@@ -396,7 +396,7 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
     // insert 1 hyper vertex, New_GraphID -> from
     STRING primary_uuid = gsql_uuid_v4();
     final_identity_graph = primary_uuid;
-    INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, now());
+    INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, updated_nanosecond);
     INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (from_id Identities, primary_uuid IdentitiesGraph);
     @@created_hyper_vertices += 1;
   ELSE IF from_type == "Contracts" AND to_type == "Identities" AND @@create_to_vertex == true
@@ -404,7 +404,7 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str) FOR 
     // insert 1 hyper vertex, New_GraphID -> to
     STRING primary_uuid = gsql_uuid_v4();
     final_identity_graph = primary_uuid;
-    INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, now());
+    INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, updated_nanosecond);
     INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (to_id Identities, primary_uuid IdentitiesGraph);
     @@created_hyper_vertices += 1;
   END;

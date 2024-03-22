@@ -210,8 +210,12 @@ where
         let from_str =
             serde_json::to_string(&from_record).map_err(|err| Error::JSONParseError(err))?;
         let to_str = serde_json::to_string(&to_record).map_err(|err| Error::JSONParseError(err))?;
-
-        Ok(UpsertHyperVertex { from_str, to_str })
+        let updated_nanosecond = chrono::Utc::now().naive_utc().and_utc().timestamp_micros();
+        Ok(UpsertHyperVertex {
+            from_str,
+            to_str,
+            updated_nanosecond,
+        })
     }
 }
 
@@ -233,20 +237,25 @@ where
         );
         let vertex_str =
             serde_json::to_string(&vertex_record).map_err(|err| Error::JSONParseError(err))?;
-
-        Ok(UpsertIsolatedVertex { vertex_str })
+        let updated_nanosecond = chrono::Utc::now().naive_utc().and_utc().timestamp_micros();
+        Ok(UpsertIsolatedVertex {
+            vertex_str,
+            updated_nanosecond,
+        })
     }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UpsertHyperVertex {
-    pub from_str: String, // STRING TO GSQL JSONObject
-    pub to_str: String,   // STRING TO GSQL JSONObject
+    pub from_str: String,        // STRING TO GSQL JSONObject
+    pub to_str: String,          // STRING TO GSQL JSONObject
+    pub updated_nanosecond: i64, // nanosecond
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UpsertIsolatedVertex {
-    pub vertex_str: String, // STRING TO GSQL JSONObject
+    pub vertex_str: String,      // STRING TO GSQL JSONObject
+    pub updated_nanosecond: i64, // nanosecond
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
