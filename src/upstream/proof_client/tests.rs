@@ -1,7 +1,9 @@
 use crate::upstream::Target;
 use crate::{error::Error, upstream::proof_client::ProofClient, upstream::Fetcher};
 use crate::{
-    graph::new_db_connection, graph::vertex::Identity, upstream::Platform, util::naive_now,
+    tigergraph::vertex::Identity,
+    upstream::Platform,
+    util::{make_http_client, naive_now},
 };
 
 #[tokio::test]
@@ -12,12 +14,16 @@ async fn test_smoke() -> Result<(), Error> {
     );
     ProofClient::fetch(&target).await?;
 
-    let db = new_db_connection().await?;
-    let found = Identity::find_by_platform_identity(&db, &target.platform()?, &target.identity()?)
-        .await?
-        .expect("Record not found");
+    let client = make_http_client();
+    let found =
+        Identity::find_by_platform_identity(&client, &target.platform()?, &target.identity()?)
+            .await?
+            .expect("Record not found");
 
-    assert_eq!(found.updated_at.timestamp(), naive_now().timestamp());
+    assert_eq!(
+        found.updated_at.and_utc().timestamp(),
+        naive_now().and_utc().timestamp()
+    );
 
     Ok(())
 }
@@ -29,8 +35,8 @@ async fn test_multiple_avatars() -> Result<(), Error> {
         "0x1cb1fa7d604e06cd8c596b5b7bcaaf5c5fdefd53".into(),
     );
     ProofClient::fetch(&target).await?;
-    let db = new_db_connection().await?;
-    let found = Identity::find_by_platform_identity(&db, &Platform::Twitter, "lyria_shan0127")
+    let client = make_http_client();
+    let found = Identity::find_by_platform_identity(&client, &Platform::Twitter, "lyria_shan0127")
         .await?
         .expect("Record not found");
     assert_eq!(found.identity, "lyria_shan0127");

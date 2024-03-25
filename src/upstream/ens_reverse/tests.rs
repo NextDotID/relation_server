@@ -6,11 +6,10 @@ async fn test_fetch_success() -> Result<(), Error> {
         Platform::Ethereum,
         "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".into(),
     );
-    let db = new_db_connection().await?;
-    db.truncate().await;
+    let cli = make_http_client();
     ENSReverseLookup::fetch(&target).await?;
     let found = Identity::find_by_platform_identity(
-        &db,
+        &cli,
         &target.platform().unwrap(),
         &target.identity().unwrap(),
     )

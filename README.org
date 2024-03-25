@@ -1,13 +1,17 @@
 #+TITLE: Relation aggregation service for NextID
 #+AUTHOR: Nyk Ma <nykma@mask.io>
 
-* Relation service
-:PROPERTIES:
-:ID:       f593b646-bb51-49a1-a8a2-e67ff74bbd0b
-:END:
+=RelationService= provides inter-identity relationship aggregation store /
+search function for web3 / web2.0. Treat it like a search engine, but for identities.
 
-This lambda function / standalone server provides relation
-aggregation store / search for web3 / web2.0.
+#+begin_quote
+Quick try: https://web3.bio is powered by this.
+#+end_quote
+
+#+begin_quote
+*NOTE*: Branch =main= and =develop= are switched from ArangoDB to
+TigerGraph. You can still find ArangoDB version in =arangodb= branch.
+#+end_quote
 
 * Deploy
 :PROPERTIES:
@@ -23,18 +27,25 @@ See [[file:deploy/README.org][=deploy/README.org=]].
 
 1. Install [[https://github.com/casey/just][just]] and [[https://docs.docker.com/compose/][docker-compose]] first.
 2. =just prepare=
-3. =just migrate=
-4. =just test=
-5. Code!
+3. Code!
 
-* Goal [0/1]
+* Goal [1/2]
 :PROPERTIES:
 :ID:       5f4d4828-bf69-4119-a519-a4edd2aa8c36
 :END:
 
-** TODO Stage1: Search engine
+** DONE Stage 1: Search engine
+CLOSED: [2023-06-01 Thu 15:43]
 :PROPERTIES:
 :ID:       79e0996c-2bfc-4030-8df0-c700520c1dd2
 :END:
 
 One search engine to rule them all.
+
+** TODO Stage 2: IdentityRank
+:PROPERTIES:
+:ID:       c236777d-afaa-4e61-91fb-e79f41681f13
+:END:
+
+=PageRank=-ish soul rank system. Combine cross-soul activities (web2-
+or web3-based) to judge if a soul acts like a real person.

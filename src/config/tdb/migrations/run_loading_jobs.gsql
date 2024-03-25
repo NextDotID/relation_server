@@ -1,0 +1,94 @@
+CREATE LOADING JOB Load_LensSocialFeed FOR GRAPH IdentityGraph {
+  LOAD "/home/tigergraph/shared_data/lens_social_feed/ethereum.identity.tsv"
+    TO VERTEX Identities VALUES ($"primary_id", $"primary_id", REDUCE(ignore_if_exists($"uuid")), $"platform", $"identity", _, _, _, _, REDUCE(min($"added_at")), REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/lens_social_feed/lens.identity.tsv"
+    TO VERTEX Identities VALUES ($"primary_id", $"primary_id", REDUCE(ignore_if_exists($"uuid")), $"platform", $"identity", $"display_name", $"profile_url", $"avatar_url", _, REDUCE(min($"added_at")), REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/lens_social_feed/lens.hold.tsv"
+    TO EDGE Hold_Identity VALUES ($"from", $"to", $"source", REDUCE(ignore_if_exists($"uuid")), _, $"id", _, REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/lens_social_feed/lens.resolve.tsv"
+    TO EDGE Resolve VALUES ($"from", $"to", $"source", $"system", $"name", REDUCE(ignore_if_exists($"uuid")), REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/lens_social_feed/lens.reverse_resolve.tsv"
+    TO EDGE Resolve VALUES ($"from", $"to", $"source", $"system", $"name", REDUCE(ignore_if_exists($"uuid")), REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/lens_social_feed/lens.social.tsv"
+    TO EDGE Social_Feed VALUES ($"from", $"to", $"source", $"action", REDUCE(add($"action_count")), REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+}
+
+RUN LOADING JOB Load_LensSocialFeed
+
+CREATE LOADING JOB Load_LensSocialFeed_Only FOR GRAPH IdentityGraph {
+  LOAD "/home/tigergraph/shared_data/lens_social_feed/lens.identity.tsv"
+    TO VERTEX Identities VALUES ($"primary_id", $"primary_id", REDUCE(ignore_if_exists($"uuid")), $"platform", $"identity", $"display_name", $"profile_url", $"avatar_url", _, REDUCE(min($"added_at")), REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/lens_social_feed/lens.social.tsv"
+    TO EDGE Social_Feed VALUES ($"from", $"to", $"source", $"action", REDUCE(add($"action_count")), REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+}
+
+RUN LOADING JOB Load_LensSocialFeed_Only
+
+
+CREATE LOADING JOB Load_CrossbellSocialFeed FOR GRAPH IdentityGraph {
+  LOAD "/home/tigergraph/shared_data/crossbell_2023-08-24/ethereum.20230824.identity.tsv"
+    TO VERTEX Identities VALUES ($"primary_id", $"primary_id", REDUCE(ignore_if_exists($"uuid")), $"platform", $"identity", _, _, _, _, REDUCE(min($"added_at")), REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/crossbell_2023-08-24/csb.20230824.identity.tsv"
+    TO VERTEX Identities VALUES ($"primary_id", $"primary_id", REDUCE(ignore_if_exists($"uuid")), $"platform", $"identity", $"display_name", $"profile_url", _, _, REDUCE(min($"added_at")), REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/crossbell_2023-08-24/csb.20230824.hold.tsv"
+    TO EDGE Hold_Identity VALUES ($"from", $"to", $"source", REDUCE(ignore_if_exists($"uuid")), _, $"id", _, REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/crossbell_2023-08-24/csb.20230824.resolve.tsv"
+    TO EDGE Resolve VALUES ($"from", $"to", $"source", $"system", $"name", REDUCE(ignore_if_exists($"uuid")), REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/crossbell_2023-08-24/csb.20230824.reverse_resolve.tsv"
+    TO EDGE Resolve VALUES ($"from", $"to", $"source", $"system", $"name", REDUCE(ignore_if_exists($"uuid")), REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/crossbell_2023-08-24/csb.20230824.social.tsv"
+    TO EDGE Social_Feed VALUES ($"from", $"to", $"source", $"action", REDUCE(add($"action_count")), REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+}
+
+RUN LOADING JOB Load_CrossbellSocialFeed
+
+CREATE LOADING JOB Load_CrossbellSocialFeed_Only FOR GRAPH IdentityGraph {
+  LOAD "/home/tigergraph/shared_data/crossbell_2023-08-24/csb.20230824.identity.tsv"
+    TO VERTEX Identities VALUES ($"primary_id", $"primary_id", REDUCE(ignore_if_exists($"uuid")), $"platform", $"identity", $"display_name", $"profile_url", _, _, REDUCE(min($"added_at")), REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/crossbell_2023-08-24/csb.20230824.social.tsv"
+    TO EDGE Social_Feed VALUES ($"from", $"to", $"source", $"action", REDUCE(add($"action_count")), REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+}
+
+RUN LOADING JOB Load_CrossbellSocialFeed_Only
+
+
+
+CREATE LOADING JOB Load_DBExport FOR GRAPH IdentityGraph {
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Identities.csv"
+      TO VERTEX Identities VALUES ($"primary_id", $"id", $"uuid", $"platform", $"identity", $"display_name", $"profile_url", $"avatar_url", $"created_at", $"added_at", $"updated_at") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Contracts.csv"
+      TO VERTEX Contracts VALUES ($"primary_id", $"id", $"uuid", $"category", $"address", $"chain", $"symbol", $"updated_at") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Proof_Forward.csv"
+      TO EDGE Proof_Forward VALUES ($"from", $"to", $"source", $"created_at", $"uuid", $"level", $"record_id", $"updated_at", $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Hold_Identity.csv"
+      TO EDGE Hold_Identity VALUES ($"from", $"to", $"source", $"uuid", $"transaction", $"id", $"created_at", $"updated_at", $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Hold_Contract.csv"
+      TO EDGE Hold_Contract VALUES ($"from", $"to", $"source", $"transaction", $"id", $"uuid", $"created_at", $"updated_at", $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Resolve.csv"
+      TO EDGE Resolve VALUES ($"from", $"to", $"source", $"system", $"name", $"uuid", $"updated_at", $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Resolve_Contract.csv"
+      TO EDGE Resolve_Contract VALUES ($"from", $"to", $"source", $"system", $"name", $"uuid", $"updated_at", $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Reverse_Resolve_Contract.csv"
+      TO EDGE Reverse_Resolve_Contract VALUES ($"from", $"to", $"source", $"system", $"name", $"uuid", $"updated_at", $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Relation_Unique_TX.csv"
+      TO EDGE Relation_Unique_TX VALUES ($"from", $"to", $"tx_count", $"tx_sum", $"tx_max", $"tx_min", $"updated_at") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Relation_TX.csv"
+      TO EDGE Relation_TX VALUES ($"from", $"to", $"transaction_hash", $"transaction_index", $"tx_type", $"tx_status", $"block_hash", $"block_number", $"block_timestamp", $"from_address", $"to_address", $"tx_value", $"contract_address", $"updated_at") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Social_Feed.tsv"
+    TO EDGE Social_Feed VALUES ($"from", $"to", $"source", $"action", $"action_count", $"updated_at") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+}
+
+RUN LOADING JOB Load_DBExport
+
+
+CREATE LOADING JOB Load_DBExport FOR GRAPH IdentityGraph {
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Identities.csv" TO VERTEX Identities VALUES($"primary_id", $"id", $"uuid", $"platform", $"identity", $"display_name", $"profile_url", $"avatar_url", $"created_at", $"added_at", $"updated_at", $"uid") USING SEPARATOR="\t", HEADER="true", EOL="\n";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Contracts.csv" TO VERTEX Contracts VALUES($"primary_id", $"id", $"uuid", $"category", $"address", $"chain", $"symbol", $"updated_at") USING SEPARATOR="\t", HEADER="true", EOL="\n";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Proof_Forward.csv" TO EDGE Proof_Forward VALUES($"from", $"to", $"source", $"created_at", $"uuid", $"level", $"record_id", $"updated_at", $"fetcher") USING SEPARATOR="\t", HEADER="true", EOL="\n";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Hold_Identity.csv" TO EDGE Hold_Identity VALUES($"from", $"to", $"source", $"uuid", $"transaction", $"id", $"created_at", $"updated_at", $"fetcher", $"expired_at") USING SEPARATOR="\t", HEADER="true", EOL="\n";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Hold_Contract.csv" TO EDGE Hold_Contract VALUES($"from", $"to", $"source", $"transaction", $"id", $"uuid", $"created_at", $"updated_at", $"fetcher", $"expired_at") USING SEPARATOR="\t", HEADER="true", EOL="\n";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Resolve.csv" TO EDGE Resolve VALUES($"from", $"to", $"source", $"system", $"name", $"uuid", $"updated_at", $"fetcher") USING SEPARATOR="\t", HEADER="true", EOL="\n";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Reverse_Resolve.csv" TO EDGE Reverse_Resolve VALUES($"from", $"to", $"source", $"system", $"name", $"uuid", $"updated_at", $"fetcher") USING SEPARATOR="\t", HEADER="true", EOL="\n";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Resolve_Contract.csv" TO EDGE Resolve_Contract VALUES($"from", $"to", $"source", $"system", $"name", $"uuid", $"updated_at", $"fetcher") USING SEPARATOR="\t", HEADER="true", EOL="\n";
+  LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Reverse_Resolve_Contract.csv" TO EDGE Reverse_Resolve_Contract VALUES($"from", $"to", $"source", $"system", $"name", $"uuid", $"updated_at", $"fetcher") USING SEPARATOR="\t", HEADER="true", EOL="\n";
+}

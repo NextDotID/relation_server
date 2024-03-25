@@ -1,13 +1,11 @@
 use crate::{
     error::Error,
-    graph::{
+    tigergraph::{
         edge::Hold,
-        new_db_connection,
-        vertex::contract::Chain,
-        vertex::Identity,
-        vertex::{contract::ContractCategory, Contract},
+        vertex::{Contract, Identity},
     },
-    upstream::{knn3::Knn3, Fetcher, Platform, Target},
+    upstream::{knn3::Knn3, Chain, ContractCategory, Fetcher, Platform, Target},
+    util::make_http_client,
 };
 
 #[tokio::test]
@@ -20,14 +18,14 @@ async fn test_knn3() -> Result<(), Error> {
     );
     Knn3::fetch(&target).await?;
 
-    let db = new_db_connection().await?;
+    let client = make_http_client();
 
-    Identity::find_by_platform_identity(&db, &Platform::Ethereum, &target.identity()?)
+    Identity::find_by_platform_identity(&client, &Platform::Ethereum, &target.identity()?)
         .await?
         .expect("Record not found");
 
     Contract::find_by_chain_address(
-        &db,
+        &client,
         &Chain::Ethereum,
         &ContractCategory::ENS.default_contract_address().unwrap(),
     )
@@ -35,7 +33,7 @@ async fn test_knn3() -> Result<(), Error> {
     .unwrap();
 
     let _ = Hold::find_by_id_chain_address(
-        &db,
+        &client,
         "vitalik.eth",
         &Chain::Ethereum,
         &ContractCategory::ENS.default_contract_address().unwrap(),

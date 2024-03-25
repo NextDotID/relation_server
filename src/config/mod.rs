@@ -24,7 +24,7 @@ lazy_static! {
 
 #[derive(Clone, Deserialize, Default)]
 pub struct KVConfig {
-    pub db: ConfigDB,
+    pub tdb: ConfigTigerGraph,
     pub web: ConfigWeb,
     pub upstream: Upstream,
 }
@@ -43,16 +43,18 @@ pub struct Upstream {
     pub lens_api: ConfigLensAPI,
     pub unstoppable_api: ConfigUnstoppableDomainsAPI,
     pub datamgr_api: ConfigDataMgrAPI,
+    pub warpcast_api: ConfigWarpcastAPI,
     pub spaceid_api: ConfigSpaceIdAPI,
+    pub crossbell_api: ConfigCrossbellAPI,
 }
 
 #[derive(Clone, Deserialize, Default)]
-pub struct ConfigDB {
+pub struct ConfigTigerGraph {
     pub host: String,
     pub username: String,
     pub password: String,
-    pub db: String,
-    pub schema_path: String,
+    pub identity_graph_token: String,
+    pub social_graph_token: String,
 }
 
 #[derive(Clone, Deserialize, Default)]
@@ -69,6 +71,7 @@ pub struct ConfigProofService {
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigKeybaseService {
     pub url: String,
+    pub stable_url: String,
 }
 
 #[derive(Clone, Deserialize, Default)]
@@ -123,7 +126,18 @@ pub struct ConfigDataMgrAPI {
 }
 
 #[derive(Clone, Deserialize, Default)]
+pub struct ConfigWarpcastAPI {
+    pub url: String,
+    pub token: String,
+}
+
+#[derive(Clone, Deserialize, Default)]
 pub struct ConfigSpaceIdAPI {
+    pub url: String,
+}
+
+#[derive(Clone, Deserialize, Default)]
+pub struct ConfigCrossbellAPI {
     pub url: String,
 }
 

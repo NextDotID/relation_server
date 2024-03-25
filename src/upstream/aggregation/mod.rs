@@ -1,14 +1,15 @@
 #[cfg(test)]
 mod tests;
 
-use super::{DataFetcher, Target};
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::edge::Proof;
-use crate::graph::vertex::Identity;
-use crate::graph::{create_identity_to_identity_record, new_db_connection};
-use crate::upstream::{DataSource, Fetcher, Platform, TargetProcessedList};
-use crate::util::{make_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive};
+use crate::tigergraph::edge::Proof;
+use crate::tigergraph::upsert::create_identity_to_identity_proof_two_way_binding;
+use crate::tigergraph::vertex::Identity;
+use crate::upstream::{DataSource, Fetcher, Platform, ProofLevel, TargetProcessedList};
+use crate::util::{
+    make_client, make_http_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive,
+};
 use async_trait::async_trait;
 use futures::future::join_all;
 use hyper::{Body, Method};
@@ -16,6 +17,8 @@ use serde::Deserialize;
 use std::str::FromStr;
 use tracing::{debug, error, info};
 use uuid::Uuid;
+
+use super::{DataFetcher, Target};
 
 #[derive(Deserialize, Debug)]
 pub struct Pagination {
@@ -91,12 +94,14 @@ async fn fetch_connections_by_platform_identity(
                 Error::ParamError(format!("Aggregation Service Build Request Error {}", _err))
             })?;
 
-        let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
-            Error::ManualHttpClientError(format!(
-                "Aggregation Service fetch | error: {:?}",
-                err.to_string()
-            ))
-        })?;
+        let mut resp = request_with_timeout(&client, req, None)
+            .await
+            .map_err(|err| {
+                Error::ManualHttpClientError(format!(
+                    "Aggregation Service fetch | error: {:?}",
+                    err.to_string()
+                ))
+            })?;
 
         let body: Response = parse_body(&mut resp).await?;
         if body.records.is_empty() {
@@ -122,7 +127,7 @@ async fn fetch_connections_by_platform_identity(
 }
 
 async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
-    let db = new_db_connection().await?;
+    let client = make_http_client();
     let mut targets = Vec::new();
 
     let from_platform = Platform::from_str(p.sns_platform.as_str()).unwrap_or(Platform::Unknown);
@@ -137,12 +142,15 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         uuid: Some(Uuid::new_v4()),
         platform: from_platform,
         identity: p.sns_handle.clone().to_lowercase(),
+        uid: None,
         created_at: None,
         display_name: Some(p.sns_handle.clone()),
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     let to_platform = Platform::from_str(p.web3_platform.as_str()).unwrap_or_default();
@@ -158,6 +166,7 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         uuid: Some(Uuid::new_v4()),
         platform: to_platform,
         identity: web3_addr.clone().to_lowercase(),
+        uid: None,
         created_at: None,
         // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
         display_name: None,
@@ -165,6 +174,8 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     let create_ms_time: u32 = (p.create_timestamp.parse::<i64>().unwrap() % 1000)
@@ -179,22 +190,46 @@ async fn save_item(p: Record) -> Result<TargetProcessedList, Error> {
         debug!("AggregationService filter source={}", DataSource::Rss3);
         return Ok(vec![]);
     }
+    let level = if source == DataSource::NextID {
+        ProofLevel::VeryConfident
+    } else {
+        ProofLevel::Confident
+    };
     let pf: Proof = Proof {
         uuid: Uuid::new_v4(),
         source,
+        level: level.clone(),
         record_id: Some(p.id.clone()),
-        created_at: Some(timestamp_to_naive(
+        created_at: timestamp_to_naive(
             p.create_timestamp.parse::<i64>().unwrap() / 1000,
             create_ms_time,
-        )),
+        ),
         updated_at: timestamp_to_naive(
             p.modify_timestamp.parse::<i64>().unwrap() / 1000,
             update_ms_time,
-        ),
+        )
+        .unwrap(),
         fetcher: DataFetcher::AggregationService,
     };
 
-    let _ = create_identity_to_identity_record(&db, &from, &to, &pf).await;
+    let pb: Proof = Proof {
+        uuid: Uuid::new_v4(),
+        source,
+        level: level.clone(),
+        record_id: Some(p.id.clone()),
+        created_at: timestamp_to_naive(
+            p.create_timestamp.parse::<i64>().unwrap() / 1000,
+            create_ms_time,
+        ),
+        updated_at: timestamp_to_naive(
+            p.modify_timestamp.parse::<i64>().unwrap() / 1000,
+            update_ms_time,
+        )
+        .unwrap(),
+        fetcher: DataFetcher::AggregationService,
+    };
+
+    let _ = create_identity_to_identity_proof_two_way_binding(&client, &from, &to, &pf, &pb).await;
 
     targets.push(Target::Identity(to_platform, web3_addr.clone()));
     Ok(targets)

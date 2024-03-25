@@ -1,23 +1,20 @@
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    config::C,
-    error::Error,
-    graph::{
-        edge::{hold::Hold, resolve::DomainNameSystem, Resolve},
-        new_db_connection,
-        vertex::Identity,
-        Edge, Vertex,
-    },
-    upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList},
-    util::naive_now,
+use crate::config::C;
+use crate::error::Error;
+use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::upsert::create_identity_domain_resolve_record;
+use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
+use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
+use crate::tigergraph::vertex::Identity;
+use crate::upstream::{
+    DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
 };
-use aragog::DatabaseConnection;
+use crate::util::{make_http_client, naive_now};
 use async_trait::async_trait;
 use cynic::{http::SurfExt, QueryBuilder};
-use std::convert::TryInto;
-use surf::{middleware::Next, Client, Config, HttpClient, Request, Response};
+use hyper::{client::HttpConnector, Client};
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -151,9 +148,9 @@ async fn fetch_by_addr(target: &Target) -> Result<TargetProcessedList, Error> {
         info!("Lens profile {} | No result", target);
         return Ok(vec![]);
     }
-    let db = new_db_connection().await?;
+    let cli = make_http_client();
     for profile in data.into_iter() {
-        save_profile(&db, &profile).await?;
+        save_profile(&cli, &profile).await?;
     }
     // there is no other upstream can get lens protocol
     Ok(vec![])
@@ -187,9 +184,8 @@ async fn fetch_by_lens_profile(target: &Target) -> Result<TargetProcessedList, E
         return Ok(vec![]);
     }
     let profile: Profile = data.unwrap();
-    let db = new_db_connection().await?;
-
-    save_profile(&db, &profile).await?;
+    let cli = make_http_client();
+    save_profile(&cli, &profile).await?;
 
     Ok(vec![Target::Identity(
         Platform::Ethereum,
@@ -197,29 +193,35 @@ async fn fetch_by_lens_profile(target: &Target) -> Result<TargetProcessedList, E
     )])
 }
 
-async fn save_profile(db: &DatabaseConnection, profile: &Profile) -> Result<(), Error> {
-    let from: Identity = Identity {
+async fn save_profile(client: &Client<HttpConnector>, profile: &Profile) -> Result<(), Error> {
+    let mut addr: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: profile.owned_by.clone().to_lowercase(),
+        uid: None,
         created_at: None,
         display_name: None,
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
-    let to: Identity = Identity {
+    let mut lens: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Lens,
         identity: profile.handle.clone(),
+        uid: Some(profile.id.clone()),
         created_at: None,
         display_name: profile.name.clone(),
         added_at: naive_now(),
         avatar_url: profile.metadata.clone(),
         profile_url: Some("https://lenster.xyz/u/".to_owned() + &profile.handle.clone()),
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     let hold: Hold = Hold {
@@ -230,13 +232,19 @@ async fn save_profile(db: &DatabaseConnection, profile: &Profile) -> Result<(), 
         created_at: None,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: None,
     };
-    let from_record = from.create_or_update(db).await?;
-    let to_record = to.create_or_update(db).await?;
-    hold.connect(db, &from_record, &to_record).await?;
+    let resolve: Resolve = Resolve {
+        uuid: Uuid::new_v4(),
+        source: DataSource::Lens,
+        system: DomainNameSystem::Lens,
+        name: profile.handle.clone(),
+        fetcher: DataFetcher::RelationService,
+        updated_at: naive_now(),
+    };
 
     if profile.is_default {
-        let resolve: Resolve = Resolve {
+        let reverse: Resolve = Resolve {
             uuid: Uuid::new_v4(),
             source: DataSource::Lens,
             system: DomainNameSystem::Lens,
@@ -244,7 +252,13 @@ async fn save_profile(db: &DatabaseConnection, profile: &Profile) -> Result<(), 
             fetcher: DataFetcher::RelationService,
             updated_at: naive_now(),
         };
-        resolve.connect(db, &to_record, &from_record).await?;
+        addr.reverse = Some(true);
+        lens.reverse = Some(true);
+        create_identity_domain_reverse_resolve_record(client, &addr, &lens, &reverse).await?;
     }
+
+    create_identity_to_identity_hold_record(client, &addr, &lens, &hold).await?;
+    create_identity_domain_resolve_record(client, &lens, &addr, &resolve).await?;
+
     Ok(())
 }

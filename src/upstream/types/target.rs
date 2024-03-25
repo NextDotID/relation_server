@@ -1,10 +1,9 @@
 use http::StatusCode;
 
-use crate::{
-    error::Error,
-    graph::vertex::contract::{Chain, ContractCategory},
-};
+use crate::error::Error;
 
+use super::chain::Chain;
+use super::contract_category::ContractCategory;
 use super::platform::Platform;
 
 /// List when processing identities.

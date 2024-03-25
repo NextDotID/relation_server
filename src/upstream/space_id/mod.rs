@@ -1,18 +1,16 @@
 mod tests;
 
-use crate::{
-    config::C,
-    error::Error,
-    graph::edge::{hold::Hold, resolve::DomainNameSystem, Resolve},
-    graph::vertex::Identity,
-    graph::{
-        create_domain_resolve_record, create_identity_to_identity_hold_record, new_db_connection,
-    },
-    upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList},
-    util::{make_client, naive_now, parse_body, request_with_timeout},
+use crate::config::C;
+use crate::error::Error;
+use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::upsert::create_identity_domain_resolve_record;
+use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
+use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
+use crate::tigergraph::vertex::Identity;
+use crate::upstream::{
+    DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
 };
-
-// use super::types::target;
+use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};
 use async_trait::async_trait;
 use http::uri::InvalidUri;
 use hyper::{Body, Method, Request};
@@ -74,35 +72,41 @@ async fn fetch_domain_by_address(
     _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
-    let db = new_db_connection().await?;
+    let cli = make_http_client();
     let name = get_name(identity).await?;
     if name.is_none() {
         // name=null, address does not have a valid primary name
         return Ok(vec![]);
     }
 
-    let eth_identity: Identity = Identity {
+    let eth: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: identity.to_lowercase(),
+        uid: None,
         created_at: None,
         display_name: None,
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(true),
     };
 
-    let sid_identity: Identity = Identity {
+    let sid: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::SpaceId,
         identity: name.clone().unwrap(),
+        uid: None,
         created_at: None,
         display_name: None,
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(true),
     };
 
     let hold: Hold = Hold {
@@ -113,6 +117,7 @@ async fn fetch_domain_by_address(
         created_at: None,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: None,
     };
 
     let resolve: Resolve = Resolve {
@@ -133,11 +138,11 @@ async fn fetch_domain_by_address(
     };
 
     // hold record
-    create_identity_to_identity_hold_record(&db, &eth_identity, &sid_identity, &hold).await?;
+    create_identity_to_identity_hold_record(&cli, &eth, &sid, &hold).await?;
     // 'regular' resolution involves mapping from a name to an address.
-    create_domain_resolve_record(&db, &sid_identity, &eth_identity, &resolve).await?;
+    create_identity_domain_resolve_record(&cli, &sid, &eth, &resolve).await?;
     // 'reverse' resolution maps from an address back to a name.
-    create_domain_resolve_record(&db, &eth_identity, &sid_identity, &reverse).await?;
+    create_identity_domain_reverse_resolve_record(&cli, &eth, &sid, &reverse).await?;
 
     return Ok(vec![Target::Identity(
         Platform::SpaceId,
@@ -149,31 +154,37 @@ async fn fetch_address_by_domain(
     _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
-    let db = new_db_connection().await?;
+    let cli = make_http_client();
     let address = get_address(identity).await?;
 
-    let eth_identity: Identity = Identity {
+    let mut eth: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: address.clone().to_lowercase(),
+        uid: None,
         created_at: None,
         display_name: None,
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
-    let sid_identity: Identity = Identity {
+    let mut sid: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::SpaceId,
         identity: identity.to_string(),
+        uid: None,
         created_at: None,
         display_name: None,
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     let hold: Hold = Hold {
@@ -184,6 +195,7 @@ async fn fetch_address_by_domain(
         created_at: None,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: None,
     };
     let resolve: Resolve = Resolve {
         uuid: Uuid::new_v4(),
@@ -195,9 +207,9 @@ async fn fetch_address_by_domain(
     };
 
     // hold record
-    create_identity_to_identity_hold_record(&db, &eth_identity, &sid_identity, &hold).await?;
+    create_identity_to_identity_hold_record(&cli, &eth, &sid, &hold).await?;
     // 'regular' resolution involves mapping from a name to an address.
-    create_domain_resolve_record(&db, &sid_identity, &eth_identity, &resolve).await?;
+    create_identity_domain_resolve_record(&cli, &sid, &eth, &resolve).await?;
 
     // lookup reverse resolve name
     if let Some(domain) = get_name(&address).await? {
@@ -210,7 +222,9 @@ async fn fetch_address_by_domain(
             fetcher: DataFetcher::RelationService,
             updated_at: naive_now(),
         };
-        create_domain_resolve_record(&db, &eth_identity, &sid_identity, &reverse).await?;
+        eth.reverse = Some(true);
+        sid.reverse = Some(true);
+        create_identity_domain_reverse_resolve_record(&cli, &eth, &sid, &reverse).await?;
     }
 
     return Ok(vec![Target::Identity(
@@ -236,9 +250,11 @@ async fn get_address(domain: &str) -> Result<String, Error> {
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("SpaceId Build Request Error {}", _err)))?;
 
-    let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
-        Error::ManualHttpClientError(format!("SpaceId fetch | error: {:?}", err.to_string()))
-    })?;
+    let mut resp = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!("SpaceId fetch | error: {:?}", err.to_string()))
+        })?;
 
     if !resp.status().is_success() {
         let err_message = format!("SpaceId fetch error, statusCode: {}", resp.status());
@@ -287,9 +303,11 @@ async fn get_name(address: &str) -> Result<Option<String>, Error> {
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("SpaceId Build Request Error {}", _err)))?;
 
-    let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
-        Error::ManualHttpClientError(format!("SpaceId fetch | error: {:?}", err.to_string()))
-    })?;
+    let mut resp = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!("SpaceId fetch | error: {:?}", err.to_string()))
+        })?;
 
     if !resp.status().is_success() {
         let err_message = format!("SpaceId fetch error, statusCode: {}", resp.status());

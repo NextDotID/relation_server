@@ -1,11 +1,11 @@
 use crate::{
     error::Error,
-    graph::{new_db_connection, vertex::Identity},
+    tigergraph::vertex::Identity,
     upstream::{
         sybil_list::{prefetch, SybilList},
         Target,
     },
-    upstream::{Fetcher, Platform},
+    upstream::{Fetcher, Platform}, util::make_http_client,
 };
 
 #[tokio::test]
@@ -19,9 +19,9 @@ async fn test_get_sybil_result() -> Result<(), Error> {
     );
     let fetched = SybilList::fetch(&target).await?;
 
-    let db = new_db_connection().await?;
+    let client = make_http_client();
     Identity::find_by_platform_identity(
-        &db,
+        &client,
         &target.platform()?,
         &target.identity()?.to_lowercase(),
     )

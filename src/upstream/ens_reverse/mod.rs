@@ -1,21 +1,25 @@
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    config::C,
-    error::Error,
-    graph::{new_db_connection, vertex::Identity, Vertex},
-    util::{make_client, parse_body, request_with_timeout},
-};
+use crate::config::C;
+use crate::error::Error;
+use crate::tigergraph::edge::Resolve;
+use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
+use crate::tigergraph::upsert::create_identity_to_contract_reverse_resolve_record;
+use crate::tigergraph::upsert::create_isolated_vertex;
+use crate::tigergraph::vertex::{Contract, Identity};
+use crate::upstream::{Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem};
+use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};
 use async_trait::async_trait;
 use hyper::{Body, Method};
 use serde::Deserialize;
 use tracing::info;
+use uuid::Uuid;
 
 use super::{Fetcher, Platform, Target, TargetProcessedList};
 
 #[derive(Deserialize, Debug, Clone)]
-struct Response {
+pub struct Response {
     #[serde(rename = "reverseRecord")]
     pub reverse_record: Option<String>,
     #[allow(unused)]
@@ -36,17 +40,61 @@ impl Fetcher for ENSReverseLookup {
         // If reverse lookup record is reset to empty by user,
         // our cache should also be cleared.
         // Reach this by setting `display_name` into `Some("")`.
-        let reverse_ens = record.reverse_record.unwrap_or("".into());
-
+        let reverse_ens = record.reverse_record.clone().unwrap_or("".into());
+        let mut eth_identity = Identity::default();
+        eth_identity.uuid = Some(Uuid::new_v4());
+        eth_identity.platform = Platform::Ethereum;
+        eth_identity.identity = wallet.clone();
+        eth_identity.display_name = Some(reverse_ens.clone());
+        let cli = make_http_client();
+        create_isolated_vertex(&cli, &eth_identity).await?;
+        if reverse_ens == "" {
+            return Ok(vec![]);
+        }
         info!("ENS Reverse record: {} => {}", wallet, reverse_ens);
 
-        let mut identity = Identity::default();
-        identity.platform = Platform::Ethereum;
-        identity.identity = wallet.clone();
-        identity.display_name = Some(reverse_ens);
-        let db = new_db_connection().await?;
-        identity.create_or_update(&db).await?;
+        eth_identity.reverse = Some(true); // ethereum and primary ens remain same value
+        let ens_domain = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::ENS,
+            identity: reverse_ens.clone(),
+            uid: None,
+            created_at: None,
+            display_name: Some(reverse_ens.clone()),
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(true),
+        };
+        let contract = Contract {
+            uuid: Uuid::new_v4(),
+            category: ContractCategory::ENS,
+            address: ContractCategory::ENS.default_contract_address().unwrap(),
+            chain: Chain::Ethereum,
+            symbol: None,
+            updated_at: naive_now(),
+        };
 
+        let resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::TheGraph,
+            system: DomainNameSystem::ENS,
+            name: reverse_ens.clone(),
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+        // reverse resolve record
+        create_identity_domain_reverse_resolve_record(&cli, &eth_identity, &ens_domain, &resolve)
+            .await?;
+        create_identity_to_contract_reverse_resolve_record(
+            &cli,
+            &eth_identity,
+            &contract,
+            &resolve,
+        )
+        .await?;
         Ok(vec![])
     }
 
@@ -55,7 +103,7 @@ impl Fetcher for ENSReverseLookup {
     }
 }
 
-async fn fetch_record(wallet: &str) -> Result<Response, Error> {
+pub async fn fetch_record(wallet: &str) -> Result<Response, Error> {
     let client = make_client();
     let url: http::Uri = format!("{}{}", C.upstream.ens_reverse.url, wallet)
         .parse()
@@ -69,12 +117,14 @@ async fn fetch_record(wallet: &str) -> Result<Response, Error> {
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("ENSReverse Build Request Error {}", _err)))?;
 
-    let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
-        Error::ManualHttpClientError(format!(
-            "ENSReverse fetch | fetch_record error: {:?}",
-            err.to_string()
-        ))
-    })?;
+    let mut resp = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "ENSReverse fetch | fetch_record error: {:?}",
+                err.to_string()
+            ))
+        })?;
 
     if !resp.status().is_success() {
         return Err(Error::General(
