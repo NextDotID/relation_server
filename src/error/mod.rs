@@ -43,6 +43,12 @@ pub enum Error {
     IsahcError(#[from] isahc::error::Error),
     #[error("StdIOError error: {0}")]
     StdIOError(#[from] std::io::Error),
+    #[error("SnsError error: {0}")]
+    SnsError(#[from] sns_sdk::error::SnsError),
+    #[error("SolanaClientError error: {0}")]
+    SolanaClientError(#[from] solana_client::client_error::ClientError),
+    #[error("ParsePubkeyError error: {0}")]
+    ParsePubkeyError(#[from] solana_program::pubkey::ParsePubkeyError),
 }
 
 impl Error {
@@ -67,6 +73,9 @@ impl Error {
             Error::PoolError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::IsahcError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Error::StdIOError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::SnsError(_) => StatusCode::BAD_REQUEST,
+            Error::SolanaClientError(_) => StatusCode::BAD_REQUEST,
+            Error::ParsePubkeyError(_) => StatusCode::BAD_REQUEST,
         }
     }
 }

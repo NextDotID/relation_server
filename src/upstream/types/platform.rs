@@ -92,6 +92,12 @@ pub enum Platform {
     #[graphql(name = "ENS")]
     ENS,
 
+    /// https://www.sns.id: Solana Name Service
+    #[strum(serialize = "sns")]
+    #[serde(rename = "sns")]
+    #[graphql(name = "sns")]
+    SNS,
+
     /// Lens
     #[strum(serialize = "Lens", serialize = "lens")]
     #[serde(rename = "lens")]
@@ -186,6 +192,8 @@ impl From<Platform> for DomainNameSystem {
             Platform::Lens => DomainNameSystem::Lens,
             Platform::SpaceId => DomainNameSystem::SpaceId,
             Platform::Crossbell => DomainNameSystem::SpaceId,
+            Platform::ENS => DomainNameSystem::ENS,
+            Platform::SNS => DomainNameSystem::SNS,
             _ => DomainNameSystem::Unknown,
         }
     }
