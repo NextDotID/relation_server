@@ -159,6 +159,8 @@ impl ExpandIdentityRecord {
             Platform::Crossbell,
             Platform::Ethereum,
             Platform::ENS,
+            Platform::Solana,
+            Platform::SNS,
         ]
         .contains(&self.platform)
         {
@@ -177,6 +179,7 @@ impl ExpandIdentityRecord {
             Platform::SpaceId,
             Platform::Crossbell,
             Platform::ENS,
+            Platform::SNS,
         ]
         .contains(&self.platform)
         {

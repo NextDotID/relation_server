@@ -128,6 +128,12 @@ pub enum DataSource {
     #[graphql(name = "crossbell")]
     Crossbell,
 
+    /// Solana
+    #[strum(serialize = "solana")]
+    #[serde(rename = "solana")]
+    #[graphql(name = "solana")]
+    Solana,
+
     /// opensea
     /// https://opensea.io
     /// Twitter <-> Ethereum
