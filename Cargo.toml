@@ -50,6 +50,16 @@ maybe-async = "0.2"
 strum_macros = "*"
 strum = "*"
 
+# Solana Name Service (SNS)
+solana-sdk = "<1.16.0"
+solana-client = "~1.14.1"
+spl-name-service = { version = "0.2.0", features = ["no-entrypoint"] }
+spl-token = "3.0.0"
+solana-account-decoder = "<1.16.0"
+solana-program = "<1.16.0"
+sns-sdk = "=1.4.0"
+borsh = "0.9"
+
 # GraphQL
 async-graphql = { version = "7", features = ["uuid", "chrono"] }
 async-graphql-warp = "7"

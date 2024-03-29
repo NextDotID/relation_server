@@ -269,7 +269,7 @@ async fn stable_fetch_connections_by_platform_identity(
                 ));
             }
             let result = r.data.map_or(vec![], |res| res);
-            tracing::info!("proofs_summary result {:?}", result);
+            tracing::debug!("proofs_summary result {:?}", result);
             debug!("Keybase proofs_summary = {} Records found.", result.len(),);
             result
         }
@@ -341,7 +341,7 @@ async fn stable_fetch_connections_by_platform_identity(
         next_targets.push(Target::Identity(to_platform, p.username.clone()));
     }
 
-    Ok(vec![])
+    Ok(next_targets)
 }
 
 #[allow(dead_code)]

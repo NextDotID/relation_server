@@ -9,6 +9,7 @@ mod knn3;
 mod lensv2;
 mod proof_client;
 mod rss3;
+mod solana;
 mod space_id;
 mod sybil_list;
 mod unstoppable;
@@ -23,7 +24,7 @@ use crate::{
     upstream::{
         aggregation::Aggregation, crossbell::Crossbell, dotbit::DotBit,
         ens_reverse::ENSReverseLookup, farcaster::Farcaster, keybase::Keybase, knn3::Knn3,
-        lensv2::LensV2, proof_client::ProofClient, rss3::Rss3, space_id::SpaceId,
+        lensv2::LensV2, proof_client::ProofClient, rss3::Rss3, solana::Solana, space_id::SpaceId,
         sybil_list::SybilList, the_graph::TheGraph, unstoppable::UnstoppableDomains,
     },
     util::hashset_append,
@@ -172,6 +173,7 @@ pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
         SpaceId::fetch(target),
         Crossbell::fetch(target),
         TheGraph::fetch(target),
+        Solana::fetch(target),
     ])
     .await
     .into_iter()

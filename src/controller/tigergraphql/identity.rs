@@ -252,6 +252,8 @@ impl IdentityRecord {
             Platform::Crossbell,
             Platform::Ethereum,
             Platform::ENS,
+            Platform::Solana,
+            Platform::SNS,
         ]
         .contains(&self.platform)
         {
@@ -270,6 +272,7 @@ impl IdentityRecord {
             Platform::SpaceId,
             Platform::Crossbell,
             Platform::ENS,
+            Platform::SNS,
         ]
         .contains(&self.platform)
         {
@@ -365,7 +368,8 @@ impl IdentityQuery {
                 Ok(IdentityGraph::find_expand_identity(&client, &platform, &identity).await?)
             }
             Some(found) => {
-                if found.is_outdated() {
+                // if found.is_outdated() {
+                if true {
                     event!(
                         Level::DEBUG,
                         ?platform,

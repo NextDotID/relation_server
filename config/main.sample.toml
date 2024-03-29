@@ -56,3 +56,6 @@ url = "https://api.prd.space.id"
 
 [upstream.crossbell_api]
 url = "https://indexer.crossbell.io/v1/graphql"
+
+[upstream.solana_rpc]
+rpc_url = "https://api.mainnet-beta.solana.com"

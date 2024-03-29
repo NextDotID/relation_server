@@ -25,6 +25,12 @@ pub enum DomainNameSystem {
     #[graphql(name = "ENS")]
     ENS,
 
+    /// https://www.sns.id: Solana Name Service
+    #[strum(serialize = "sns")]
+    #[serde(rename = "sns")]
+    #[graphql(name = "sns")]
+    SNS,
+
     /// https://www.did.id/
     #[strum(serialize = "dotbit")]
     #[serde(rename = "dotbit")]

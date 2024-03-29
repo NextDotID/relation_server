@@ -94,10 +94,14 @@ async fn save_verifications(
     verification: &Verification,
 ) -> Result<Target, Error> {
     let protocol: Platform = verification.protocol.parse()?;
+    let mut address = verification.address.clone();
+    if protocol == Platform::Ethereum {
+        address = address.to_lowercase();
+    }
     let eth_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: protocol,
-        identity: verification.address.to_lowercase(),
+        identity: address.clone(),
         uid: None,
         created_at: None,
         display_name: None,
@@ -134,10 +138,7 @@ async fn save_verifications(
     };
     create_identity_to_identity_hold_record(client, &eth_identity, &farcaster_identity, &hold)
         .await?;
-    Ok(Target::Identity(
-        protocol,
-        verification.address.to_lowercase().to_string(),
-    ))
+    Ok(Target::Identity(protocol, address.clone()))
 }
 
 // {"errors":[{"message":"No FID associated with username checkyou"}]}

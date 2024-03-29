@@ -486,7 +486,7 @@ CREATE OR REPLACE QUERY find_expand_identity(STRING platform, STRING identity) F
   SetAccum<Address> @owner_address;
   SetAccum<Address> @resolve_address;
   
-  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS"];
+  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS", "sns"];
   IF @@domainSystems.contains(platform) == TRUE THEN
     tmp = SELECT domain FROM seed:domain-((<Hold_Identity):e)-Identities:owner
             ACCUM domain.@owner_address += Address(owner.platform, owner.identity);
@@ -523,7 +523,7 @@ CREATE OR REPLACE QUERY find_identity_graph(STRING p, INT reverse_flag=0) FOR GR
                      POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_nanosecond, tgt.id);
   graph_id = @@minUpdateTime.id;
 
-  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS"];
+  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS", "sns"];
 
   IF reverse_flag == 1 THEN
     vset = SELECT v FROM Identities:v-((PartOfIdentitiesGraph>):e)-identities_graph
@@ -534,21 +534,21 @@ CREATE OR REPLACE QUERY find_identity_graph(STRING p, INT reverse_flag=0) FOR GR
     tmp2 = SELECT v1 FROM vset:v1-((<Proof_Forward|<Proof_Backward):e2)-vset:v2
           ACCUM @@edges += IdentityConnection(v2, v1, e2.source, "Proof");
     tmp4 = SELECT v1  FROM vset:v1-((Hold_Identity>):e1)-vset:i-((Resolve>):e2)-vset:v2
-          WHERE i.platform != "ENS"
+          WHERE i.platform != "ENS" AND i.platform != "sns"
           ACCUM @@edges += IdentityConnection(v1, i, e1.source, "Hold"),
                 i.@owner_address += Address(v1.platform, v1.identity), 
                 i.@resolve_address += Address(v2.platform, v2.identity);
     tmp5 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
-          WHERE v2.platform != "ENS"
+          WHERE v2.platform != "ENS" AND v2.platform != "sns"
           ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Hold"),
                 v2.@owner_address += Address(v1.platform, v1.identity);
     tmp3 = SELECT v1 FROM vset:v1-((Resolve>):r)-vset:v2
-          WHERE v1.platform == "ENS"
+          WHERE v1.platform == "ENS" OR v1.platform != "sns"
           ACCUM
             @@edges += IdentityConnection(v1, v2, r.source, "Resolve"),
             v1.@resolve_address += Address(v2.platform, v2.identity);
     tmp3_1 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
-          WHERE v2.platform == "ENS"
+          WHERE v2.platform == "ENS" OR v2.platform == "sns"
           ACCUM v2.@owner_address += Address(v1.platform, v1.identity);
 
     tmp6 = SELECT v1 FROM vset:v1-((Reverse_Resolve>):e1)-vset:v2
@@ -564,21 +564,21 @@ CREATE OR REPLACE QUERY find_identity_graph(STRING p, INT reverse_flag=0) FOR GR
     tmp2 = SELECT v1 FROM vset:v1-((<Proof_Forward|<Proof_Backward):e2)-vset:v2
           ACCUM @@edges += IdentityConnection(v2, v1, e2.source, "Proof");
     tmp4 = SELECT v1  FROM vset:v1-((Hold_Identity>):e1)-vset:i-((Resolve>):e2)-vset:v2
-          WHERE i.platform != "ENS"
+          WHERE i.platform != "ENS" AND i.platform != "sns"
           ACCUM @@edges += IdentityConnection(v1, i, e1.source, "Hold"),
                 i.@owner_address += Address(v1.platform, v1.identity), 
                 i.@resolve_address += Address(v2.platform, v2.identity);
     tmp5 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
-          WHERE v2.platform != "ENS"
+          WHERE v2.platform != "ENS" AND v2.platform != "sns"
           ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Hold"),
                 v2.@owner_address += Address(v1.platform, v1.identity);
     tmp3 = SELECT v1 FROM vset:v1-((Resolve>):r)-vset:v2
-          WHERE v1.platform == "ENS"
+          WHERE v1.platform == "ENS" OR v1.platform == "sns"
           ACCUM
             @@edges += IdentityConnection(v1, v2, r.source, "Resolve"),
             v1.@resolve_address += Address(v2.platform, v2.identity);
     tmp3_1 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
-          WHERE v2.platform == "ENS"
+          WHERE v2.platform == "ENS" OR v2.platform == "sns"
           ACCUM v2.@owner_address += Address(v1.platform, v1.identity);
     tmp6 = SELECT v1 FROM vset:v1-((Reverse_Resolve>):e1)-vset:v2
           ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Reverse_Resolve");
@@ -591,21 +591,21 @@ CREATE OR REPLACE QUERY find_identity_graph(STRING p, INT reverse_flag=0) FOR GR
     tmp2 = SELECT v1 FROM vset:v1-((<Proof_Forward|<Proof_Backward):e2)-vset:v2
           ACCUM @@edges += IdentityConnection(v2, v1, e2.source, "Proof");
     tmp4 = SELECT v1  FROM vset:v1-((Hold_Identity>):e1)-vset:i-((Resolve>):e2)-vset:v2
-          WHERE i.platform != "ENS"
+          WHERE i.platform != "ENS" AND i.platform != "sns"
           ACCUM @@edges += IdentityConnection(v1, i, e1.source, "Hold"),
                 i.@owner_address += Address(v1.platform, v1.identity), 
                 i.@resolve_address += Address(v2.platform, v2.identity);
     tmp5 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
-          WHERE v2.platform != "ENS"
+          WHERE v2.platform != "ENS" AND v2.platform != "sns"
           ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Hold"),
                 v2.@owner_address += Address(v1.platform, v1.identity);
     tmp3 = SELECT v1 FROM vset:v1-((Resolve>):r)-vset:v2
-          WHERE v1.platform == "ENS"
+          WHERE v1.platform == "ENS" OR v1.platform == "sns"
           ACCUM
             @@edges += IdentityConnection(v1, v2, r.source, "Resolve"),
             v1.@resolve_address += Address(v2.platform, v2.identity);
     tmp3_1 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
-          WHERE v2.platform == "ENS"
+          WHERE v2.platform == "ENS" OR v2.platform == "sns"
           ACCUM v2.@owner_address += Address(v1.platform, v1.identity);
 
     tmp6 = SELECT v1 FROM vset:v1-((Reverse_Resolve>):e1)-vset:v2
@@ -645,7 +645,7 @@ CREATE OR REPLACE QUERY neighbors_with_source_reverse(VERTEX<Identities> p, INT 
   SetAccum<STRING> @source_list;
   SetAccum<EDGE> @@edge_set;
   SetAccum<VERTEX<Identities>> @@vertices;
-  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS"];
+  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS", "sns"];
 
   ##### Initialization  #####
   seed (Identities) = {p};
