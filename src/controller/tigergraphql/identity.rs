@@ -368,8 +368,7 @@ impl IdentityQuery {
                 Ok(IdentityGraph::find_expand_identity(&client, &platform, &identity).await?)
             }
             Some(found) => {
-                // if found.is_outdated() {
-                if true {
+                if found.is_outdated() {
                     event!(
                         Level::DEBUG,
                         ?platform,
