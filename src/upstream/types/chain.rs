@@ -169,6 +169,13 @@ pub enum Chain {
     #[graphql(name = "celo")]
     Celo,
 
+    /// CKB
+    /// https://www.nervos.org/ Common Knowledge Base
+    #[strum(serialize = "ckb")]
+    #[serde(rename = "ckb")]
+    #[graphql(name = "ckb")]
+    CKB,
+
     /// Base is an easy way for decentralized apps to leverage Coinbase's products and distribution.
     /// https://base.org/
     /// https://basescan.org/
@@ -233,6 +240,7 @@ impl Chain {
             Avalanche => ChainType::EVM(43114),
             Fantom => ChainType::EVM(250),
             Celo => ChainType::EVM(42220),
+            CKB => ChainType::EVM(71402),
             Base => ChainType::EVM(8453),
             Unknown => todo!(),
         }
