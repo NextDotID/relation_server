@@ -137,13 +137,14 @@ async fn fetch_by_wallet(target: &Target) -> Result<TargetProcessedList, Error> 
     let twitter_handle = get_handle_and_registry_key(&rpc_client, &owner).await?;
     match twitter_handle {
         Some(twitter_handle) => {
+            let format_twitter = twitter_handle.to_lowercase();
             let twitter = Identity {
                 uuid: Some(Uuid::new_v4()),
                 platform: Platform::Twitter,
-                identity: twitter_handle.clone(),
+                identity: format_twitter.clone(),
                 uid: None,
                 created_at: None,
-                display_name: Some(twitter_handle.clone()),
+                display_name: Some(format_twitter.clone()),
                 added_at: naive_now(),
                 avatar_url: None,
                 profile_url: None,
@@ -173,7 +174,7 @@ async fn fetch_by_wallet(target: &Target) -> Result<TargetProcessedList, Error> 
             };
             create_identity_to_identity_proof_two_way_binding(&client, &solana, &twitter, &pf, &pb)
                 .await?;
-            next_targets.push(Target::Identity(Platform::Twitter, twitter_handle.clone()))
+            next_targets.push(Target::Identity(Platform::Twitter, format_twitter.clone()))
         }
         None => trace!(?target, "Twitter Record Not Set"),
     }
@@ -340,13 +341,14 @@ async fn fetch_by_twitter_handle(target: &Target) -> Result<TargetProcessedList,
                 reverse: Some(false),
             };
 
+            let format_twitter = twitter_handle.to_lowercase();
             let twitter = Identity {
                 uuid: Some(Uuid::new_v4()),
                 platform: Platform::Twitter,
-                identity: twitter_handle.clone(),
+                identity: format_twitter.clone(),
                 uid: None,
                 created_at: None,
-                display_name: Some(twitter_handle.clone()),
+                display_name: Some(format_twitter.clone()),
                 added_at: naive_now(),
                 avatar_url: None,
                 profile_url: None,
@@ -491,7 +493,6 @@ async fn get_twitter_registry(
         None, // Assuming no name class
         Some(&TWITTER_ROOT_PARENT_REGISTRY_KEY),
     );
-    // Some(NameRecordHeader { parent_name: 4YcexoW3r78zz16J2aqmukBLRwGq6rAvWzJpkYAXqebv, owner: CLnUobvN8Fy7vhDMkQqNF7STxk5CT7MoePXvkgUGgdc9, class: 11111111111111111111111111111111 })
     match resolve_name_registry(rpc_client, &twitter_handle_registry_key).await? {
         Some((header, _)) => Ok(Some(header.owner)),
         None => Ok(None),

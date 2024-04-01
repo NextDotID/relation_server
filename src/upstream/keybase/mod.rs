@@ -231,13 +231,17 @@ async fn stable_fetch_connections_by_platform_identity(
     let client = make_http_client();
     let uri: http::Uri = format!(
         "{}/proofs_summary?platform={}&username={}",
-        C.upstream.keybase_service.stable_url, platform, identity
+        C.upstream.keybase_service.stable_url,
+        platform,
+        identity.to_lowercase()
     )
     .parse()
     .map_err(|_err: InvalidUri| {
         Error::ParamError(format!(
             "{}={} Uri format Error | {}",
-            platform, identity, _err
+            platform,
+            identity.to_lowercase(),
+            _err
         ))
     })?;
     let req = hyper::Request::builder()
@@ -250,7 +254,7 @@ async fn stable_fetch_connections_by_platform_identity(
         Error::ManualHttpClientError(format!(
             "Keybase proofs_summary?platform={}&identity={} error | Fail to request: {:?}",
             platform,
-            identity,
+            identity.to_lowercase(),
             err.to_string()
         ))
     })?;

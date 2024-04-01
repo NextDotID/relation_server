@@ -11,9 +11,9 @@ mod tests {
     use rand::Rng;
     use sns_sdk::non_blocking::resolve::resolve_owner;
 
-    // const RPC_URL: &str = "https://api.mainnet-beta.solana.com";
+    const RPC_URL: &str = "https://api.mainnet-beta.solana.com";
     // const RPC_URL: &str = "https://api.testnet.solana.com";
-    const RPC_URL: &str = "https://api.devnet.solana.com"; // sns-api.bonfida.com
+    // const RPC_URL: &str = "https://api.devnet.solana.com"; // sns-api.bonfida.com
 
     pub fn generate_random_string(len: usize) -> String {
         let mut rng = rand::thread_rng();
@@ -45,7 +45,7 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_register_favourite() -> Result<(), Error> {
         let client = get_rpc_client(RPC_URL.to_string());
-        let res = fetch_register_favourite(&client, "5k8SRiitUFPcUPLNB4eWwafXfYBP76iTx2P16xc99QYd")
+        let res = fetch_register_favourite(&client, "HKKp49qGWXd639QsuH7JiLijfVW5UtCVY4s1n2HANwEA")
             .await?;
         println!("{:?}", res);
         Ok(())
@@ -55,7 +55,7 @@ mod tests {
     async fn test_get_twitter_registry() -> Result<(), Error> {
         let client = get_rpc_client(RPC_URL.to_string());
 
-        let res = get_twitter_registry(&client, "blueoceanshark").await?;
+        let res = get_twitter_registry(&client, "suji_yan").await?;
         println!("{:?}", res);
         Ok(())
     }
@@ -66,8 +66,9 @@ mod tests {
 
         // CLnUobvN8Fy7vhDMkQqNF7STxk5CT7MoePXvkgUGgdc9
         // 5k8SRiitUFPcUPLNB4eWwafXfYBP76iTx2P16xc99QYd
+        // 9mUxj781h7UXDFcbesr1YUfVGD2kQZgsUMc5kzpL9g65
         let res =
-            get_handle_and_registry_key(&client, "5k8SRiitUFPcUPLNB4eWwafXfYBP76iTx2P16xc99QYd")
+            get_handle_and_registry_key(&client, "9mUxj781h7UXDFcbesr1YUfVGD2kQZgsUMc5kzpL9g65")
                 .await?;
         println!("{:?}", res);
         Ok(())
