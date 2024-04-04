@@ -26,6 +26,12 @@ pub enum Platform {
     #[graphql(name = "twitter")]
     Twitter,
 
+    /// Bitcoin
+    #[strum(serialize = "bitcoin")]
+    #[serde(rename = "bitcoin")]
+    #[graphql(name = "bitcoin")]
+    Bitcoin,
+
     /// Ethereum wallet `0x[a-f0-9]{40}`
     #[strum(serialize = "ethereum", serialize = "eth")]
     #[serde(rename = "ethereum")]

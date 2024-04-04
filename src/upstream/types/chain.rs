@@ -18,6 +18,12 @@ use strum_macros::{Display, EnumIter, EnumString};
     Hash,
 )]
 pub enum Chain {
+    /// Bitcoin
+    #[strum(serialize = "bitcoin")]
+    #[serde(rename = "bitcoin")]
+    #[graphql(name = "bitcoin")]
+    Bitcoin,
+
     /// The Blockchain.
     #[serde(rename = "ethereum")]
     #[strum(serialize = "ethereum")]
@@ -203,6 +209,8 @@ pub enum ChainType {
     Arweave,
     /// Basiclly an EVM, but with different address serializer, transaction packaging and genesis contracts.
     Conflux,
+    /// Bitcoin
+    BTC,
 }
 
 impl Default for ChainType {
@@ -217,6 +225,7 @@ impl Chain {
         use Chain::*;
 
         match self {
+            Bitcoin => ChainType::BTC,
             Ethereum => ChainType::EVM(1),
             Rinkeby => ChainType::EVM(4),
             Ropsten => ChainType::EVM(3),

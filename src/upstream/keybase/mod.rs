@@ -108,6 +108,7 @@ struct KeybaseProof {
     display_name: Option<String>,
     proof_type: i32,
     proof_state: i32,
+    record_id: Option<String>,
     #[serde(deserialize_with = "option_naive_datetime_from_string")]
     #[serde(serialize_with = "option_naive_datetime_to_string")]
     created_time: Option<NaiveDateTime>,
@@ -142,6 +143,7 @@ impl Fetcher for Keybase {
             Platform::Lobsters,
             Platform::HackerNews,
             Platform::Facebook,
+            Platform::Bitcoin,
         ])
     }
 }
@@ -229,19 +231,22 @@ async fn stable_fetch_connections_by_platform_identity(
 ) -> Result<TargetProcessedList, Error> {
     let mut next_targets: TargetProcessedList = Vec::new();
     let client = make_http_client();
+
+    // BTC Character case sensitive
+    let mut format_identity = identity.to_string();
+    if platform.to_owned() != Platform::Bitcoin {
+        format_identity = format_identity.to_lowercase();
+    }
+
     let uri: http::Uri = format!(
         "{}/proofs_summary?platform={}&username={}",
-        C.upstream.keybase_service.stable_url,
-        platform,
-        identity.to_lowercase()
+        C.upstream.keybase_service.stable_url, platform, format_identity
     )
     .parse()
     .map_err(|_err: InvalidUri| {
         Error::ParamError(format!(
             "{}={} Uri format Error | {}",
-            platform,
-            identity.to_lowercase(),
-            _err
+            platform, format_identity, _err
         ))
     })?;
     let req = hyper::Request::builder()
@@ -254,7 +259,7 @@ async fn stable_fetch_connections_by_platform_identity(
         Error::ManualHttpClientError(format!(
             "Keybase proofs_summary?platform={}&identity={} error | Fail to request: {:?}",
             platform,
-            identity.to_lowercase(),
+            format_identity,
             err.to_string()
         ))
     })?;
@@ -324,7 +329,7 @@ async fn stable_fetch_connections_by_platform_identity(
             uuid: Uuid::new_v4(),
             source: DataSource::Keybase,
             level: ProofLevel::VeryConfident,
-            record_id: None,
+            record_id: p.record_id.clone(),
             created_at: p.created_time.clone(),
             updated_at: naive_now(),
             fetcher: DataFetcher::RelationService,
@@ -334,7 +339,7 @@ async fn stable_fetch_connections_by_platform_identity(
             uuid: Uuid::new_v4(),
             source: DataSource::Keybase,
             level: ProofLevel::VeryConfident,
-            record_id: None,
+            record_id: p.record_id.clone(),
             created_at: p.created_time.clone(),
             updated_at: naive_now(),
             fetcher: DataFetcher::RelationService,

@@ -9,7 +9,9 @@ mod tests {
     use crate::upstream::{Fetcher, Platform, Target};
     use crate::util::make_http_client;
     use rand::Rng;
-    use sns_sdk::non_blocking::resolve::resolve_owner;
+    use sns_sdk::non_blocking::resolve::{get_domains_owner, resolve_owner, resolve_reverse_batch};
+    use solana_program::pubkey::Pubkey;
+    use std::str::FromStr;
 
     const RPC_URL: &str = "https://api.mainnet-beta.solana.com";
     // const RPC_URL: &str = "https://api.testnet.solana.com";
@@ -130,6 +132,20 @@ mod tests {
         // .await?
         // .expect("Record not found");
         // print!("found: {:?}", found);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_owner() -> Result<(), Error> {
+        let rpc_client: solana_client::nonblocking::rpc_client::RpcClient =
+            get_rpc_client(RPC_URL.to_string());
+        let owner = "CLnUobvN8Fy7vhDMkQqNF7STxk5CT7MoePXvkgUGgdc9";
+        let owner_key = Pubkey::from_str(owner)?;
+        let domains = get_domains_owner(&rpc_client, owner_key).await?;
+        print!("domains: {:?}", domains);
+        let resolve_records: Vec<Option<String>> =
+            resolve_reverse_batch(&rpc_client, &domains).await.unwrap();
+        print!("resolve_records: {:?}", resolve_records);
         Ok(())
     }
 }
