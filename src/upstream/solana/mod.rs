@@ -96,6 +96,7 @@ async fn fetch_by_wallet(target: &Target) -> Result<TargetProcessedList, Error> 
             let format_sol = format_domain(&favourite_domain);
             trace!(?target, "Favourite Domain Founded({})", format_sol);
             solana.reverse = Some(true); // set reverse
+            solana.display_name = Some(format_sol.clone());
             let farvourite_sns = Identity {
                 uuid: Some(Uuid::new_v4()),
                 platform: Platform::SNS,
