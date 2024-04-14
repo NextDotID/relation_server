@@ -8,11 +8,12 @@ use crate::tigergraph::edge::Resolve;
 use crate::tigergraph::upsert::create_ens_identity_ownership;
 use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
+use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
 use crate::tigergraph::upsert::create_identity_to_identity_proof_two_way_binding;
 use crate::tigergraph::upsert::create_isolated_vertex;
-use crate::tigergraph::vertex::Identity;
+use crate::tigergraph::vertex::{Contract, Identity};
 use crate::upstream::ProofLevel;
-use crate::upstream::{DataFetcher, DataSource, DomainNameSystem};
+use crate::upstream::{Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem};
 use crate::util::{make_http_client, naive_now};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
@@ -222,9 +223,19 @@ async fn fetch_by_wallet(target: &Target) -> Result<TargetProcessedList, Error> 
             updated_at: naive_now(),
         };
 
+        let contract = Contract {
+            uuid: Uuid::new_v4(),
+            category: ContractCategory::SNS,
+            address: ContractCategory::SNS.default_contract_address().unwrap(),
+            chain: Chain::Solana,
+            symbol: Some("SNS".to_string()),
+            updated_at: naive_now(),
+        };
+
         create_identity_domain_resolve_record(&client, &sns, &solana, &resolve).await?;
         // ownership create `Hold_Identity` connection but only Wallet connected to HyperVertex
         create_ens_identity_ownership(&client, &solana, &sns, &hold).await?;
+        create_identity_to_contract_hold_record(&client, &solana, &contract, &hold).await?;
     }
 
     Ok(next_targets)
@@ -293,9 +304,20 @@ async fn fetch_by_sns_handle(target: &Target) -> Result<TargetProcessedList, Err
                 fetcher: DataFetcher::RelationService,
                 updated_at: naive_now(),
             };
+
+            let contract = Contract {
+                uuid: Uuid::new_v4(),
+                category: ContractCategory::SNS,
+                address: ContractCategory::SNS.default_contract_address().unwrap(),
+                chain: Chain::Solana,
+                symbol: Some("SNS".to_string()),
+                updated_at: naive_now(),
+            };
+
             create_identity_domain_resolve_record(&client, &sns, &solana, &resolve).await?;
             // ownership create `Hold_Identity` connection but only Wallet connected to HyperVertex
             create_ens_identity_ownership(&client, &solana, &sns, &hold).await?;
+            create_identity_to_contract_hold_record(&client, &solana, &contract, &hold).await?;
         }
         None => trace!(?target, "Owner not found"),
     }
@@ -440,7 +462,6 @@ async fn fetch_register_favourite(
     owner: &str,
 ) -> Result<Option<String>, Error> {
     let owner_key = Pubkey::from_str(owner)?;
-    // let name_service_account = ;
     match get_favourite_domain(client, &owner_key).await? {
         None => Ok(None),
         Some(name_service_account) => match resolve_reverse(client, &name_service_account).await? {
