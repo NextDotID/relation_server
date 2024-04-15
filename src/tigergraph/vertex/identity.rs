@@ -988,7 +988,9 @@ impl IdentityRecord {
         limit: u16,
         offset: u16,
     ) -> Result<Vec<HoldRecord>, Error> {
-        if self.attributes.platform != Platform::Ethereum {
+        if self.attributes.platform != Platform::Ethereum
+            && self.attributes.platform != Platform::Solana
+        {
             return Ok(vec![]);
         }
         // query see in Solution: nfts(VERTEX<Identities> p, SET<STRING> categories, INT numPerPage, INT pageNum)
