@@ -134,6 +134,14 @@ pub enum DataSource {
     #[graphql(name = "solana")]
     Solana,
 
+    /// Solana Name Service | Bonfida
+    /// Bonfida is building top-tier infrastructure to enhance the efficiency of Solana with a community-centric approach.
+    /// https://www.sns.id/
+    #[strum(serialize = "sns")]
+    #[serde(rename = "sns")]
+    #[graphql(name = "sns")]
+    SNS,
+
     /// opensea
     /// https://opensea.io
     /// Twitter <-> Ethereum

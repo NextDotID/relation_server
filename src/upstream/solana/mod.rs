@@ -157,7 +157,7 @@ async fn fetch_by_wallet(target: &Target) -> Result<TargetProcessedList, Error> 
 
             let pf: Proof = Proof {
                 uuid: Uuid::new_v4(),
-                source: DataSource::Solana,
+                source: DataSource::SNS,
                 level: ProofLevel::VeryConfident,
                 record_id: None,
                 created_at: None,
@@ -167,7 +167,7 @@ async fn fetch_by_wallet(target: &Target) -> Result<TargetProcessedList, Error> 
 
             let pb: Proof = Proof {
                 uuid: Uuid::new_v4(),
-                source: DataSource::Solana,
+                source: DataSource::SNS,
                 level: ProofLevel::VeryConfident,
                 record_id: None,
                 created_at: None,
@@ -382,7 +382,7 @@ async fn fetch_by_twitter_handle(target: &Target) -> Result<TargetProcessedList,
 
             let pf: Proof = Proof {
                 uuid: Uuid::new_v4(),
-                source: DataSource::Solana,
+                source: DataSource::SNS,
                 level: ProofLevel::VeryConfident,
                 record_id: None,
                 created_at: None,
@@ -392,7 +392,7 @@ async fn fetch_by_twitter_handle(target: &Target) -> Result<TargetProcessedList,
 
             let pb: Proof = Proof {
                 uuid: Uuid::new_v4(),
-                source: DataSource::Solana,
+                source: DataSource::SNS,
                 level: ProofLevel::VeryConfident,
                 record_id: None,
                 created_at: None,
