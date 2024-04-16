@@ -22,6 +22,22 @@ mod schema {
     cynic::use_schema!("src/upstream/lensv2/schema.graphql");
 }
 
+#[derive(cynic::QueryVariables, Debug)]
+pub struct DefaultProfileVariables {
+    pub evm_address: EvmAddress,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    graphql_type = "Query",
+    schema_path = "src/upstream/lensv2/schema.graphql",
+    variables = "DefaultProfileVariables"
+)]
+pub struct GetDefaultProfile {
+    #[arguments(request: { for: $evm_address })]
+    pub default_profile: Option<Profile>,
+}
+
 // Query by Handles
 #[derive(cynic::QueryVariables, Debug, Default)]
 pub struct ProfilesRequestVariables {
@@ -104,6 +120,12 @@ pub struct TokenId(pub String);
 #[derive(cynic::Scalar, Debug, Clone)]
 pub struct TxHash(pub String);
 
+impl PartialEq for ProfileId {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
 pub struct LensV2 {}
 
 #[async_trait]
@@ -152,13 +174,49 @@ async fn fetch_by_lens_handle(target: &Target) -> Result<TargetProcessedList, Er
 
     let mut next_targets: Vec<Target> = Vec::new();
     for profile in profiles.iter() {
-        let t = save_profile(&cli, profile).await?;
+        if profile.handle.clone().is_none() {
+            continue;
+        }
+        let evm_owner = profile.owned_by.address.0.to_ascii_lowercase();
+        // fetch default profile id for lens-v2
+        let default_profile_id = get_default_profile_id(&evm_owner).await?;
+        let t = save_profile(&cli, profile, default_profile_id).await?;
         if let Some(t) = t {
             next_targets.push(t);
         }
     }
 
     Ok(next_targets)
+}
+
+async fn get_default_profile_id(evm_address: &str) -> Result<Option<ProfileId>, Error> {
+    // https://docs.lens.xyz/docs/default-profile
+    // Even though default profiles are not part of the Lens V2 Protocol specification
+    // the Lens API allows setting and fetching default profiles for any given EvmAddress.
+    // If a Lens user has not explicitly set their default profile,
+    // their oldest profile will be returned, prioritising profiles with linked handles.
+    let default_operation = GetDefaultProfile::build(DefaultProfileVariables {
+        evm_address: EvmAddress(evm_address.to_string()),
+    });
+    let default_response = surf::post(C.upstream.lens_api.url.clone())
+        .run_graphql(default_operation)
+        .await;
+
+    if default_response.is_err() {
+        warn!(
+            "Failed to fetch default profile.id: {}",
+            default_response.unwrap_err(),
+        );
+        return Ok(None);
+    }
+    match default_response
+        .unwrap()
+        .data
+        .map_or(None, |data| data.default_profile)
+    {
+        Some(profile) => Ok(Some(profile.id)),
+        None => Ok(None),
+    }
 }
 
 async fn fetch_by_wallet(target: &Target) -> Result<TargetProcessedList, Error> {
@@ -185,9 +243,11 @@ async fn fetch_by_wallet(target: &Target) -> Result<TargetProcessedList, Error> 
         .unwrap()
         .data
         .map_or(vec![], |data| data.profiles.items);
+    // fetch default profile id for lens-v2
+    let default_profile_id = get_default_profile_id(&owned_by_evm).await?;
     let mut next_targets: Vec<Target> = Vec::new();
     for profile in profiles.iter() {
-        let t = save_profile(&cli, profile).await?;
+        let t = save_profile(&cli, profile, default_profile_id.clone()).await?;
         if let Some(t) = t {
             next_targets.push(t);
         }
@@ -199,9 +259,21 @@ async fn fetch_by_wallet(target: &Target) -> Result<TargetProcessedList, Error> 
 async fn save_profile(
     client: &Client<HttpConnector>,
     profile: &Profile,
+    default_profile_id: Option<ProfileId>,
 ) -> Result<Option<Target>, Error> {
     if profile.handle.clone().is_none() {
         return Ok(None);
+    }
+    let mut is_default = false;
+    if let Some(default_profile_id) = default_profile_id {
+        if profile.id == default_profile_id {
+            tracing::info!(
+                "profile.id {:?} == default_profile_id {:?}",
+                profile.id,
+                default_profile_id
+            );
+            is_default = true;
+        }
     }
     let handle_info = profile.handle.clone().unwrap();
     let owner = profile.owned_by.address.0.to_ascii_lowercase();
@@ -224,7 +296,7 @@ async fn save_profile(
         profile_url: None,
         updated_at: naive_now(),
         expired_at: None,
-        reverse: Some(false),
+        reverse: Some(is_default),
     };
 
     let lens: Identity = Identity {
@@ -239,7 +311,7 @@ async fn save_profile(
         profile_url: Some("https://hey.xyz/u/".to_owned() + &handle_info.local_name),
         updated_at: naive_now(),
         expired_at: None,
-        reverse: Some(true),
+        reverse: Some(is_default),
     };
 
     let hold: Hold = Hold {
@@ -274,6 +346,8 @@ async fn save_profile(
     trace!("LensV2 Ethereum({}) handle: {}", owner, lens_handle);
     create_identity_to_identity_hold_record(client, &addr, &lens, &hold).await?;
     create_identity_domain_resolve_record(client, &lens, &addr, &resolve).await?;
-    create_identity_domain_reverse_resolve_record(client, &addr, &lens, &reverse).await?;
+    if is_default {
+        create_identity_domain_reverse_resolve_record(client, &addr, &lens, &reverse).await?;
+    }
     Ok(Some(Target::Identity(Platform::Ethereum, owner.clone())))
 }
