@@ -206,7 +206,7 @@ async fn fetch_by_wallet(target: &Target) -> Result<TargetProcessedList, Error> 
         let hold: Hold = Hold {
             uuid: Uuid::new_v4(),
             source: DataSource::Solana,
-            transaction: None,
+            transaction: Some("".to_string()),
             id: format_sol_handle.clone(),
             created_at: None,
             updated_at: naive_now(),
@@ -288,7 +288,7 @@ async fn fetch_by_sns_handle(target: &Target) -> Result<TargetProcessedList, Err
             let hold: Hold = Hold {
                 uuid: Uuid::new_v4(),
                 source: DataSource::Solana,
-                transaction: None,
+                transaction: Some("".to_string()),
                 id: name.clone(),
                 created_at: None,
                 updated_at: naive_now(),
