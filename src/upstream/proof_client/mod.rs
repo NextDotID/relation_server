@@ -101,6 +101,7 @@ async fn fetch_connections_by_platform_identity(
     let req = hyper::Request::builder()
         .method(Method::GET)
         .uri(uri)
+        .header("x-api-key", C.upstream.proof_service.api_key.clone())
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("Proof Service Build Request Error {}", _err)))?;
 

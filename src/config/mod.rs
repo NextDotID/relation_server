@@ -67,6 +67,7 @@ pub struct ConfigWeb {
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigProofService {
     pub url: String,
+    pub api_key: String,
 }
 
 #[derive(Clone, Deserialize, Default)]
