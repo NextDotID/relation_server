@@ -9,3 +9,6 @@
 
 /gsql_client/.env
 /gsql_client/gsql_server_ip_config
+
+# Nix related
+/result
