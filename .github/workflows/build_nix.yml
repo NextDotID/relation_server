@@ -1,19 +1,15 @@
-name: "Build legacy Nix package on Ubuntu"
+name: "Build Nix package on NixOS"
 
 on:
   push:
 
 jobs:
   nix-build:
-    runs-on: ubuntu-latest
+    runs-on:
+      labels: [nixos, X64]
     steps:
-      - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v26
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v14
-        with:
-          name: nextid-relation-service
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - name: Building package
-        run: nix build
+    - uses: actions/checkout@v4
+    - name: Building package
+      run: nix build -v -L
+    - name: Build docker
+      run: nix bundle --bundler 'github:NixOS/bundlers#toDockerImage' .
