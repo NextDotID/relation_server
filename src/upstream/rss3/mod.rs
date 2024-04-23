@@ -220,10 +220,28 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
     {
         return Ok(vec![]);
     }
+    let mut nft_category = ContractCategory::Unknown;
+    let standard = real_action.metadata.standard.clone();
+    if let Some(standard) = standard {
+        if standard == "ERC-721".to_string() {
+            nft_category = ContractCategory::ERC721;
+        } else if standard == "ERC-1155".to_string() {
+            nft_category = ContractCategory::ERC1155;
+        }
+    }
 
-    let mut nft_category =
-        ContractCategory::from_str(real_action.metadata.standard.as_ref().unwrap().as_str())
-            .unwrap_or_default();
+    // let mut nft_category = ContractCategory::from_str(
+    //     real_action
+    //         .metadata
+    //         .standard
+    //         .as_ref()
+    //         .unwrap()
+    //         .to_lowercase()
+    //         .as_str(),
+    // )
+    // .unwrap_or_default();
+    println!("{:?}", real_action.metadata.standard);
+    println!("{:?}", nft_category.to_string());
 
     if real_action.tag_type == "poap".to_string() {
         nft_category = ContractCategory::POAP;
