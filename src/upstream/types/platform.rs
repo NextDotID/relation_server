@@ -93,9 +93,9 @@ pub enum Platform {
     HackerNews,
 
     /// ENS
-    #[strum(serialize = "ENS")]
-    #[serde(rename = "ENS")]
-    #[graphql(name = "ENS")]
+    #[strum(serialize = "ens")]
+    #[serde(rename = "ens")]
+    #[graphql(name = "ens")]
     ENS,
 
     /// https://www.sns.id: Solana Name Service

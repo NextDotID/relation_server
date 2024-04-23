@@ -18,29 +18,29 @@ use strum_macros::{Display, EnumIter, EnumString};
     Hash,
 )]
 pub enum ContractCategory {
-    #[strum(serialize = "ENS")]
-    #[serde(rename = "ENS")]
-    #[graphql(name = "ENS")]
+    #[strum(serialize = "ens")]
+    #[serde(rename = "ens")]
+    #[graphql(name = "ens")]
     ENS,
 
-    #[strum(serialize = "ERC721", serialize = "ERC-721")]
-    #[serde(rename = "ERC721")]
-    #[graphql(name = "ERC721")]
+    #[strum(serialize = "erc721")]
+    #[serde(rename = "erc721")]
+    #[graphql(name = "erc721")]
     ERC721,
 
-    #[strum(serialize = "ERC1155", serialize = "ERC-1155")]
-    #[serde(rename = "ERC1155")]
-    #[graphql(name = "ERC1155")]
+    #[strum(serialize = "erc1155")]
+    #[serde(rename = "erc1155")]
+    #[graphql(name = "erc1155")]
     ERC1155,
 
-    #[strum(serialize = "POAP")]
-    #[serde(rename = "POAP")]
-    #[graphql(name = "POAP")]
+    #[strum(serialize = "poap")]
+    #[serde(rename = "poap")]
+    #[graphql(name = "poap")]
     POAP,
 
-    #[strum(serialize = "SNS")]
-    #[serde(rename = "SNS")]
-    #[graphql(name = "SNS")]
+    #[strum(serialize = "sns")]
+    #[serde(rename = "sns")]
+    #[graphql(name = "sns")]
     SNS,
 
     #[default]

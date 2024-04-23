@@ -340,7 +340,7 @@ impl IdentityQuery {
     ) -> Result<Option<ExpandIdentityRecord>> {
         let client = make_http_client();
 
-        let platform: Platform = platform.parse()?;
+        let platform: Platform = platform.to_lowercase().parse()?;
 
         let target = match platform {
             Platform::ENS => Target::NFT(

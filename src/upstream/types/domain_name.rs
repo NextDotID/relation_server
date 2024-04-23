@@ -20,9 +20,9 @@ use strum_macros::{Display, EnumIter, EnumString};
 pub enum DomainNameSystem {
     /// ENS name system on the ETH chain.
     /// https://ens.domains
-    #[strum(serialize = "ENS")]
-    #[serde(rename = "ENS")]
-    #[graphql(name = "ENS")]
+    #[strum(serialize = "ens")]
+    #[serde(rename = "ens")]
+    #[graphql(name = "ens")]
     ENS,
 
     /// https://www.sns.id: Solana Name Service
