@@ -2,6 +2,7 @@ pub mod hold;
 pub mod proof;
 pub mod relation;
 pub mod resolve;
+pub mod social;
 pub use hold::{Hold, HoldRecord, HOLD_CONTRACT, HOLD_IDENTITY};
 pub use proof::{
     Proof, ProofRecord, EDGE_NAME as PROOF_EDGE, REVERSE_EDGE_NAME as PROOF_REVERSE_EDGE,
@@ -11,6 +12,7 @@ pub use resolve::{
     Resolve, ResolveEdge, ResolveRecord, RESOLVE, RESOLVE_CONTRACT, REVERSE_RESOLVE,
     REVERSE_RESOLVE_CONTRACT,
 };
+pub use social::{Relation, RelationConnection, RelationEdge, RelationResult};
 
 use crate::{
     error::Error,

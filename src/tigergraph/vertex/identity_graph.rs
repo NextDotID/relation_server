@@ -2,16 +2,19 @@ use crate::{
     config::C,
     error::Error,
     tigergraph::{
+        edge::{EdgeRecord, Relation, RelationConnection, RelationEdge, RelationResult},
         vertex::{Identity, IdentityRecord, VertexRecord},
         BaseResponse, Graph,
     },
     upstream::{Chain, DataSource, Platform},
     util::parse_body,
 };
+use chrono::NaiveDateTime;
 use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::de::{self, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, str::FromStr};
 use tracing::error;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,6 +51,36 @@ struct SingleExpandIdentityResponse {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct ExpandVerticesList {
     expand_vlist: Vec<ExpandIdentityRecord>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RelationResponse {
+    #[serde(flatten)]
+    base: BaseResponse,
+    results: Option<Vec<RelationTopology>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelationTopology {
+    pub all_count: i32,
+    pub edges: Vec<ExpandRelation>,
+    pub vertices: Vec<IdentitiesGraphStatistic>,
+    pub original_vertices: Vec<IdentityRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IdentitiesGraphStatistic {
+    pub attributes: Statistic,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Statistic {
+    #[serde(rename = "id")]
+    pub graph_id: String,
+    #[serde(rename = "@range")]
+    pub range: i32,
+    #[serde(rename = "@degree")]
+    pub degree: i32,
 }
 
 impl IdentityGraph {
@@ -121,6 +154,7 @@ impl IdentityGraph {
             }
         }
     }
+
     pub async fn find_graph_by_platform_identity(
         client: &Client<HttpConnector>,
         platform: &Platform,
@@ -216,6 +250,186 @@ impl IdentityGraph {
             }
         }
     }
+
+    pub async fn follow(
+        &self,
+        client: &Client<HttpConnector>,
+        hop: u16,
+        data_source: Option<Vec<DataSource>>,
+        limit: u16,
+        offset: u16,
+    ) -> Result<RelationResult, Error> {
+        let uri: http::Uri;
+        if data_source.is_none() || data_source.as_ref().unwrap().len() == 0 {
+            uri = format!(
+                "{}/query/{}/social_follows?g={}&hop={}&numPerPage={}&pageNum={}",
+                C.tdb.host,
+                Graph::SocialGraph.to_string(),
+                self.graph_id.to_string(),
+                hop,
+                limit,
+                offset
+            )
+            .parse()
+            .map_err(|_err: InvalidUri| {
+                Error::ParamError(format!("query social_follows Uri format Error {}", _err))
+            })?;
+        } else {
+            let sources: Vec<String> = data_source
+                .unwrap()
+                .into_iter()
+                .map(|field| format!("sources={}", field.to_string()))
+                .collect();
+            let combined = sources.join("&");
+            uri = format!(
+                "{}/query/{}/nfts?g={}&hop={}&{}&numPerPage={}&pageNum={}",
+                C.tdb.host,
+                Graph::SocialGraph.to_string(),
+                self.graph_id.to_string(),
+                hop,
+                combined,
+                limit,
+                offset
+            )
+            .parse()
+            .map_err(|_err: InvalidUri| {
+                Error::ParamError(format!("query social_follows  Uri format Error {}", _err))
+            })?;
+        }
+
+        let req = hyper::Request::builder()
+            .method(Method::GET)
+            .uri(uri)
+            .header("Authorization", Graph::SocialGraph.token())
+            .body(Body::empty())
+            .map_err(|_err| {
+                Error::ParamError(format!("query social_follows ParamError Error {}", _err))
+            })?;
+
+        let mut resp = client.request(req).await.map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "query social_follows | Fail to request: {:?}",
+                err.to_string()
+            ))
+        })?;
+
+        match parse_body::<RelationResponse>(&mut resp).await {
+            Ok(r) => {
+                if r.base.error {
+                    let err_message = format!(
+                        "TigerGraph query follow_relation error | Code: {:?}, Message: {:?}",
+                        r.base.code, r.base.message
+                    );
+                    error!(err_message);
+                    return Err(Error::General(err_message, resp.status()));
+                }
+                if let Some(relations) = r.results.and_then(|res| res.first().cloned()) {
+                    let identity_map: HashMap<String, IdentityRecord> = relations
+                        .original_vertices
+                        .into_iter()
+                        .map(|record| (record.v_id.clone(), record))
+                        .collect();
+
+                    let statistic_map: HashMap<String, i32> = relations
+                        .vertices
+                        .into_iter()
+                        .map(|record| (record.attributes.graph_id, record.attributes.degree))
+                        .collect();
+
+                    let relation_edges: Vec<Relation> = relations
+                        .edges
+                        .into_iter()
+                        .map(|expand| {
+                            let original_from = identity_map.get(&expand.original_from).cloned();
+                            let original_to = identity_map.get(&expand.original_to).cloned();
+                            let edge = Relation {
+                                relation: expand.clone().record,
+                                source_degree: statistic_map.get(&expand.record.from_id).cloned(),
+                                target_degree: statistic_map.get(&expand.record.to_id).cloned(),
+                                original_from,
+                                original_to,
+                            };
+                            edge
+                        })
+                        .collect();
+
+                    let result = RelationResult {
+                        count: relations.all_count,
+                        relation: relation_edges,
+                    };
+                    return Ok(result);
+                } else {
+                    return Ok(RelationResult {
+                        count: 0,
+                        relation: vec![],
+                    });
+                }
+            }
+            Err(err) => {
+                let err_message = format!(
+                    "TigerGraph query social_follows parse_body error: {:?}",
+                    err
+                );
+                error!(err_message);
+                return Err(err);
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct VertexIds {
+    ids: Vec<String>,
+}
+
+pub async fn query_identity_graph_by_ids(
+    client: &Client<HttpConnector>,
+    ids: Vec<String>,
+) -> Result<Vec<IdentityGraph>, Error> {
+    let uri: http::Uri = format!(
+        "{}/query/{}/query_identity_graph_by_ids",
+        C.tdb.host,
+        Graph::SocialGraph.to_string()
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+    let payload = VertexIds { ids };
+    let json_params = serde_json::to_string(&payload).map_err(|err| Error::JSONParseError(err))?;
+    let req = hyper::Request::builder()
+        .method(Method::POST)
+        .uri(uri)
+        .header("Authorization", Graph::SocialGraph.token())
+        .body(Body::from(json_params))
+        .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+    let mut resp = client.request(req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!(
+            "TigerGraph | Fail to query_identity_graph_by_ids: {:?}",
+            err.to_string()
+        ))
+    })?;
+    match parse_body::<IdentityGraphResponse>(&mut resp).await {
+        Ok(r) => {
+            if r.base.error {
+                let err_message = format!(
+                    "TigerGraph query_identity_graph_by_ids error | Code: {:?}, Message: {:?}",
+                    r.base.code, r.base.message
+                );
+                error!(err_message);
+                return Err(Error::General(err_message, resp.status()));
+            }
+
+            let result = r.results.map_or(vec![], |res| res);
+            Ok(result)
+        }
+        Err(err) => {
+            let err_message = format!(
+                "TigerGraph query_identity_graph_by_ids parse_body error: {:?}",
+                err
+            );
+            error!(err_message);
+            return Err(err);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -223,6 +437,11 @@ pub struct ExpandIdentityRecord {
     pub record: IdentityRecord,
     pub owner_address: Option<Vec<Address>>,
     pub resolve_address: Option<Vec<Address>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExpandRelation {
+    pub record: RelationEdge,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -241,6 +460,109 @@ impl std::ops::Deref for ExpandIdentityRecord {
     type Target = IdentityRecord;
     fn deref(&self) -> &Self::Target {
         &self.record
+    }
+}
+
+impl std::ops::DerefMut for ExpandRelation {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.record
+    }
+}
+
+impl std::ops::Deref for ExpandRelation {
+    type Target = RelationEdge;
+    fn deref(&self) -> &Self::Target {
+        &self.record
+    }
+}
+
+impl<'de> Deserialize<'de> for ExpandRelation {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct ExpandRelationRecordVisitor;
+        impl<'de> Visitor<'de> for ExpandRelationRecordVisitor {
+            type Value = ExpandRelation;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("struct ExpandRelation")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let e_type: String = "Follow".to_string();
+                let directed: bool = true;
+                let from_type: String = "IdentitiesGraph".to_string();
+                let to_type: String = "IdentitiesGraph".to_string();
+
+                let mut source_v: Option<String> = None;
+                let mut target_v: Option<String> = None;
+                let mut original_from: Option<String> = None;
+                let mut original_to: Option<String> = None;
+                let mut data_source: Option<String> = None;
+                let mut edge_type: Option<String> = None;
+                let mut tag: Option<String> = None;
+                let mut updated_at_str: Option<String> = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        "source_v" => source_v = Some(map.next_value()?),
+                        "target_v" => target_v = Some(map.next_value()?),
+                        "original_from" => original_from = Some(map.next_value()?),
+                        "original_to" => original_to = Some(map.next_value()?),
+                        "data_source" => data_source = Some(map.next_value()?),
+                        "edge_type" => edge_type = Some(map.next_value()?),
+                        "tag" => tag = Some(map.next_value()?),
+                        "updated_at" => updated_at_str = Some(map.next_value()?),
+                        _ => {}
+                    }
+                }
+
+                let from_id = source_v.ok_or_else(|| de::Error::missing_field("source_v"))?;
+                let to_id = target_v.ok_or_else(|| de::Error::missing_field("target_v"))?;
+
+                let edge_type = edge_type.ok_or_else(|| de::Error::missing_field("edge_type"))?;
+                let tag = tag.ok_or_else(|| de::Error::missing_field("tag"))?;
+                let data_source =
+                    data_source.ok_or_else(|| de::Error::missing_field("data_source"))?;
+                let original_from =
+                    original_from.ok_or_else(|| de::Error::missing_field("original_from"))?;
+                let original_to =
+                    original_to.ok_or_else(|| de::Error::missing_field("original_to"))?;
+                let updated_at_str =
+                    updated_at_str.ok_or_else(|| de::Error::missing_field("updated_at"))?;
+
+                let updated_at =
+                    NaiveDateTime::parse_from_str(&updated_at_str, "%Y-%m-%d %H:%M:%S")
+                        .map_err(serde::de::Error::custom)?;
+                let attributes = RelationConnection {
+                    edge_type,
+                    tag: Some(tag),
+                    data_source: DataSource::from_str(data_source.as_str())
+                        .unwrap_or(DataSource::Unknown),
+                    original_from,
+                    original_to,
+                    updated_at,
+                };
+                let edge_record = RelationEdge(EdgeRecord {
+                    e_type,
+                    directed,
+                    from_id,
+                    from_type,
+                    to_id,
+                    to_type,
+                    discriminator: None,
+                    attributes,
+                });
+                let expand_record = ExpandRelation {
+                    record: edge_record,
+                };
+                Ok(expand_record)
+            }
+        }
+        deserializer.deserialize_map(ExpandRelationRecordVisitor)
     }
 }
 

@@ -614,6 +614,177 @@ CREATE OR REPLACE QUERY find_identity_graph(STRING p, INT reverse_flag=0) FOR GR
   END;
 }
 
+CREATE OR REPLACE QUERY query_identity_graph_by_ids(SET<STRING> ids) FOR GRAPH SocialGraph {
+  TYPEDEF TUPLE< VERTEX source_v, VERTEX target_v, STRING data_source, STRING edge_type > IdentityConnection;
+  TYPEDEF TUPLE< STRING chain, STRING address > Address;
+
+  SetAccum<Address> @owner_address;
+  SetAccum<Address> @resolve_address;
+
+  SetAccum<IdentityConnection> @@edges;
+  SetAccum<VERTEX> @@hyper_vset;
+  @@hyper_vset = to_vertex_set(ids, "IdentitiesGraph");
+  hyper_vertices (IdentitiesGraph) = {@@hyper_vset};
+
+  FOREACH hv IN @@hyper_vset DO
+    @@edges.clear();
+    hyper_v = {hv};
+    vset = SELECT v FROM Identities:v-((PartOfIdentitiesGraph>):e)-hyper_v LIMIT 500;
+
+    tmp1 = SELECT v1 FROM vset:v1-((Proof_Forward>|Proof_Backward>):e1)-vset:v2
+            ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Proof");
+    tmp2 = SELECT v1 FROM vset:v1-((<Proof_Forward|<Proof_Backward):e2)-vset:v2
+          ACCUM @@edges += IdentityConnection(v2, v1, e2.source, "Proof");
+    tmp4 = SELECT v1  FROM vset:v1-((Hold_Identity>):e1)-vset:i-((Resolve>):e2)-vset:v2
+          WHERE i.platform != "ENS" AND i.platform != "ens" AND i.platform != "sns"
+          ACCUM @@edges += IdentityConnection(v1, i, e1.source, "Hold"),
+                i.@owner_address += Address(v1.platform, v1.identity), 
+                i.@resolve_address += Address(v2.platform, v2.identity);
+    tmp5 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
+          WHERE v2.platform != "ENS" AND v2.platform != "ens" AND v2.platform != "sns"
+          ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Hold"),
+                v2.@owner_address += Address(v1.platform, v1.identity);
+    tmp3 = SELECT v1 FROM vset:v1-((Resolve>):r)-vset:v2
+          WHERE v1.platform == "ENS" OR v1.platform == "ens" OR v1.platform == "sns"
+          ACCUM
+            @@edges += IdentityConnection(v1, v2, r.source, "Resolve"),
+            v1.@resolve_address += Address(v2.platform, v2.identity);
+    tmp3_1 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
+          WHERE v2.platform == "ENS" OR v2.platform == "ens" OR v2.platform == "sns"
+          ACCUM v2.@owner_address += Address(v1.platform, v1.identity);
+
+    tmp6 = SELECT v1 FROM vset:v1-((Reverse_Resolve>):e1)-vset:v2
+          ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Reverse_Resolve");
+
+    PRINT hv as graph_id, vset as vertices, @@edges as edges;
+  END;
+}
+
+
+CREATE OR REPLACE QUERY social_follows(VERTEX<IdentitiesGraph> g, INT hop, SET<STRING> sources, INT numPerPage = 200, INT pageNum = 0) FOR GRAPH SocialGraph {
+  TYPEDEF TUPLE< VERTEX source_v, VERTEX target_v, STRING original_from, STRINg original_to, STRING data_source, STRING edge_type , STRING tag, DATETIME updated_at > Relation;
+
+  // TYPEDEF TUPLE< STRING chain, STRING address > Address;
+  // SetAccum<Address> @owner_address;
+  // SetAccum<Address> @resolve_address;
+
+  OrAccum @visited = FALSE;
+  SumAccum<INT> @degree;
+  SumAccum<INT> @range;
+  SumAccum<INT> @@all_count;
+
+  SetAccum<Relation> @@edges;
+  SetAccum<EDGE<Follow>> @@follow_edges;
+  SetAccum<VERTEX> @@vertices;
+
+  SetAccum<STRING> @@original_vid;
+  SetAccum<VERTEX> @@original_vset; // collect for original Identities vertex
+  
+  seed (IdentitiesGraph) = {g};
+  seed = SELECT s FROM seed:s
+     ACCUM s.@visited += true,
+           s.@degree = s.outdegree("Follow");
+  @@vertices += g;
+  
+  T = SELECT hv FROM seed-((Follow>|<Follow):e)-IdentitiesGraph:hv
+      PER (hv)
+      ACCUM @@all_count += 1;
+
+  WHILE(seed.size()>0) LIMIT hop DO
+    SetAccum<VERTEX> @@pool;
+    // mutual follow
+    INT size_0 = @@vertices.size();
+    INT index_start = numPerPage * pageNum;
+    INT index_end = numPerPage;
+    IF index_end - size_0 <= 0 THEN
+      BREAK;
+    END;
+
+    mutual_follow = SELECT hv FROM seed:s1-((Follow>):e1)-IdentitiesGraph:hv-((Follow>):e2)-seed:s2
+                 WHERE hv.@visited == FALSE AND s1 == s2
+                 POST-ACCUM
+                        hv.@visited = TRUE, 
+                        hv.@degree = hv.outdegree("Follow")
+                 ORDER BY hv.@degree DESC
+                 LIMIT index_start, index_end - size_0;
+
+    tmp_1 = SELECT tgt FROM seed:s1-((Follow>):e1)-mutual_follow:tgt-((Follow>):e2)-seed:s2
+           WHERE s1 == s2 AND s1 != tgt
+           PER (s1, s2, e1, e2, tgt)
+           ACCUM
+                IF e1.source == e2.source THEN
+                  @@edges += Relation(s1, tgt, e1.original_from, e1.original_to, e1.source, "following", "mutual_follow", e1.updated_at),
+                  @@edges += Relation(tgt, s2, e2.original_from, e2.original_to, e2.source, "follower", "mutual_follow", e2.updated_at),
+                  @@original_vid += e1.original_from,
+                  @@original_vid += e1.original_to,
+                  tgt.@range += 3,
+                  @@pool += tgt,
+                  @@vertices += tgt
+                END;
+
+    INT size_1 = @@vertices.size();
+    IF index_end - size_1 <= 0 THEN
+      BREAK;
+    END;
+
+    following = SELECT hv FROM seed:s1-((Follow>):e)-IdentitiesGraph:hv
+                 WHERE hv.@visited == FALSE
+                 POST-ACCUM
+                       hv.@visited = TRUE,
+                       hv.@degree = hv.outdegree("Follow")
+                 ORDER BY hv.@degree DESC
+                 LIMIT index_start, index_end - size_1;
+
+    tmp_2 = SELECT tgt FROM seed:s1-((Follow>):e)-following:tgt
+                 PER (s1, e, tgt)
+                 ACCUM
+                       @@edges += Relation(s1, tgt, e.original_from, e.original_to, e.source, "following", "", e.updated_at),
+                       @@original_vid += e.original_from,
+                       @@original_vid += e.original_to,
+                       tgt.@range += 2,
+                       @@pool += tgt,
+                       @@vertices += tgt;
+
+
+    INT size_2 = @@vertices.size();
+    IF index_end - size_2 <= 0 THEN
+      BREAK;
+    END;
+
+    follower = SELECT hv FROM seed:s1-((<Follow):e)-IdentitiesGraph:hv
+                 WHERE hv.@visited == FALSE
+                 POST-ACCUM
+                       hv.@visited = TRUE,
+                       hv.@degree = hv.outdegree("Follow")
+                 ORDER BY hv.@degree DESC
+                 LIMIT index_start, index_end - size_2;
+
+    tmp_3 = SELECT tgt FROM seed:s1-((<Follow):e)-follower:tgt
+                 PER (s1, e, tgt)
+                 ACCUM
+                       @@edges += Relation(s1, tgt, e.original_from, e.original_to, e.source, "follower", "", e.updated_at),
+                       @@original_vid += e.original_from,
+                       @@original_vid += e.original_to,
+                       tgt.@range += 1,
+                       @@pool += tgt,
+                       @@vertices += tgt;
+
+    seed (IdentitiesGraph) = {@@pool};
+  END;
+
+  @@original_vset = to_vertex_set(@@original_vid, "Identities");
+  original_vertices = { @@original_vset };
+  vertices = { @@vertices };
+
+  // tmp = SELECT domain FROM original_vertices:domain-((<Hold_Identity):e)-Identities:owner
+  //           ACCUM domain.@owner_address += Address(owner.platform, owner.identity);
+  // tmp2 = SELECT domain FROM original_vertices:domain-((Resolve>):e)-Identities:tgt
+  //         ACCUM domain.@resolve_address += Address(tgt.platform, tgt.identity);
+
+  PRINT @@all_count as all_count, @@edges as edges, vertices, original_vertices;
+}
+
+
 CREATE OR REPLACE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH SocialGraph { 
   SetAccum<EDGE> @@edges;
   SetAccum<VERTEX> @@vertices;
