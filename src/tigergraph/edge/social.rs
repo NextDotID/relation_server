@@ -1,8 +1,5 @@
 use crate::{
-    tigergraph::{
-        edge::EdgeRecord,
-        vertex::{ExpandIdentityRecord, IdentityRecord},
-    },
+    tigergraph::{edge::EdgeRecord, vertex::IdentityRecord},
     upstream::DataSource,
     util::{naive_datetime_from_string, naive_datetime_to_string, naive_now},
 };
@@ -79,6 +76,14 @@ impl std::ops::DerefMut for EdgeRecord<RelationConnection> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Relation {
     pub relation: RelationEdge,
-    pub original_from: Option<ExpandIdentityRecord>,
-    pub original_to: Option<ExpandIdentityRecord>,
+    pub source_degree: Option<i32>,
+    pub target_degree: Option<i32>,
+    pub original_from: Option<IdentityRecord>,
+    pub original_to: Option<IdentityRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelationResult {
+    pub count: i32,
+    pub relation: Vec<Relation>,
 }

@@ -2,7 +2,7 @@ use crate::{
     config::C,
     error::Error,
     tigergraph::{
-        edge::{EdgeRecord, Relation, RelationConnection, RelationEdge},
+        edge::{EdgeRecord, Relation, RelationConnection, RelationEdge, RelationResult},
         vertex::{Identity, IdentityRecord, VertexRecord},
         BaseResponse, Graph,
     },
@@ -62,9 +62,10 @@ pub struct RelationResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelationTopology {
+    pub all_count: i32,
     pub edges: Vec<ExpandRelation>,
     pub vertices: Vec<IdentitiesGraphStatistic>,
-    pub original_vertices: Vec<ExpandIdentityRecord>,
+    pub original_vertices: Vec<IdentityRecord>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -257,7 +258,7 @@ impl IdentityGraph {
         data_source: Option<Vec<DataSource>>,
         limit: u16,
         offset: u16,
-    ) -> Result<Option<Vec<Relation>>, Error> {
+    ) -> Result<RelationResult, Error> {
         let uri: http::Uri;
         if data_source.is_none() || data_source.as_ref().unwrap().len() == 0 {
             uri = format!(
@@ -323,10 +324,16 @@ impl IdentityGraph {
                     return Err(Error::General(err_message, resp.status()));
                 }
                 if let Some(relations) = r.results.and_then(|res| res.first().cloned()) {
-                    let identity_map: HashMap<String, ExpandIdentityRecord> = relations
+                    let identity_map: HashMap<String, IdentityRecord> = relations
                         .original_vertices
                         .into_iter()
                         .map(|record| (record.v_id.clone(), record))
+                        .collect();
+
+                    let statistic_map: HashMap<String, i32> = relations
+                        .vertices
+                        .into_iter()
+                        .map(|record| (record.attributes.graph_id, record.attributes.degree))
                         .collect();
 
                     let relation_edges: Vec<Relation> = relations
@@ -336,16 +343,26 @@ impl IdentityGraph {
                             let original_from = identity_map.get(&expand.original_from).cloned();
                             let original_to = identity_map.get(&expand.original_to).cloned();
                             let edge = Relation {
-                                relation: expand.record,
+                                relation: expand.clone().record,
+                                source_degree: statistic_map.get(&expand.record.from_id).cloned(),
+                                target_degree: statistic_map.get(&expand.record.to_id).cloned(),
                                 original_from,
                                 original_to,
                             };
                             edge
                         })
                         .collect();
-                    return Ok(Some(relation_edges));
+
+                    let result = RelationResult {
+                        count: relations.all_count,
+                        relation: relation_edges,
+                    };
+                    return Ok(result);
                 } else {
-                    return Ok(Some(vec![]));
+                    return Ok(RelationResult {
+                        count: 0,
+                        relation: vec![],
+                    });
                 }
             }
             Err(err) => {
@@ -498,7 +515,7 @@ impl<'de> Deserialize<'de> for ExpandRelation {
                         "data_source" => data_source = Some(map.next_value()?),
                         "edge_type" => edge_type = Some(map.next_value()?),
                         "tag" => tag = Some(map.next_value()?),
-                        "updated_at" => tag = Some(map.next_value()?),
+                        "updated_at" => updated_at_str = Some(map.next_value()?),
                         _ => {}
                     }
                 }

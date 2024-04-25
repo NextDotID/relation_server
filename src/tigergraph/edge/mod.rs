@@ -12,7 +12,7 @@ pub use resolve::{
     Resolve, ResolveEdge, ResolveRecord, RESOLVE, RESOLVE_CONTRACT, REVERSE_RESOLVE,
     REVERSE_RESOLVE_CONTRACT,
 };
-pub use social::{Relation, RelationConnection, RelationEdge};
+pub use social::{Relation, RelationConnection, RelationEdge, RelationResult};
 
 use crate::{
     error::Error,

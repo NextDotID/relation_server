@@ -662,11 +662,11 @@ CREATE OR REPLACE QUERY query_identity_graph_by_ids(SET<STRING> ids) FOR GRAPH S
 
 
 CREATE OR REPLACE QUERY social_follows(VERTEX<IdentitiesGraph> g, INT hop, SET<STRING> sources, INT numPerPage = 200, INT pageNum = 0) FOR GRAPH SocialGraph {
-  TYPEDEF TUPLE< VERTEX source_v, VERTEX target_v, STRING original_from, STRINg original_to, STRING data_source, STRING edge_type , STRING tag > Relation;
+  TYPEDEF TUPLE< VERTEX source_v, VERTEX target_v, STRING original_from, STRINg original_to, STRING data_source, STRING edge_type , STRING tag, DATETIME updated_at > Relation;
 
-  TYPEDEF TUPLE< STRING chain, STRING address > Address;
-  SetAccum<Address> @owner_address;
-  SetAccum<Address> @resolve_address;
+  // TYPEDEF TUPLE< STRING chain, STRING address > Address;
+  // SetAccum<Address> @owner_address;
+  // SetAccum<Address> @resolve_address;
 
   OrAccum @visited = FALSE;
   SumAccum<INT> @degree;
@@ -681,6 +681,9 @@ CREATE OR REPLACE QUERY social_follows(VERTEX<IdentitiesGraph> g, INT hop, SET<S
   SetAccum<VERTEX> @@original_vset; // collect for original Identities vertex
   
   seed (IdentitiesGraph) = {g};
+  seed = SELECT s FROM seed:s
+     ACCUM s.@visited += true,
+           s.@degree = s.outdegree("Follow");
   @@vertices += g;
   
   T = SELECT hv FROM seed-((Follow>|<Follow):e)-IdentitiesGraph:hv
@@ -710,8 +713,8 @@ CREATE OR REPLACE QUERY social_follows(VERTEX<IdentitiesGraph> g, INT hop, SET<S
            PER (s1, s2, e1, e2, tgt)
            ACCUM
                 IF e1.source == e2.source THEN
-                  @@edges += Relation(s1, tgt, e1.original_from, e1.original_to, e1.source, "following", "mutual_follow"),
-                  @@edges += Relation(tgt, s2, e2.original_from, e2.original_to, e2.source, "follower", "mutual_follow"),
+                  @@edges += Relation(s1, tgt, e1.original_from, e1.original_to, e1.source, "following", "mutual_follow", e1.updated_at),
+                  @@edges += Relation(tgt, s2, e2.original_from, e2.original_to, e2.source, "follower", "mutual_follow", e2.updated_at),
                   @@original_vid += e1.original_from,
                   @@original_vid += e1.original_to,
                   tgt.@range += 3,
@@ -735,7 +738,7 @@ CREATE OR REPLACE QUERY social_follows(VERTEX<IdentitiesGraph> g, INT hop, SET<S
     tmp_2 = SELECT tgt FROM seed:s1-((Follow>):e)-following:tgt
                  PER (s1, e, tgt)
                  ACCUM
-                       @@edges += Relation(s1, tgt, e.original_from, e.original_to, e.source, "following", ""),
+                       @@edges += Relation(s1, tgt, e.original_from, e.original_to, e.source, "following", "", e.updated_at),
                        @@original_vid += e.original_from,
                        @@original_vid += e.original_to,
                        tgt.@range += 2,
@@ -759,7 +762,7 @@ CREATE OR REPLACE QUERY social_follows(VERTEX<IdentitiesGraph> g, INT hop, SET<S
     tmp_3 = SELECT tgt FROM seed:s1-((<Follow):e)-follower:tgt
                  PER (s1, e, tgt)
                  ACCUM
-                       @@edges += Relation(s1, tgt, e.original_from, e.original_to, e.source, "follower", ""),
+                       @@edges += Relation(s1, tgt, e.original_from, e.original_to, e.source, "follower", "", e.updated_at),
                        @@original_vid += e.original_from,
                        @@original_vid += e.original_to,
                        tgt.@range += 1,
@@ -773,10 +776,10 @@ CREATE OR REPLACE QUERY social_follows(VERTEX<IdentitiesGraph> g, INT hop, SET<S
   original_vertices = { @@original_vset };
   vertices = { @@vertices };
 
-  tmp = SELECT domain FROM original_vertices:domain-((<Hold_Identity):e)-Identities:owner
-            ACCUM domain.@owner_address += Address(owner.platform, owner.identity);
-  tmp2 = SELECT domain FROM original_vertices:domain-((Resolve>):e)-Identities:tgt
-          ACCUM domain.@resolve_address += Address(tgt.platform, tgt.identity);
+  // tmp = SELECT domain FROM original_vertices:domain-((<Hold_Identity):e)-Identities:owner
+  //           ACCUM domain.@owner_address += Address(owner.platform, owner.identity);
+  // tmp2 = SELECT domain FROM original_vertices:domain-((Resolve>):e)-Identities:tgt
+  //         ACCUM domain.@resolve_address += Address(tgt.platform, tgt.identity);
 
   PRINT @@all_count as all_count, @@edges as edges, vertices, original_vertices;
 }

@@ -1,8 +1,8 @@
 use crate::{
     error::Result,
     tigergraph::{
-        edge::Relation,
-        vertex::{ExpandIdentityRecord, IdentityGraph},
+        edge::{Relation, RelationResult},
+        vertex::{IdentityGraph, IdentityRecord},
     },
     upstream::{DataSource, Platform},
     util::make_http_client,
@@ -12,41 +12,12 @@ use async_graphql::{Context, Object};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RelationResult {
+pub struct IdentityGraphResult {
     identity_graph: IdentityGraph,
 }
 
 #[Object]
-impl Relation {
-    async fn edge_type(&self) -> String {
-        self.relation.edge_type.clone()
-    }
-    async fn tag(&self) -> Option<String> {
-        self.relation.tag.clone()
-    }
-    async fn data_source(&self) -> DataSource {
-        self.relation.data_source.clone()
-    }
-
-    async fn source(&self) -> String {
-        self.relation.from_id.clone()
-    }
-
-    async fn target(&self) -> String {
-        self.relation.to_id.clone()
-    }
-
-    async fn original_source(&self) -> &Option<ExpandIdentityRecord> {
-        &self.original_from
-    }
-
-    async fn original_target(&self) -> &Option<ExpandIdentityRecord> {
-        &self.original_to
-    }
-}
-
-#[Object]
-impl RelationResult {
+impl IdentityGraphResult {
     async fn identity_graph(&self) -> &IdentityGraph {
         &self.identity_graph
     }
@@ -69,7 +40,7 @@ impl RelationResult {
             desc = "`offset` determines the starting position from which the records are retrieved in query. It defaults to 0."
         )]
         offset: Option<u16>,
-    ) -> Result<Option<Vec<Relation>>> {
+    ) -> Result<RelationResult> {
         let client = make_http_client();
         self.identity_graph
             .follow(
@@ -83,6 +54,54 @@ impl RelationResult {
     }
 }
 
+#[Object]
+impl Relation {
+    async fn edge_type(&self) -> String {
+        self.relation.edge_type.clone()
+    }
+    async fn tag(&self) -> Option<String> {
+        self.relation.tag.clone()
+    }
+    async fn data_source(&self) -> DataSource {
+        self.relation.data_source.clone()
+    }
+
+    async fn source(&self) -> String {
+        self.relation.from_id.clone()
+    }
+
+    async fn target(&self) -> String {
+        self.relation.to_id.clone()
+    }
+
+    async fn source_degree(&self) -> Option<i32> {
+        self.source_degree.clone()
+    }
+
+    async fn target_degree(&self) -> Option<i32> {
+        self.target_degree.clone()
+    }
+
+    async fn original_source(&self) -> &Option<IdentityRecord> {
+        &self.original_from
+    }
+
+    async fn original_target(&self) -> &Option<IdentityRecord> {
+        &self.original_to
+    }
+}
+
+#[Object]
+impl RelationResult {
+    async fn count(&self) -> &i32 {
+        &self.count
+    }
+
+    async fn relation(&self) -> &Vec<Relation> {
+        &self.relation
+    }
+}
+
 #[derive(Default)]
 pub struct RelationQuery;
 
@@ -93,7 +112,7 @@ impl RelationQuery {
         _ctx: &Context<'_>,
         #[graphql(desc = "Platform to query")] platform: String,
         #[graphql(desc = "Identity on target Platform")] identity: String,
-    ) -> Result<Option<RelationResult>> {
+    ) -> Result<Option<IdentityGraphResult>> {
         let client = make_http_client();
         let platform: Platform = platform.parse()?;
         match IdentityGraph::find_graph_by_platform_identity(&client, &platform, &identity, None)
@@ -103,7 +122,7 @@ impl RelationQuery {
                 // TODO: fetch_all
                 Ok(None)
             }
-            Some(identity_graph) => Ok(Some(RelationResult { identity_graph })),
+            Some(identity_graph) => Ok(Some(IdentityGraphResult { identity_graph })),
         }
     }
 }
