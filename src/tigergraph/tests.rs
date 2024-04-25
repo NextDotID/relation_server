@@ -293,6 +293,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_follow() -> Result<(), Error> {
+        let client = make_http_client();
+        if let Some(found) = IdentityGraph::find_graph_by_platform_identity(
+            &client,
+            &Platform::Lens,
+            "sujiyan.lens",
+            None,
+        )
+        .await?
+        {
+            let result = found.follow(&client, 1, None, 200, 0).await?;
+
+            // println!("found = {:?}", found);
+            let json_raw =
+                serde_json::to_string(&found).map_err(|err| Error::JSONParseError(err))?;
+            println!("test_identity_graph: {}", json_raw);
+
+            let result_raw: String =
+                serde_json::to_string(&result).map_err(|err| Error::JSONParseError(err))?;
+            println!("follow result: {}", result_raw);
+        } else {
+            // return Err(Error::NoResult);
+            println!("identity_graph not exists.");
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_t() -> Result<(), Error> {
         let json_string = r###"
         {
