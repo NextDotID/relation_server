@@ -4,20 +4,54 @@ use crate::{
     tigergraph::{
         edge::{EdgeUnion, HoldRecord},
         vertex::{
-            Address, ExpandIdentityRecord, IdentityConnection, IdentityGraph, IdentityRecord,
-            IdentityWithSource, OwnerLoadFn,
+            query_identity_graph_by_ids, Address, ExpandIdentityRecord, IdentityConnection,
+            IdentityGraph, IdentityRecord, IdentityWithSource, OwnerLoadFn,
         },
     },
     upstream::{fetch_all, Chain, ContractCategory, DataSource, Platform, Target},
     util::make_http_client,
 };
-use async_graphql::{Context, Object};
+use async_graphql::{Context, InputObject, Object};
 use dataloader::non_cached::Loader;
+use serde::{Deserialize, Serialize};
 use tracing::{event, Level};
 use uuid::Uuid;
 
+#[derive(InputObject, Debug, Clone, Serialize, Deserialize)]
+pub struct IdentityFilter {
+    identity: String,
+    platform: String,
+}
+
+#[derive(InputObject, Clone, Debug, Serialize, Deserialize)]
+pub struct IdentityGraphFilter {
+    by_graph_id: Option<Vec<String>>,
+    by_identity_platform: Option<Vec<IdentityFilter>>,
+    by_identity_id: Option<Vec<String>>,
+}
+
 #[derive(Default)]
 pub struct IdentityGraphQuery;
+
+#[Object]
+impl IdentityGraphQuery {
+    async fn identity_graph(
+        &self,
+        _ctx: &Context<'_>,
+        filter: IdentityGraphFilter,
+    ) -> Result<Vec<IdentityGraph>> {
+        if let Some(graph_ids) = filter.by_graph_id {
+            let client = make_http_client();
+            Ok(query_identity_graph_by_ids(&client, graph_ids).await?)
+        } else if let Some(_identity_filters) = filter.by_identity_platform {
+            Ok(vec![])
+        } else if let Some(_identity_filters) = filter.by_identity_id {
+            Ok(vec![])
+        } else {
+            Err(Error::ParamMissing("Must use filter to query".to_string()))
+        }
+    }
+}
 
 #[Object]
 impl IdentityGraph {

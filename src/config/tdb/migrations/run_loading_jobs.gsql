@@ -92,3 +92,32 @@ CREATE LOADING JOB Load_DBExport FOR GRAPH IdentityGraph {
   LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Resolve_Contract.csv" TO EDGE Resolve_Contract VALUES($"from", $"to", $"source", $"system", $"name", $"uuid", $"updated_at", $"fetcher") USING SEPARATOR="\t", HEADER="true", EOL="\n";
   LOAD "/home/tigergraph/shared_data/export_graphs/GlobalTypes/Reverse_Resolve_Contract.csv" TO EDGE Reverse_Resolve_Contract VALUES($"from", $"to", $"source", $"system", $"name", $"uuid", $"updated_at", $"fetcher") USING SEPARATOR="\t", HEADER="true", EOL="\n";
 }
+
+
+CREATE LOADING JOB Load_LensSocialFeed FOR GRAPH SocialGraph {
+  // ethereum identity and lens identity already have been loading in call `upsert_hyper_vertex()`
+  // from	to	source	uuid	id	updated_at	fetcher
+  LOAD "/home/tigergraph/shared_data/lens_v2_social_feeds/lens.hold.tsv"
+    TO EDGE Hold_Identity VALUES ($"from", $"to", $"source", REDUCE(ignore_if_exists($"uuid")), _, $"id", _, REDUCE(max($"updated_at")), $"fetcher", _) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  // from	to	source	system	name	uuid	updated_at	fetcher
+  LOAD "/home/tigergraph/shared_data/lens_v2_social_feeds/lens.resolve.tsv"
+    TO EDGE Resolve VALUES ($"from", $"to", $"source", $"system", $"name", REDUCE(ignore_if_exists($"uuid")), REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  // from	to	source	system	name	uuid	updated_at	fetcher
+  LOAD "/home/tigergraph/shared_data/lens_v2_social_feeds/lens.reverse_resolve.tsv"
+    TO EDGE Reverse_Resolve VALUES ($"from", $"to", $"source", $"system", $"name", REDUCE(ignore_if_exists($"uuid")), REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  // from	to	original_from	original_to	source	updated_at
+  LOAD "/home/tigergraph/shared_data/lens_v2_social_feeds/lens.follow.tsv"
+    TO EDGE Follow VALUES ($"from", $"to", $"original_from", $"original_to", $"source", REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+}
+
+RUN LOADING JOB Load_LensSocialFeed
+
+
+CREATE LOADING JOB Load_KeybaseSocialFeed FOR GRAPH SocialGraph {
+  LOAD "/home/tigergraph/shared_data/keybase_social_feeds/keybase.proof.tsv"
+    TO EDGE Proof_Forward VALUES ($"from", $"to", $"source", $"created_at", $"uuid", $"level", $"record_id", $"updated_at", $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+  LOAD "/home/tigergraph/shared_data/keybase_social_feeds/keybase.follow.tsv"
+    TO EDGE Follow VALUES ($"from", $"to", $"original_from", $"original_to", $"source", REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+}
+
+RUN LOADING JOB Load_KeybaseSocialFeed
