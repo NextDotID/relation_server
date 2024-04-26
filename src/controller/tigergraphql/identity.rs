@@ -296,10 +296,11 @@ impl IdentityRecord {
     async fn nft(
         &self,
         _ctx: &Context<'_>,
+        // TODO: need to change back to ContractCategory when frontend migration is done.
         #[graphql(
             desc = "Filter condition for ContractCategory. If not provided or empty array, all category NFTs will be returned."
         )]
-        category: Option<Vec<ContractCategory>>,
+        category: Option<Vec<String>>,
         #[graphql(
             desc = "`limit` used to control the maximum number of records returned by query. It defaults to 100"
         )]
@@ -310,6 +311,17 @@ impl IdentityRecord {
         offset: Option<u16>,
     ) -> Result<Vec<HoldRecord>> {
         let client = make_http_client();
+        let category = category
+            .map(|v| {
+                v.into_iter()
+                    .map(|s| {
+                        s.to_lowercase()
+                            .parse::<ContractCategory>()
+                            .map_err(Error::from)
+                    })
+                    .collect::<Result<Vec<ContractCategory>>>()
+            })
+            .transpose()?;
         self.nfts(&client, category, limit.unwrap_or(100), offset.unwrap_or(0))
             .await
     }

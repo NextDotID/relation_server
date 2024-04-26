@@ -208,6 +208,7 @@ impl ExpandIdentityRecord {
         #[graphql(
             desc = "Filter condition for ContractCategory. If missing or empty, all category NFTs will be returned."
         )]
+        // TODO: need to change back to ContractCategory when frontend migration is done.
         category: Option<Vec<String>>,
         #[graphql(
             desc = "`limit` used to control the maximum number of records returned by query. It defaults to 100"
@@ -219,14 +220,17 @@ impl ExpandIdentityRecord {
         offset: Option<u16>,
     ) -> Result<Vec<HoldRecord>> {
         let client = make_http_client();
-        let parsed_category: Option<Vec<ContractCategory>> = category.map(|orig| {
-            orig.into_iter()
-                .map(|c| {
-                    ContractCategory::from_str(&c.to_lowercase())
-                        .unwrap_or(ContractCategory::Unknown) // TODO: maybe error message is missing here.
-                })
-                .collect()
-        });
+        let parsed_category: Option<Vec<ContractCategory>> = category
+            .map(|v| {
+                v.into_iter()
+                    .map(|s| {
+                        s.to_lowercase()
+                            .parse::<ContractCategory>()
+                            .map_err(Error::from)
+                    })
+                    .collect::<Result<Vec<ContractCategory>>>()
+            })
+            .transpose()?;
         self.nfts(
             &client,
             parsed_category,
