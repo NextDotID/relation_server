@@ -8,8 +8,8 @@ mod resolve;
 mod social;
 
 use self::{
-    hold::HoldQuery, identity::IdentityQuery, proof::ProofQuery, resolve::ResolveQuery,
-    social::RelationQuery,
+    hold::HoldQuery, identity::IdentityQuery, identity_graph::IdentityGraphQuery,
+    proof::ProofQuery, resolve::ResolveQuery, social::RelationQuery,
 };
 use async_graphql::{MergedObject, Object};
 const API_VERSION: &str = "0.1";
@@ -23,6 +23,7 @@ pub struct Query(
     ProofQuery,
     HoldQuery,
     RelationQuery,
+    IdentityGraphQuery,
 );
 
 #[derive(Default)]

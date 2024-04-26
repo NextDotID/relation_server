@@ -717,6 +717,8 @@ CREATE OR REPLACE QUERY social_follows(VERTEX<IdentitiesGraph> g, INT hop, SET<S
                   @@edges += Relation(tgt, s2, e2.original_from, e2.original_to, e2.source, "follower", "mutual_follow", e2.updated_at),
                   @@original_vid += e1.original_from,
                   @@original_vid += e1.original_to,
+                  @@original_vid += e2.original_from,
+                  @@original_vid += e2.original_to,
                   tgt.@range += 3,
                   @@pool += tgt,
                   @@vertices += tgt
