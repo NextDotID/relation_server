@@ -13,6 +13,7 @@ use crate::{
 };
 use async_graphql::{Context, Object};
 use dataloader::non_cached::Loader;
+use std::str::FromStr;
 use tracing::{event, Level};
 use uuid::Uuid;
 
@@ -205,9 +206,9 @@ impl ExpandIdentityRecord {
         &self,
         _ctx: &Context<'_>,
         #[graphql(
-            desc = "Filter condition for ContractCategory. If not provided or empty array, all category NFTs will be returned."
+            desc = "Filter condition for ContractCategory. If missing or empty, all category NFTs will be returned."
         )]
-        category: Option<Vec<ContractCategory>>,
+        category: Option<Vec<String>>,
         #[graphql(
             desc = "`limit` used to control the maximum number of records returned by query. It defaults to 100"
         )]
@@ -218,8 +219,21 @@ impl ExpandIdentityRecord {
         offset: Option<u16>,
     ) -> Result<Vec<HoldRecord>> {
         let client = make_http_client();
-        self.nfts(&client, category, limit.unwrap_or(100), offset.unwrap_or(0))
-            .await
+        let parsed_category: Option<Vec<ContractCategory>> = category.map(|orig| {
+            orig.into_iter()
+                .map(|c| {
+                    ContractCategory::from_str(&c.to_lowercase())
+                        .unwrap_or(ContractCategory::Unknown) // TODO: maybe error message is missing here.
+                })
+                .collect()
+        });
+        self.nfts(
+            &client,
+            parsed_category,
+            limit.unwrap_or(100),
+            offset.unwrap_or(0),
+        )
+        .await
     }
 
     async fn owner_address(&self) -> Option<Vec<Address>> {
