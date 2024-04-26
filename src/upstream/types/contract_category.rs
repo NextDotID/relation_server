@@ -17,6 +17,7 @@ use strum_macros::{Display, EnumIter, EnumString};
     async_graphql::Enum,
     Hash,
 )]
+#[graphql(rename_items = "lowercase")]
 pub enum ContractCategory {
     #[strum(serialize = "ens")]
     #[serde(rename = "ens")]
