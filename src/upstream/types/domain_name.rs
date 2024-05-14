@@ -55,6 +55,12 @@ pub enum DomainNameSystem {
     #[graphql(name = "space_id")]
     SpaceId,
 
+    /// Genome
+    #[strum(serialize = "genome")]
+    #[serde(rename = "genome")]
+    #[graphql(name = "genome")]
+    Genome,
+
     /// https://indexer.crossbell.io/docs
     #[strum(serialize = "crossbell")]
     #[serde(rename = "crossbell")]
@@ -72,10 +78,12 @@ impl From<DomainNameSystem> for Platform {
     fn from(domain: DomainNameSystem) -> Self {
         match domain {
             DomainNameSystem::ENS => Platform::ENS,
+            DomainNameSystem::SNS => Platform::SNS,
             DomainNameSystem::DotBit => Platform::Dotbit,
             DomainNameSystem::UnstoppableDomains => Platform::UnstoppableDomains,
             DomainNameSystem::Lens => Platform::Lens,
             DomainNameSystem::SpaceId => Platform::SpaceId,
+            DomainNameSystem::Genome => Platform::Genome,
             DomainNameSystem::Crossbell => Platform::Crossbell,
             _ => Platform::Unknown,
         }
