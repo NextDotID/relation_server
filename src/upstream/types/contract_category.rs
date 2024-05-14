@@ -43,6 +43,11 @@ pub enum ContractCategory {
     #[graphql(name = "sns")]
     SNS,
 
+    #[strum(serialize = "gns")]
+    #[serde(rename = "gns")]
+    #[graphql(name = "gns")]
+    GNS,
+
     #[default]
     #[serde(rename = "unknown")]
     #[graphql(name = "unknown")]
@@ -57,6 +62,7 @@ impl ContractCategory {
             // TODO: ENS has a complicated contract structure, which cannot determine the "main" contract easily.
             ENS => Some("0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85".to_lowercase()),
             SNS => Some("4gj2A7SSgWUGfHTm2iG4NeH3kpySmGd54bj78TM4d7Fg".to_string()), // Solana Name Service
+            GNS => Some("0x5dc881dda4e4a8d312be3544ad13118d1a04cb17".to_string()), // Gnosis Name Service
             _ => None,
         }
     }
@@ -69,6 +75,7 @@ impl ContractCategory {
             ERC1155 => Some(Chain::Ethereum),
             POAP => Some(Chain::Ethereum),
             SNS => Some(Chain::Solana),
+            GNS => Some(Chain::Gnosis),
             _ => None,
         }
     }
