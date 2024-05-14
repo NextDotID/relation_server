@@ -240,8 +240,6 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
     //         .as_str(),
     // )
     // .unwrap_or_default();
-    println!("{:?}", real_action.metadata.standard);
-    println!("{:?}", nft_category.to_string());
 
     if real_action.tag_type == "poap".to_string() {
         nft_category = ContractCategory::POAP;

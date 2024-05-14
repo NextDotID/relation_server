@@ -260,7 +260,7 @@ async fn upsert_edge(
             return Err(Error::General(err_message, resp.status()));
         }
     };
-    // let json_raw = serde_json::to_string(&result).map_err(|err| Error::JSONParseError(err))?;
+    // let json_raw = serde_json::to_string(&_result).map_err(|err| Error::JSONParseError(err))?;
     // println!("{}", json_raw);
     // trace!("TigerGraph upsert_edge ...");
     Ok(())
