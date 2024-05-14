@@ -4,6 +4,7 @@ mod crossbell;
 mod dotbit;
 mod ens_reverse;
 mod farcaster;
+mod genome;
 mod keybase;
 mod knn3;
 mod lensv2;
@@ -23,9 +24,10 @@ use crate::{
     error::Error,
     upstream::{
         aggregation::Aggregation, crossbell::Crossbell, dotbit::DotBit,
-        ens_reverse::ENSReverseLookup, farcaster::Farcaster, keybase::Keybase, knn3::Knn3,
-        lensv2::LensV2, proof_client::ProofClient, rss3::Rss3, solana::Solana, space_id::SpaceId,
-        sybil_list::SybilList, the_graph::TheGraph, unstoppable::UnstoppableDomains,
+        ens_reverse::ENSReverseLookup, farcaster::Farcaster, genome::Genome, keybase::Keybase,
+        knn3::Knn3, lensv2::LensV2, proof_client::ProofClient, rss3::Rss3, solana::Solana,
+        space_id::SpaceId, sybil_list::SybilList, the_graph::TheGraph,
+        unstoppable::UnstoppableDomains,
     },
     util::hashset_append,
 };
@@ -171,6 +173,7 @@ pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
         DotBit::fetch(target),
         UnstoppableDomains::fetch(target),
         SpaceId::fetch(target),
+        Genome::fetch(target),
         Crossbell::fetch(target),
         TheGraph::fetch(target),
         Solana::fetch(target),
