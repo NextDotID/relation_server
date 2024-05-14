@@ -13,7 +13,6 @@ use crate::{
 };
 use async_graphql::{Context, Object};
 use dataloader::non_cached::Loader;
-use std::str::FromStr;
 use tracing::{event, Level};
 use uuid::Uuid;
 
@@ -141,7 +140,7 @@ impl ExpandIdentityRecord {
 
     /// The expiry date for the domain, from either the registration, or the wrapped domain if PCC is burned
     async fn expired_at(&self) -> Option<i64> {
-        if !vec![Platform::Dotbit, Platform::ENS].contains(&self.platform) {
+        if !vec![Platform::Dotbit, Platform::ENS, Platform::Genome].contains(&self.platform) {
             return None;
         }
         self.expired_at.map(|dt| dt.and_utc().timestamp())
@@ -162,6 +161,7 @@ impl ExpandIdentityRecord {
             Platform::ENS,
             Platform::Solana,
             Platform::SNS,
+            Platform::Genome,
         ]
         .contains(&self.platform)
         {
@@ -181,6 +181,7 @@ impl ExpandIdentityRecord {
             Platform::Crossbell,
             Platform::ENS,
             Platform::SNS,
+            Platform::Genome,
         ]
         .contains(&self.platform)
         {

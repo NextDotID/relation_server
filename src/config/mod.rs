@@ -47,6 +47,7 @@ pub struct Upstream {
     pub spaceid_api: ConfigSpaceIdAPI,
     pub crossbell_api: ConfigCrossbellAPI,
     pub solana_rpc: ConfigSolanaRPC,
+    pub genome_api: ConfigGenomeAPI,
 }
 
 #[derive(Clone, Deserialize, Default)]
@@ -146,6 +147,11 @@ pub struct ConfigCrossbellAPI {
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigSolanaRPC {
     pub rpc_url: String,
+}
+
+#[derive(Clone, Deserialize, Default)]
+pub struct ConfigGenomeAPI {
+    pub url: String,
 }
 
 #[derive(Clone, Deserialize)]

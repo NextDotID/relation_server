@@ -146,6 +146,12 @@ pub enum Platform {
     #[graphql(name = "space_id")]
     SpaceId,
 
+    /// Genome
+    #[strum(serialize = "genome")]
+    #[serde(rename = "genome")]
+    #[graphql(name = "genome")]
+    Genome,
+
     /// Crossbell
     #[strum(serialize = "crossbell")]
     #[serde(rename = "crossbell")]
