@@ -3,11 +3,11 @@ mod tests;
 use crate::config::C;
 use crate::error::Error;
 use crate::tigergraph::edge::{Hold, Resolve};
-// use crate::tigergraph::upsert::create_ens_identity_ownership;
+use crate::tigergraph::upsert::create_ens_identity_ownership;
 use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
-// use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
-use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
+use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
+// use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::{Contract, Identity};
 use crate::upstream::{
     Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target,
@@ -164,7 +164,7 @@ async fn fetch_domain_by_address(
             updated_at: naive_now(),
         };
 
-        let _contract = Contract {
+        let contract = Contract {
             uuid: Uuid::new_v4(),
             category: ContractCategory::GNS,
             address: ContractCategory::GNS.default_contract_address().unwrap(),
@@ -174,13 +174,13 @@ async fn fetch_domain_by_address(
         };
 
         tracing::debug!("{} => {} created.", address, d.name);
-        create_identity_to_identity_hold_record(&cli, &addr, &gno, &hold).await?;
+        // create_identity_to_identity_hold_record(&cli, &addr, &gno, &hold).await?;
         // 'regular' resolution involves mapping from a name to an address.
         create_identity_domain_resolve_record(&cli, &gno, &addr, &resolve).await?;
 
         // ownership create `Hold_Identity` connection but only Wallet connected to HyperVertex
-        // create_ens_identity_ownership(&cli, &addr, &gno, &hold).await?;
-        // create_identity_to_contract_hold_record(&cli, &addr, &contract, &hold).await?;
+        create_ens_identity_ownership(&cli, &addr, &gno, &hold).await?;
+        create_identity_to_contract_hold_record(&cli, &addr, &contract, &hold).await?;
 
         if d.is_default {
             // 'reverse' resolution maps from an address back to a name.
@@ -276,7 +276,7 @@ async fn fetch_address_by_domain(
             updated_at: naive_now(),
         };
 
-        let _contract = Contract {
+        let contract = Contract {
             uuid: Uuid::new_v4(),
             category: ContractCategory::GNS,
             address: ContractCategory::GNS.default_contract_address().unwrap(),
@@ -286,13 +286,13 @@ async fn fetch_address_by_domain(
         };
 
         tracing::debug!("{} => {} created.", address, d.name);
-        create_identity_to_identity_hold_record(&cli, &addr, &gno, &hold).await?;
+        // create_identity_to_identity_hold_record(&cli, &addr, &gno, &hold).await?;
         // 'regular' resolution involves mapping from a name to an address.
         create_identity_domain_resolve_record(&cli, &gno, &addr, &resolve).await?;
 
         // ownership create `Hold_Identity` connection but only Wallet connected to HyperVertex
-        // create_ens_identity_ownership(&cli, &addr, &gno, &hold).await?;
-        // create_identity_to_contract_hold_record(&cli, &addr, &contract, &hold).await?;
+        create_ens_identity_ownership(&cli, &addr, &gno, &hold).await?;
+        create_identity_to_contract_hold_record(&cli, &addr, &contract, &hold).await?;
 
         if d.is_default {
             // 'reverse' resolution maps from an address back to a name.
