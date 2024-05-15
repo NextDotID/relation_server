@@ -13,7 +13,7 @@ SECRET_FILE := "secret.toml"
 RESTPP_HOST := "http://$DB_HOST:9000/requesttoken"
 
 # Commands
-gsql := 'java -jar gsql_client.jar'
+gsql := 'java -jar tigergraph-3.10.1-gsql_client.jar'
 
 default:
 	just --list
