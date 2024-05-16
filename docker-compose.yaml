@@ -1,6 +1,11 @@
 # For developemnt use only.
-version: "3.8"
 services:
+  relation:
+    image: nextdotid/relation_server:latest
+    ports:
+      - 127.0.0.1:8000:8000
+    volumes:
+    - ./config:/app/config:ro
   tigergraph:
     image: tigergraph/tigergraph:3.9.1
     ports:

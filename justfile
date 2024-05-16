@@ -35,3 +35,9 @@ clean:
 # npm install -g get-graphql-schema
 get-schema:
     get-graphql-schema https://api-v2.lens.dev/playground > src/upstream/lensv2/schema.graphql
+
+# Build docker image using nix:
+build-docker:
+  nix build '.#docker'
+  docker load -i ./result
+  echo 'Image: nextdotid/relation_server:latest'
