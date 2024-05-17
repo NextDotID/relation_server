@@ -7,25 +7,15 @@ set export
 
 # Start peripherals of this server
 peri:
-	docker-compose up -d arangodb
+	docker-compose up -d tigergraph
 
 # Development environment preparation.
 prepare: peri
 	@rustup override set stable
 	@if [ ! -f .env ]; then cp .env.example .env; fi
 	@if [ ! -f config/main.toml ]; then cp config/main.sample.toml config/main.toml; fi
-	@if [ ! -f config/testing.toml ]; then printf "[db]\ndb = \"relation_server_test\"" > config/testing.toml; fi
 
-# Do database migration.
-migrate:
-	aragog --db-name relation_server_development migrate
-	aragog --db-name relation_server_test migrate
-
-# Do aragog CLI command (with .env loaded).
-@aragog subcommand subsubcommand:
-	aragog $subcommand $subsubcommand
-
-# Run test
+# Run tests
 test: peri
 	env RUST_BACKTRACE=1 RUST_LOG=debug RELATION_SERVER_ENV=testing cargo test -- --nocapture --test-threads=1
 
@@ -34,13 +24,20 @@ clean:
 	cargo clean
 	docker-compose down -v
 
-local:
+@local:
 	docker compose down -v
 	docker compose up -d
-	sleep 20
-	just migrate
+	echo 'Waiting for TigerGraph to start...'
+	sleep 60
 	env RUST_LOG=trace cargo run --bin standalone
 
-# Get latest schema file. install first: npm install -g get-graphql-schema
+# Get latest schema file.
+# npm install -g get-graphql-schema
 get-schema:
-    get-graphql-schema https://api.lens.dev/playground > src/upstream/lens/schema.graphql
+    get-graphql-schema https://api-v2.lens.dev/playground > src/upstream/lensv2/schema.graphql
+
+# Build docker image using nix:
+build-docker:
+  nix build '.#docker'
+  docker load -i ./result
+  echo 'Image: nextdotid/relation_server:latest'

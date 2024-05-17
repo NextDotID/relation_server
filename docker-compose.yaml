@@ -1,8 +1,21 @@
-version: "3.8"
+# For developemnt use only.
 services:
-  arangodb:
-    image: arangodb/arangodb:3.10.5
+  relation:
+    image: nextdotid/relation_server:latest
     ports:
-    - 127.0.0.1:8529:8529
-    environment:
-      ARANGO_ROOT_PASSWORD: ieNgoo5roong9Chu
+      - 127.0.0.1:8000:8000
+    volumes:
+    - ./config:/app/config:ro
+  tigergraph:
+    image: tigergraph/tigergraph:3.9.1
+    ports:
+    # API (HTTP)
+    - 127.0.0.1:9001:9000
+    # Dashboard (HTTP)
+    - 127.0.0.1:14240:14240
+    # SSH (TCP)
+    - 127.0.0.1:14022:22
+    ulimits:
+      nofile:
+        soft: 1000000
+        hard: 1000000

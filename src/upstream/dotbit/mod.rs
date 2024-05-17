@@ -2,18 +2,22 @@
 mod tests;
 use crate::config::C;
 use crate::error::Error;
-use crate::graph::create_domain_resolve_record;
-use crate::graph::create_identity_to_identity_hold_record;
-use crate::graph::edge::Edge;
-use crate::graph::edge::Resolve;
-use crate::graph::edge::{hold::Hold, resolve::DomainNameSystem};
-use crate::graph::vertex::Vertex;
-use crate::graph::{new_db_connection, vertex::Identity};
-use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
-use crate::util::{make_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive};
+use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::upsert::create_identity_domain_resolve_record;
+use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
+use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
+use crate::tigergraph::vertex::Identity;
+use crate::upstream::{
+    DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
+};
+use crate::util::{
+    make_client, make_http_client, naive_now, option_timestamp_to_naive, parse_body,
+    request_with_timeout, timestamp_to_naive,
+};
 use async_trait::async_trait;
 use hyper::{Body, Method, Request};
 use serde::{Deserialize, Serialize};
+use strum_macros::{Display, EnumIter, EnumString};
 use tracing::warn;
 use uuid::Uuid;
 
@@ -35,7 +39,14 @@ impl Fetcher for DotBit {
     }
 
     fn can_fetch(target: &Target) -> bool {
-        target.in_platform_supported(vec![Platform::Dotbit, Platform::Ethereum])
+        target.in_platform_supported(vec![
+            Platform::Dotbit,
+            Platform::Ethereum,
+            Platform::CKB,
+            Platform::Tron,
+            Platform::Polygon,
+            Platform::BNBSmartChain,
+        ])
     }
 }
 
@@ -62,11 +73,13 @@ pub struct OutPoint {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountInfo {
     pub account: String,
-    pub account_alias: String,
+    pub account_alias: Option<String>,
     pub account_id_hex: String,
     pub create_at_unix: i64,
     pub expired_at_unix: i64,
     pub owner_key: String,
+    pub owner_algorithm_id: i64,
+    pub display_name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -78,7 +91,7 @@ pub struct AccountInfoData {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountInfoResult {
     pub errno: Option<i32>,
-    pub errmsg: String,
+    pub errmsg: Option<String>,
     pub data: Option<AccountInfoData>,
 }
 
@@ -114,13 +127,15 @@ pub struct ReverseRecordRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountItem {
     pub account: String,
-    pub account_alias: String,
+    pub account_alias: Option<String>,
+    pub registered_at: Option<i64>,
+    pub expired_at: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ReverseResult {
     pub errno: Option<i32>,
-    pub errmsg: String,
+    pub errmsg: Option<String>,
     pub data: Option<AccountItem>,
 }
 
@@ -139,7 +154,7 @@ pub struct AccountListData {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountListResult {
     pub errno: Option<i32>,
-    pub errmsg: String,
+    pub errmsg: Option<String>,
     pub data: Option<AccountListData>,
 }
 
@@ -159,6 +174,12 @@ async fn fetch_connections_by_platform_identity(
     match *platform {
         Platform::Dotbit => fetch_connections_by_account_info(platform, identity).await,
         Platform::Ethereum => fetch_hold_acc_and_reverse_record_by_addrs(platform, identity).await,
+        Platform::CKB => fetch_hold_acc_and_reverse_record_by_addrs(platform, identity).await,
+        Platform::Tron => fetch_hold_acc_and_reverse_record_by_addrs(platform, identity).await,
+        Platform::Polygon => fetch_hold_acc_and_reverse_record_by_addrs(platform, identity).await,
+        Platform::BNBSmartChain => {
+            fetch_hold_acc_and_reverse_record_by_addrs(platform, identity).await
+        }
         _ => Ok(vec![]),
     }
 }
@@ -167,6 +188,50 @@ async fn fetch_connections_by_account_info(
     _platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
+    let addr_identity = fetch_and_save_account_info(_platform, identity).await?;
+    if addr_identity.is_none() {
+        return Ok(vec![]);
+    }
+    let account_platform = addr_identity.clone().unwrap().platform;
+    let account_identity = addr_identity.clone().unwrap().identity.clone();
+
+    // fetch addr's reverse record
+    let reverse_identity = fetch_reverse_record(&account_platform, &account_identity).await?;
+    if reverse_identity.is_none() {
+        return Ok(vec![Target::Identity(account_platform, account_identity)]);
+    }
+    let reverse_platform = reverse_identity.clone().unwrap().platform;
+    let reverse_identity = reverse_identity.clone().unwrap().identity;
+
+    return Ok(vec![
+        Target::Identity(account_platform, account_identity),
+        Target::Identity(reverse_platform, reverse_identity),
+    ]);
+}
+
+async fn fetch_hold_acc_and_reverse_record_by_addrs(
+    _platform: &Platform,
+    identity: &str,
+) -> Result<TargetProcessedList, Error> {
+    // fetch addr's hold dotbit records
+    fetch_account_list_by_addrs(_platform, identity).await?;
+
+    // fetch addr's reverse record
+    let reverse_identity = fetch_reverse_record(_platform, identity).await?;
+    if reverse_identity.is_none() {
+        return Err(Error::NoResult);
+    }
+
+    return Ok(vec![Target::Identity(
+        Platform::Dotbit,
+        reverse_identity.unwrap().identity,
+    )]);
+}
+
+async fn fetch_and_save_account_info(
+    _platform: &Platform,
+    identity: &str,
+) -> Result<Option<Identity>, Error> {
     let request_acc = AccInfoRequestParams {
         account: identity.to_string(),
     };
@@ -185,18 +250,21 @@ async fn fetch_connections_by_account_info(
         .body(Body::from(json_params))
         .map_err(|_err| Error::ParamError(format!("Dotbit Build Request Error {}", _err)))?;
 
-    let mut result = request_with_timeout(&client, req).await.map_err(|err| {
-        Error::ManualHttpClientError(format!(
-            "Dotbit fetch | das_accountInfo error: {:?}",
-            err.to_string()
-        ))
-    })?;
+    let mut result = request_with_timeout(&client, req, Some(std::time::Duration::from_secs(30)))
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "Dotbit fetch | das_accountInfo error: {:?}",
+                err.to_string()
+            ))
+        })?;
 
     let resp: AccountInfoResponse = parse_body(&mut result).await?;
-    if resp.result.errno.unwrap() != 0 {
+    if resp.result.errno.map_or(false, |e| e != 0) {
         warn!("fail to fetch the result from .bit, resp {:?}", resp);
         return Err(Error::NoResult);
     }
+
     let info = resp.result.data.unwrap();
     let account_info = info.account_info.unwrap();
     let out_point = info.out_point.unwrap();
@@ -209,32 +277,48 @@ async fn fetch_connections_by_account_info(
         return Err(Error::NoResult);
     }
 
-    // add to db
-    let db = new_db_connection().await?;
-    let created_at_naive = timestamp_to_naive(account_info.create_at_unix, 0);
+    let account_addr = account_info.owner_key.to_lowercase();
+    let account_platform: Platform = account_info.owner_algorithm_id.into();
+    if account_platform == Platform::Unknown {
+        warn!(
+            ".bit profile owner_algorithm_id(value={}) map to platform is Unknown",
+            account_info.owner_algorithm_id
+        );
+        return Ok(None);
+    }
 
-    let eth_identity: Identity = Identity {
+    let cli = make_http_client(); // connect server
+    let created_at_naive = timestamp_to_naive(account_info.create_at_unix, 0);
+    let expired_at_naive = timestamp_to_naive(account_info.expired_at_unix, 0);
+
+    let addr_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
-        platform: Platform::Ethereum,
-        identity: account_info.owner_key.to_lowercase().clone(),
-        created_at: Some(created_at_naive),
+        platform: account_platform,
+        identity: account_addr.clone(),
+        uid: None,
+        created_at: created_at_naive,
         display_name: None,
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     let dotbit_identity: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Dotbit,
         identity: identity.to_string(),
-        created_at: Some(created_at_naive),
+        uid: None,
+        created_at: created_at_naive,
         display_name: Some(identity.to_string()),
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: expired_at_naive,
+        reverse: Some(false),
     };
 
     let hold: Hold = Hold {
@@ -242,9 +326,10 @@ async fn fetch_connections_by_account_info(
         source: DataSource::Dotbit,
         transaction: Some(out_point.tx_hash),
         id: out_point.index.to_string(),
-        created_at: Some(created_at_naive),
+        created_at: created_at_naive,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: expired_at_naive,
     };
 
     let resolve: Resolve = Resolve {
@@ -257,26 +342,23 @@ async fn fetch_connections_by_account_info(
     };
 
     // hold record
-    create_identity_to_identity_hold_record(&db, &eth_identity, &dotbit_identity, &hold).await?;
+    create_identity_to_identity_hold_record(&cli, &addr_identity, &dotbit_identity, &hold).await?;
     // 'regular' resolution involves mapping from a name to an address.
-    create_domain_resolve_record(&db, &dotbit_identity, &eth_identity, &resolve).await?;
+    create_identity_domain_resolve_record(&cli, &dotbit_identity, &addr_identity, &resolve).await?;
 
-    return Ok(vec![Target::Identity(
-        Platform::Ethereum,
-        account_info.owner_key,
-    )]);
+    Ok(Some(addr_identity))
 }
 
-async fn fetch_hold_acc_and_reverse_record_by_addrs(
+async fn fetch_reverse_record(
     _platform: &Platform,
     identity: &str,
-) -> Result<TargetProcessedList, Error> {
-    // account_list api result doesn't provide any proofs(tx, recordID...)
-    // remove the function first
-    // fetch_account_list_by_addrs(_platform, identity).await?;
-
-    // das_reverseRecord
-    let request_params = get_req_params_by_platform(_platform, identity);
+) -> Result<Option<Identity>, Error> {
+    let coin_type: CoinType = _platform.clone().into();
+    if coin_type == CoinType::Unknown {
+        return Ok(None);
+    }
+    // fetch addr's reverse record: das_reverseRecord
+    let request_params = get_req_params(&coin_type, identity);
     let params = ReverseRecordRequest {
         jsonrpc: "2.0".to_string(),
         id: 1,
@@ -292,59 +374,43 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
         .body(Body::from(json_params))
         .map_err(|_err| Error::ParamError(format!("Dotbit Build Request Error {}", _err)))?;
 
-    let mut result = request_with_timeout(&client, req).await.map_err(|err| {
-        Error::ManualHttpClientError(format!(
-            "Dotbit fetch | das_reverseRecord error: {:?}",
-            err.to_string()
-        ))
-    })?;
-
+    let mut result = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "Dotbit fetch | das_reverseRecord error: {:?}",
+                err.to_string()
+            ))
+        })?;
     let resp: ReverseResponse = parse_body(&mut result).await?;
-    if resp.result.errno.unwrap() != 0 {
+    if resp.result.errno.map_or(false, |e| e != 0) {
         warn!("fail to fetch the result from .bit, resp {:?}", resp);
         return Err(Error::NoResult);
     }
     if resp.result.data.is_none() || resp.result.data.as_ref().unwrap().account.len() == 0 {
-        return Err(Error::NoResult);
+        warn!("das_reverseRecord result is empty, resp {:?}", resp);
+        return Ok(None);
     }
 
     let result_data = resp.result.data.unwrap();
-    let db = new_db_connection().await?;
-    let eth_identity: Identity = Identity {
-        uuid: Some(Uuid::new_v4()),
-        platform: Platform::Ethereum,
-        identity: identity.to_string().to_lowercase(),
-        created_at: None,
-        display_name: None,
-        added_at: naive_now(),
-        avatar_url: None,
-        profile_url: None,
-        updated_at: naive_now(),
-    };
+    let cli = make_http_client(); // connect server
 
-    let dotbit_identity: Identity = Identity {
+    let reverse_dotbit: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Dotbit,
         identity: result_data.account.clone(),
+        uid: None,
         created_at: None,
         display_name: Some(result_data.account.clone()),
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(true),
     };
 
-    let hold: Hold = Hold {
-        uuid: Uuid::new_v4(),
-        source: DataSource::Dotbit,
-        transaction: None,
-        id: "".to_string(),
-        created_at: None,
-        updated_at: naive_now(),
-        fetcher: DataFetcher::RelationService,
-    };
-
-    let resolve: Resolve = Resolve {
+    let reverse: Resolve = Resolve {
         uuid: Uuid::new_v4(),
         source: DataSource::Dotbit,
         system: DomainNameSystem::DotBit,
@@ -353,25 +419,29 @@ async fn fetch_hold_acc_and_reverse_record_by_addrs(
         updated_at: naive_now(),
     };
 
-    // hold record
-    create_identity_to_identity_hold_record(&db, &eth_identity, &dotbit_identity, &hold).await?;
-    // 'regular' resolution involves mapping from a name to an address.
-    create_domain_resolve_record(&db, &dotbit_identity, &eth_identity, &resolve).await?;
+    let addr_identity =
+        fetch_and_save_account_info(&Platform::Dotbit, &result_data.account).await?;
+    if addr_identity.is_none() {
+        return Ok(None);
+    }
+    let mut addr = addr_identity.unwrap();
+    addr.reverse = Some(true);
     // das_reverseRecord: 'reverse' resolution maps from an address back to a name.
-    create_domain_resolve_record(&db, &eth_identity, &dotbit_identity, &resolve).await?;
+    create_identity_domain_reverse_resolve_record(&cli, &addr, &reverse_dotbit, &reverse).await?;
 
-    return Ok(vec![Target::Identity(
-        Platform::Dotbit,
-        result_data.account.clone(),
-    )]);
+    return Ok(Some(reverse_dotbit));
 }
 
 async fn fetch_account_list_by_addrs(
-    _platform: &Platform,
+    platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
     // das_accountList
-    let request_params = get_req_params_by_platform(_platform, identity);
+    let coin_type: CoinType = platform.clone().into();
+    if coin_type == CoinType::Unknown {
+        return Ok(vec![]);
+    }
+    let request_params = get_req_params(&coin_type, identity);
     let params = ReverseRecordRequest {
         jsonrpc: "2.0".to_string(),
         id: 1,
@@ -387,44 +457,57 @@ async fn fetch_account_list_by_addrs(
         .body(Body::from(json_params))
         .map_err(|_err| Error::ParamError(format!("Dotbit Build Request Error {}", _err)))?;
 
-    let mut result = request_with_timeout(&client, req).await.map_err(|err| {
-        Error::ManualHttpClientError(format!(
-            "Dotbit fetch | das_accountList error: {:?}",
-            err.to_string()
-        ))
-    })?;
+    let mut result = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "Dotbit fetch | das_accountList error: {:?}",
+                err.to_string()
+            ))
+        })?;
 
     let resp: AccountListResponse = parse_body(&mut result).await?;
-    if resp.result.errno.unwrap() != 0 || resp.result.data.is_none() {
+    if resp.result.errno.map_or(false, |e| e != 0) {
+        warn!("fail to fetch the result from .bit, resp {:?}", resp);
+        return Err(Error::NoResult);
+    }
+    if resp.result.data.is_none() {
         warn!("fail to fetch the result from .bit, resp {:?}", resp);
         return Err(Error::NoResult);
     }
 
-    let db = new_db_connection().await?;
+    let cli = make_http_client(); // connect server
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
-        platform: Platform::Ethereum,
+        platform: platform.clone(),
         identity: identity.to_string().to_lowercase().clone(),
+        uid: None,
         created_at: None,
         display_name: None,
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
-    let from_record = from.create_or_update(&db).await?;
 
     for i in resp.result.data.unwrap().account_list.into_iter() {
+        let create_at_naive = option_timestamp_to_naive(i.registered_at, 0);
+        let expired_at_naive = option_timestamp_to_naive(i.expired_at, 0);
         let to: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
             platform: Platform::Dotbit,
             identity: i.account.to_string(),
-            created_at: None,
+            uid: None,
+            created_at: create_at_naive,
             display_name: Some(i.account.to_string()),
             added_at: naive_now(),
             avatar_url: None,
             profile_url: None,
             updated_at: naive_now(),
+            expired_at: expired_at_naive,
+            reverse: Some(false),
         };
 
         let hold: Hold = Hold {
@@ -432,22 +515,34 @@ async fn fetch_account_list_by_addrs(
             source: DataSource::Dotbit,
             transaction: None,
             id: "".to_string(),
-            created_at: None,
+            created_at: create_at_naive,
             updated_at: naive_now(),
             fetcher: DataFetcher::RelationService,
+            expired_at: expired_at_naive,
         };
 
-        let to_record = to.create_or_update(&db).await?;
-        hold.connect(&db, &from_record, &to_record).await?;
+        let resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Dotbit,
+            system: DomainNameSystem::DotBit,
+            name: i.account.to_string(),
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+
+        // hold record
+        create_identity_to_identity_hold_record(&cli, &from, &to, &hold).await?;
+        // 'regular' resolution involves mapping from a name to an address.
+        create_identity_domain_resolve_record(&cli, &to, &from, &resolve).await?;
     }
 
     Ok(vec![])
 }
 
-fn get_req_params_by_platform(_platform: &Platform, identity: &str) -> RequestTypeKeyInfoParams {
+fn get_req_params(coin_type: &CoinType, identity: &str) -> RequestTypeKeyInfoParams {
     // will support other platform later
     let req_key_info: RequestKeyInfo = RequestKeyInfo {
-        coin_type: "60".to_string(),
+        coin_type: coin_type.to_string(),
         chain_id: "1".to_string(),
         key: identity.to_string().to_lowercase(),
     };
@@ -455,4 +550,76 @@ fn get_req_params_by_platform(_platform: &Platform, identity: &str) -> RequestTy
         req_type: "blockchain".to_string(),
         key_info: req_key_info,
     };
+}
+
+#[derive(
+    Default,
+    Clone,
+    Copy,
+    Serialize,
+    Deserialize,
+    EnumString,
+    Display,
+    Debug,
+    EnumIter,
+    PartialEq,
+    Eq,
+    Hash,
+)]
+// 60: ETH, 195: TRX, 9006: BNB, 966: Matic, 3: doge, 309: ckb
+pub enum CoinType {
+    #[strum(serialize = "60")]
+    #[serde(rename = "60")]
+    ETH,
+
+    #[strum(serialize = "195")]
+    #[serde(rename = "195")]
+    TRX,
+
+    #[strum(serialize = "9006")]
+    #[serde(rename = "9006")]
+    BNB,
+
+    #[strum(serialize = "966")]
+    #[serde(rename = "966")]
+    Matic,
+
+    #[strum(serialize = "3")]
+    #[serde(rename = "3")]
+    Doge,
+
+    #[strum(serialize = "309")]
+    #[serde(rename = "309")]
+    CKB,
+
+    #[default]
+    #[serde(rename = "unknown")]
+    #[strum(serialize = "unknown")]
+    Unknown,
+}
+
+impl From<Platform> for CoinType {
+    fn from(platform: Platform) -> Self {
+        match platform {
+            Platform::Ethereum => CoinType::ETH,
+            Platform::Tron => CoinType::TRX,
+            Platform::BNBSmartChain => CoinType::BNB,
+            Platform::Polygon => CoinType::Matic,
+            Platform::Doge => CoinType::Doge,
+            Platform::CKB => CoinType::CKB,
+            _ => CoinType::Unknown,
+        }
+    }
+}
+
+impl From<i64> for Platform {
+    fn from(algo_id: i64) -> Self {
+        match algo_id {
+            5 => Platform::Ethereum, // EIP712 = 5
+            3 => Platform::Ethereum, // ETH = 3
+            4 => Platform::Tron,     // TRX = 4
+            8 => Platform::CKB,      // CKB = 8
+            _ => Platform::Unknown,
+        }
+    }
 }

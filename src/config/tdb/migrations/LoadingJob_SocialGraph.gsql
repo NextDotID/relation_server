@@ -1,0 +1,930 @@
+CREATE GRAPH SocialGraph (Identities, Proof_Forward, Proof_Backward, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Resolve_Contract, Reverse_Resolve_Contract, IdentitiesGraph, PartOfIdentitiesGraph, Follow)
+
+USE GRAPH SocialGraph
+
+CREATE OR REPLACE QUERY upsert_isolated_vertex(STRING vertex_str, INT updated_nanosecond) FOR GRAPH SocialGraph SYNTAX v2 {
+  TYPEDEF TUPLE< INT updated_nanosecond, STRING id > MinUpdatedTimeTuple;
+  JSONOBJECT from_v = parse_json_object(vertex_str);
+
+  SumAccum<INT> @@created_vertices;
+  SumAccum<INT> @@created_hyper_vertices;
+
+  SetAccum<STRING> @@insert_vlist;
+  SetAccum<VERTEX> @@existing_vlist;
+  SetAccum<VERTEX<IdentitiesGraph>> @@from_graph;
+
+  STRING final_identity_graph;
+
+  MinAccum<MinUpdatedTimeTuple> @@minUpdateTime;
+  OrAccum @@create_from_vertex = false;
+
+  STRING from_type = from_v.getString("v_type");
+  STRING from_id = from_v.getString("v_id");
+  @@insert_vlist += from_id;
+  @@existing_vlist = to_vertex_set(@@insert_vlist, from_type);
+
+  IF @@existing_vlist.size() > 0 THEN
+    // when it exists: update value
+    IF from_type == "Identities" THEN
+      exist_vset (ANY) = {@@existing_vlist};
+      STRING display_name = from_v.getJsonObject("attributes").getString("display_name");
+      STRING profile_url = from_v.getJsonObject("attributes").getString("profile_url");
+      STRING avatar_url = from_v.getJsonObject("attributes").getString("avatar_url");
+      STRING updated_at = from_v.getJsonObject("attributes").getString("updated_at");
+      STRING expired_at = from_v.getJsonObject("attributes").getString("expired_at");
+      BOOL reverse = from_v.getJsonObject("attributes").getBool("reverse");
+      STRING uid = from_v.getJsonObject("attributes").getString("uid");
+
+      R = SELECT v
+        FROM exist_vset:v
+        POST-ACCUM
+              IF display_name != "" THEN
+                v.display_name = display_name
+              END,
+              v.profile_url = profile_url,
+              v.avatar_url = avatar_url,
+              v.updated_at = to_datetime(updated_at),
+              IF datetime_diff(to_datetime(expired_at), v.expired_at) > 0 THEN
+                v.expired_at = to_datetime(expired_at)
+              END,
+              v.reverse = v.reverse OR reverse,
+              IF uid != "" THEN
+                v.uid = uid
+              END;
+      // find the HyperVertex: IdentitiesGraph
+      hyper_vertex = SELECT tgt FROM exist_vset-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt
+                    POST-ACCUM @@from_graph += tgt
+                    POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_nanosecond, tgt.id);
+    END;
+  ELSE
+    // if it doesn't exist: insert value
+    IF from_type == "Identities" THEN
+      INSERT INTO Identities VALUES (from_id, from_id,
+                                      from_v.getJsonObject("attributes").getString("uuid"),
+                                      from_v.getJsonObject("attributes").getString("platform"), 
+                                      from_v.getJsonObject("attributes").getString("identity"), 
+                                      from_v.getJsonObject("attributes").getString("display_name"), 
+                                      from_v.getJsonObject("attributes").getString("profile_url"),
+                                      from_v.getJsonObject("attributes").getString("avatar_url"),
+                                      to_datetime(from_v.getJsonObject("attributes").getString("created_at")),
+                                      to_datetime(from_v.getJsonObject("attributes").getString("added_at")),
+                                      to_datetime(from_v.getJsonObject("attributes").getString("updated_at")),
+                                      from_v.getJsonObject("attributes").getString("uid"),
+                                      to_datetime(from_v.getJsonObject("attributes").getString("expired_at")),
+                                      from_v.getJsonObject("attributes").getBool("reverse"));
+      @@create_from_vertex += true;
+      @@created_vertices += 1;
+    END;
+  END;
+
+  IF @@create_from_vertex == true THEN
+    // insert 1 hyper vertex connect isolated vertex
+    STRING primary_uuid = gsql_uuid_v4();
+    final_identity_graph = primary_uuid;
+    INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, updated_nanosecond);
+    INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (from_id Identities, primary_uuid IdentitiesGraph);
+    @@created_hyper_vertices += 1;
+  ELSE
+    STRING earliest_uuid = @@minUpdateTime.id;
+    final_identity_graph = earliest_uuid;
+    FOREACH v1 in @@from_graph DO
+      hyper_v (IdentitiesGraph) = { v1 };
+      STRING hyper_vid = v1.id;
+      IF hyper_vid != earliest_uuid THEN
+        combine_v = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-hyper_v
+                    ACCUM DELETE(e)
+                    POST-ACCUM
+                      INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (s Identities, earliest_uuid IdentitiesGraph);
+        // also need to combine the hyper_edge
+        follower = SELECT hv FROM IdentitiesGraph:hv-((Follow>):e1)-hyper_v
+                    ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                          VALUES(hv IdentitiesGraph, earliest_uuid IdentitiesGraph, e1.original_from, e1.original_to, e1.source, now()), DELETE(e1);        
+        following = SELECT hv FROM IdentitiesGraph:hv-((<Follow):e2)-hyper_v
+                    ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                          VALUES(earliest_uuid IdentitiesGraph, hv IdentitiesGraph, e2.original_from, e2.original_to, e2.source, now()), DELETE(e2);
+        tmp = SELECT tgt FROM hyper_v:tgt POST-ACCUM DELETE(tgt);
+      END;
+    END;
+  END;
+
+  PRINT @@created_vertices as created_vertices, @@created_hyper_vertices as created_hyper_vertices, final_identity_graph;
+}
+
+CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str, INT updated_nanosecond) FOR GRAPH SocialGraph SYNTAX v2 {
+  TYPEDEF TUPLE< INT updated_nanosecond, STRING id > MinUpdatedTimeTuple;
+  JSONOBJECT from_v = parse_json_object(from_str);
+  JSONOBJECT to_v = parse_json_object(to_str);
+
+  SumAccum<INT> @@created_vertices;
+  SumAccum<INT> @@created_hyper_vertices;
+
+  SetAccum<STRING> @@insert_vlist;
+  SetAccum<VERTEX> @@existing_vlist;
+  SetAccum<VERTEX<IdentitiesGraph>> @@from_graph;
+  SetAccum<VERTEX<IdentitiesGraph>> @@to_graph;
+  STRING final_identity_graph;
+
+  MinAccum<MinUpdatedTimeTuple> @@minUpdateTime;
+
+  OrAccum @@create_from_vertex = false;
+  OrAccum @@create_to_vertex = false;
+
+  STRING from_type = from_v.getString("v_type");
+  STRING from_id = from_v.getString("v_id");
+  @@insert_vlist += from_id;
+  @@existing_vlist = to_vertex_set(@@insert_vlist, from_type); // check existence of a vertex without slowing server
+  IF @@existing_vlist.size() > 0 THEN
+    // when it exists: update value
+    IF from_type == "Identities" THEN
+      exist_vset (ANY) = {@@existing_vlist};
+      STRING display_name = from_v.getJsonObject("attributes").getString("display_name");
+      STRING profile_url = from_v.getJsonObject("attributes").getString("profile_url");
+      STRING avatar_url = from_v.getJsonObject("attributes").getString("avatar_url");
+      STRING updated_at = from_v.getJsonObject("attributes").getString("updated_at");
+      STRING expired_at = from_v.getJsonObject("attributes").getString("expired_at");
+      BOOL reverse = from_v.getJsonObject("attributes").getBool("reverse");
+      STRING uid = from_v.getJsonObject("attributes").getString("uid");
+
+      R = SELECT v
+        FROM exist_vset:v
+        POST-ACCUM
+              IF display_name != "" THEN
+                v.display_name = display_name
+              END,
+              v.profile_url = profile_url,
+              v.avatar_url = avatar_url,
+              v.updated_at = to_datetime(updated_at),
+              IF datetime_diff(to_datetime(expired_at), v.expired_at) > 0 THEN
+                v.expired_at = to_datetime(expired_at)
+              END,
+              v.reverse = v.reverse OR reverse,
+              IF uid != "" THEN
+                v.uid = uid
+              END;
+      // find the HyperVertex: IdentitiesGraph
+      hyper_vertex = SELECT tgt FROM exist_vset-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt
+                    POST-ACCUM @@from_graph += tgt
+                    POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_nanosecond, tgt.id);
+    ELSE IF from_type == "Contracts" THEN
+      exist_vset (ANY) = {@@existing_vlist};
+      STRING category = from_v.getJsonObject("attributes").getString("category");
+      STRING symbol = from_v.getJsonObject("attributes").getString("symbol");
+      STRING updated_at = from_v.getJsonObject("attributes").getString("updated_at");
+
+      R = SELECT v
+        FROM exist_vset:v
+        POST-ACCUM
+              v.category = category,
+              v.symbol = symbol,
+              v.updated_at = to_datetime(updated_at);
+    END;
+  ELSE
+    // if it doesn't exist: insert value
+    IF from_type == "Identities" THEN
+      INSERT INTO Identities VALUES (from_id, from_id,
+                                      from_v.getJsonObject("attributes").getString("uuid"),
+                                      from_v.getJsonObject("attributes").getString("platform"), 
+                                      from_v.getJsonObject("attributes").getString("identity"), 
+                                      from_v.getJsonObject("attributes").getString("display_name"), 
+                                      from_v.getJsonObject("attributes").getString("profile_url"),
+                                      from_v.getJsonObject("attributes").getString("avatar_url"),
+                                      to_datetime(from_v.getJsonObject("attributes").getString("created_at")),
+                                      to_datetime(from_v.getJsonObject("attributes").getString("added_at")),
+                                      to_datetime(from_v.getJsonObject("attributes").getString("updated_at")),
+                                      from_v.getJsonObject("attributes").getString("uid"),
+                                      to_datetime(from_v.getJsonObject("attributes").getString("expired_at")),
+                                      from_v.getJsonObject("attributes").getBool("reverse"));
+      @@create_from_vertex += true;
+      @@created_vertices += 1;
+    ELSE IF from_type == "Contracts" THEN
+      INSERT INTO Contracts VALUES (from_id, from_id, 
+                                    from_v.getJsonObject("attributes").getString("uuid"),
+                                    from_v.getJsonObject("attributes").getString("category"),
+                                    from_v.getJsonObject("attributes").getString("address"),
+                                    from_v.getJsonObject("attributes").getString("chain"),
+                                    from_v.getJsonObject("attributes").getString("symbol"),
+                                    to_datetime(from_v.getJsonObject("attributes").getString("updated_at")));
+      @@create_from_vertex += true;
+      @@created_vertices += 1;
+    END;
+  END;
+
+  @@insert_vlist.clear();
+  @@existing_vlist.clear();
+  STRING to_type = to_v.getString("v_type");
+  STRING to_id = to_v.getString("v_id");
+  @@insert_vlist += to_id;
+  @@existing_vlist = to_vertex_set(@@insert_vlist, to_type);
+
+  IF @@existing_vlist.size() > 0 THEN
+    // when it exists: update value
+    IF to_type == "Identities" THEN
+      exist_vset (ANY) = {@@existing_vlist};
+      STRING display_name = to_v.getJsonObject("attributes").getString("display_name");
+      STRING profile_url = to_v.getJsonObject("attributes").getString("profile_url");
+      STRING avatar_url = to_v.getJsonObject("attributes").getString("avatar_url");
+      STRING updated_at = to_v.getJsonObject("attributes").getString("updated_at");
+      STRING expired_at = to_v.getJsonObject("attributes").getString("expired_at");
+      BOOL reverse = to_v.getJsonObject("attributes").getBool("reverse");
+      STRING uid = to_v.getJsonObject("attributes").getString("uid");
+
+      R = SELECT v
+        FROM exist_vset:v
+        POST-ACCUM
+              IF display_name != "" THEN
+                v.display_name = display_name
+              END,
+              v.profile_url = profile_url,
+              v.avatar_url = avatar_url,
+              v.updated_at = to_datetime(updated_at),
+              IF datetime_diff(to_datetime(expired_at), v.expired_at) > 0 THEN
+                v.expired_at = to_datetime(expired_at)
+              END,
+              v.reverse = v.reverse OR reverse,
+              IF uid != "" THEN
+                v.uid = uid
+              END;
+      // find the HyperVertex: IdentitiesGraph
+      hyper_vertex = SELECT tgt FROM exist_vset-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt
+                    POST-ACCUM @@to_graph += tgt
+                    POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_nanosecond, tgt.id);
+    ELSE IF to_type == "Contracts" THEN
+      exist_vset (ANY) = {@@existing_vlist};
+      STRING category = to_v.getJsonObject("attributes").getString("category");
+      STRING symbol = to_v.getJsonObject("attributes").getString("symbol");
+      STRING updated_at = to_v.getJsonObject("attributes").getString("updated_at");
+
+      R = SELECT v
+        FROM exist_vset:v
+        POST-ACCUM
+              v.category = category,
+              v.symbol = symbol,
+              v.updated_at = to_datetime(updated_at);
+    END;
+  ELSE
+    // if it doesn't exist: insert value
+    IF to_type == "Identities" THEN
+      INSERT INTO Identities VALUES (to_id, to_id,
+                                      to_v.getJsonObject("attributes").getString("uuid"),
+                                      to_v.getJsonObject("attributes").getString("platform"), 
+                                      to_v.getJsonObject("attributes").getString("identity"), 
+                                      to_v.getJsonObject("attributes").getString("display_name"), 
+                                      to_v.getJsonObject("attributes").getString("profile_url"),
+                                      to_v.getJsonObject("attributes").getString("avatar_url"),
+                                      to_datetime(to_v.getJsonObject("attributes").getString("created_at")),
+                                      to_datetime(to_v.getJsonObject("attributes").getString("added_at")),
+                                      to_datetime(to_v.getJsonObject("attributes").getString("updated_at")),
+                                      to_v.getJsonObject("attributes").getString("uid"),
+                                      to_datetime(to_v.getJsonObject("attributes").getString("expired_at")),
+                                      to_v.getJsonObject("attributes").getBool("reverse"));
+      @@create_to_vertex += true;
+      @@created_vertices += 1;
+    ELSE IF to_type == "Contracts" THEN
+      INSERT INTO Contracts VALUES (to_id, to_id, 
+                                    to_v.getJsonObject("attributes").getString("uuid"),
+                                    to_v.getJsonObject("attributes").getString("category"),
+                                    to_v.getJsonObject("attributes").getString("address"),
+                                    to_v.getJsonObject("attributes").getString("chain"),
+                                    to_v.getJsonObject("attributes").getString("symbol"),
+                                    to_datetime(to_v.getJsonObject("attributes").getString("updated_at")));
+      @@create_to_vertex += true;
+      @@created_vertices += 1;
+    END;
+  END;
+
+  // from（Identity）New, to（Identity）New: New_GraphID * 2
+  // from（Contract）New, to（Identity）New: New_GraphID -> to
+  // from（Identity）New, to（Contract）New: New_GraphID -> from
+
+  // from（Identity）Old:From_GraphID, to（Identity）New:   Old:From_GraphID -> to
+  // from（Contract）Old, to（Identity）New:                New_GraphID -> to
+  // from（Identity）Old:From_GraphID, to（Contract）None:  Nothing to Do.
+
+  // from（Identity）New, to（Identity）Old:To_GraphID: Old:To_GraphID -> from
+  // from（Identity）New, to（Contract）Old:           New_GraphID -> from
+  // from（Contract）New, to（Identity）Old:To_GraphID: Nothing to Do.
+
+  IF from_type == "Identities" AND to_type == "Identities"
+  THEN
+    IF @@create_from_vertex == true AND @@create_to_vertex == true THEN
+      // insert 1 hyper vertex connect from & to
+      STRING primary_uuid = gsql_uuid_v4();
+      final_identity_graph = primary_uuid;
+      INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, updated_nanosecond);
+      INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (from_id Identities, primary_uuid IdentitiesGraph);
+      INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (to_id Identities, primary_uuid IdentitiesGraph);
+      @@created_hyper_vertices += 1;
+
+    ELSE IF @@create_from_vertex == false AND @@create_to_vertex == true THEN
+      // add PartOfIdentitiesGraph Old:From_GraphID -> to
+      STRING earliest_uuid = @@minUpdateTime.id;
+      final_identity_graph = earliest_uuid;
+      FOREACH v1 in @@from_graph DO
+        hyper_v (IdentitiesGraph) = { v1 };
+        STRING hyper_vid = v1.id;
+        IF hyper_vid == earliest_uuid THEN
+          INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (to_id Identities, earliest_uuid IdentitiesGraph);
+        ELSE
+          combine_v = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-hyper_v
+                      ACCUM DELETE(e)
+                      POST-ACCUM
+                        INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (s Identities, earliest_uuid IdentitiesGraph);
+          // also need to combine the hyper_edge
+          follower = SELECT hv FROM IdentitiesGraph:hv-((Follow>):e1)-hyper_v
+                      ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                            VALUES(hv IdentitiesGraph, earliest_uuid IdentitiesGraph, e1.original_from, e1.original_to, e1.source, now()), DELETE(e1);        
+          following = SELECT hv FROM IdentitiesGraph:hv-((<Follow):e2)-hyper_v
+                      ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                            VALUES(earliest_uuid IdentitiesGraph, hv IdentitiesGraph, e2.original_from, e2.original_to, e2.source, now()), DELETE(e2);
+          tmp = SELECT tgt FROM hyper_v:tgt POST-ACCUM DELETE(tgt);
+        END;
+      END;
+
+    ELSE IF @@create_from_vertex == true AND @@create_to_vertex == false THEN
+      // add PartOfIdentitiesGraph Old:To_GraphID -> from
+      STRING earliest_uuid = @@minUpdateTime.id;
+      final_identity_graph = earliest_uuid;
+      FOREACH v2 in @@to_graph DO
+        hyper_v (IdentitiesGraph) = { v2 };
+        STRING hyper_vid = v2.id;
+        IF hyper_vid == earliest_uuid THEN
+          INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (from_id Identities, earliest_uuid IdentitiesGraph);
+        ELSE
+          combine_v = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-hyper_v
+                      ACCUM DELETE(e)
+                      POST-ACCUM
+                        INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (s Identities, earliest_uuid IdentitiesGraph);
+          // also need to combine the hyper_edge
+          follower = SELECT hv FROM IdentitiesGraph:hv-((Follow>):e1)-hyper_v
+                      ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                            VALUES(hv IdentitiesGraph, earliest_uuid IdentitiesGraph, e1.original_from, e1.original_to, e1.source, now()), DELETE(e1);        
+          following = SELECT hv FROM IdentitiesGraph:hv-((<Follow):e2)-hyper_v
+                      ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                            VALUES(earliest_uuid IdentitiesGraph, hv IdentitiesGraph, e2.original_from, e2.original_to, e2.source, now()), DELETE(e2);
+          tmp = SELECT tgt FROM hyper_v:tgt POST-ACCUM DELETE(tgt);
+        END;
+      END;
+
+    ELSE IF @@create_from_vertex == false AND @@create_to_vertex == false THEN
+      // combine two IdentitiesGraph
+      STRING earliest_uuid = @@minUpdateTime.id;
+      final_identity_graph = earliest_uuid;
+      SetAccum<VERTEX<IdentitiesGraph>> @@from_union_to;
+      @@from_union_to = @@from_graph UNION @@to_graph;
+      FOREACH v3 IN @@from_union_to DO
+        hyper_v (IdentitiesGraph) = { v3 };
+        STRING hyper_vid = v3.id;
+        IF hyper_vid != earliest_uuid THEN
+          combine_v = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-hyper_v
+                      ACCUM DELETE(e)
+                      POST-ACCUM
+                        INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (s Identities, earliest_uuid IdentitiesGraph);
+          // also need to combine the hyper_edge
+          follower = SELECT hv FROM IdentitiesGraph:hv-((Follow>):e1)-hyper_v
+                      ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                            VALUES(hv IdentitiesGraph, earliest_uuid IdentitiesGraph, e1.original_from, e1.original_to, e1.source, now()), DELETE(e1);        
+          following = SELECT hv FROM IdentitiesGraph:hv-((<Follow):e2)-hyper_v
+                      ACCUM INSERT INTO Follow(FROM, TO, original_from, original_to, source, updated_at)
+                            VALUES(earliest_uuid IdentitiesGraph, hv IdentitiesGraph, e2.original_from, e2.original_to, e2.source, now()), DELETE(e2);
+          tmp = SELECT tgt FROM hyper_v:tgt POST-ACCUM DELETE(tgt);
+        END;
+      END; // end FOREACH
+
+    END; // end ELSE_IF
+  ELSE IF from_type == "Identities" AND to_type == "Contracts" AND @@create_from_vertex == true
+  THEN
+    // insert 1 hyper vertex, New_GraphID -> from
+    STRING primary_uuid = gsql_uuid_v4();
+    final_identity_graph = primary_uuid;
+    INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, updated_nanosecond);
+    INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (from_id Identities, primary_uuid IdentitiesGraph);
+    @@created_hyper_vertices += 1;
+  ELSE IF from_type == "Contracts" AND to_type == "Identities" AND @@create_to_vertex == true
+  THEN
+    // insert 1 hyper vertex, New_GraphID -> to
+    STRING primary_uuid = gsql_uuid_v4();
+    final_identity_graph = primary_uuid;
+    INSERT INTO IdentitiesGraph VALUES (primary_uuid, primary_uuid, updated_nanosecond);
+    INSERT INTO PartOfIdentitiesGraph (FROM, TO) VALUES (to_id Identities, primary_uuid IdentitiesGraph);
+    @@created_hyper_vertices += 1;
+  END;
+
+  PRINT @@created_vertices as created_vertices, @@created_hyper_vertices as created_hyper_vertices, final_identity_graph;
+}
+
+CREATE OR REPLACE QUERY delete_graph_inner_connection(VERTEX<Identities> p, INT depth=10) FOR GRAPH SocialGraph SYNTAX v2 {
+  seed (Identities) = {p};
+  identities_graph = SELECT tgt FROM seed-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt;
+  vertex2delete = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-identities_graph;
+
+  // only delete connection
+  v2c = SELECT v FROM vertex2delete-(:e)-Contracts:v ACCUM DELETE(e);
+  v2v = SELECT v FROM vertex2delete-(:e)-vertex2delete:v ACCUM DELETE(e);
+}
+
+CREATE OR REPLACE QUERY find_identity_graph_resolve(STRING platform, STRING identity, INT reverse_flag=0) FOR GRAPH SocialGraph {
+  TYPEDEF TUPLE< VERTEX source_v, VERTEX target_v, STRING data_source, STRING edge_type > IdentityConnection;
+  TYPEDEF TUPLE< STRING chain, STRING address > Address;
+  TYPEDEF TUPLE< INT updated_nanosecond, STRING id > MinUpdatedTimeTuple;
+
+  MinAccum<MinUpdatedTimeTuple> @@minUpdateTime;
+  STRING graph_id;
+  SumAccum<INT> @degree;
+  SetAccum<Address> @owner_address;
+  SetAccum<Address> @resolve_address;
+
+  SetAccum<IdentityConnection> @@edges;
+
+  SetAccum<STRING> @@vlist;
+  SetAccum<VERTEX> @@existing_vlist;
+  STRING p = platform + "," + identity;
+  @@vlist += p;
+  @@existing_vlist = to_vertex_set(@@vlist, "Identities"); // check existence of a vertex without slowing server
+  seed (ANY) = {@@existing_vlist};
+
+  identities_graph = SELECT tgt FROM seed-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt
+                     POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_nanosecond, tgt.id);
+  graph_id = @@minUpdateTime.id;
+
+  vset = SELECT v FROM Identities:v-((PartOfIdentitiesGraph>):e)-identities_graph;
+  tmp1 = SELECT v1 FROM vset:v1-((Proof_Forward>|Proof_Backward>):e1)-vset:v2
+          ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Proof");
+  tmp2 = SELECT v1 FROM vset:v1-((<Proof_Forward|<Proof_Backward):e2)-vset:v2
+        ACCUM @@edges += IdentityConnection(v2, v1, e2.source, "Proof");
+  tmp4 = SELECT v1  FROM vset:v1-((Hold_Identity>):e1)-vset:i-((Resolve>):e2)-vset:v2
+        WHERE i.platform != "ENS" AND i.platform != "ens"
+        ACCUM @@edges += IdentityConnection(v1, i, e1.source, "Hold"),
+              i.@owner_address += Address(v1.platform, v1.identity), 
+              i.@resolve_address += Address(v2.platform, v2.identity);
+  tmp5 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
+        WHERE v2.platform != "ENS" AND v2.platform != "ens"
+        ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Hold"),
+              v2.@owner_address += Address(v1.platform, v1.identity);
+  tmp3 = SELECT v1 FROM vset:v1-((Resolve>):r)-vset:v2
+        WHERE v1.platform == "ENS" OR v1.platform == "ens"
+        ACCUM
+          @@edges += IdentityConnection(v1, v2, r.source, "Resolve"),
+          v1.@resolve_address += Address(v2.platform, v2.identity);
+  tmp3_1 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
+        WHERE v2.platform == "ENS" OR v2.platform == "ens"
+        ACCUM v2.@owner_address += Address(v1.platform, v1.identity);
+
+  tmp6 = SELECT v1 FROM vset:v1-((Reverse_Resolve>):e1)-vset:v2
+        ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Reverse_Resolve");
+  PRINT graph_id, vset as vertices, @@edges as edges;
+}
+
+CREATE OR REPLACE QUERY find_expand_identity(STRING platform, STRING identity) FOR GRAPH SocialGraph {
+  TYPEDEF TUPLE< STRING chain, STRING address > Address;
+  SetAccum<STRING> @@vlist;
+  SetAccum<VERTEX> @@existing_vlist;
+  STRING p = platform + "," + identity;
+  @@vlist += p;
+  @@existing_vlist = to_vertex_set(@@vlist, "Identities"); // check existence of a vertex without slowing server
+  seed (ANY) = {@@existing_vlist};
+  
+  SetAccum<Address> @owner_address;
+  SetAccum<Address> @resolve_address;
+  
+  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS", "ens", "sns", "genome"];
+  IF @@domainSystems.contains(platform) == TRUE THEN
+    tmp = SELECT domain FROM seed:domain-((<Hold_Identity):e)-Identities:owner
+            ACCUM domain.@owner_address += Address(owner.platform, owner.identity);
+    tmp2 = SELECT domain FROM seed:domain-((Resolve>):e)-Identities:tgt
+            ACCUM domain.@resolve_address += Address(tgt.platform, tgt.identity);
+  ELSE IF platform == "farcaster" THEN
+    tmp = SELECT farcaster FROM seed:farcaster-((<Hold_Identity):e)-Identities:owner
+            ACCUM farcaster.@owner_address += Address(owner.platform, owner.identity);
+  END;
+
+  PRINT seed as expand_vlist;
+}
+
+CREATE OR REPLACE QUERY find_identity_graph(STRING p, INT reverse_flag=0) FOR GRAPH SocialGraph {
+  TYPEDEF TUPLE< VERTEX source_v, VERTEX target_v, STRING data_source, STRING edge_type > IdentityConnection;
+  TYPEDEF TUPLE< STRING chain, STRING address > Address;
+  TYPEDEF TUPLE< INT updated_nanosecond, STRING id > MinUpdatedTimeTuple;
+
+  MinAccum<MinUpdatedTimeTuple> @@minUpdateTime;
+  STRING graph_id;
+  SumAccum<INT> @degree;
+  SetAccum<Address> @owner_address;
+  SetAccum<Address> @resolve_address;
+
+  SetAccum<IdentityConnection> @@edges;
+
+  SetAccum<STRING> @@vlist;
+  SetAccum<VERTEX> @@existing_vlist;
+  @@vlist += p;
+  @@existing_vlist = to_vertex_set(@@vlist, "Identities"); // check existence of a vertex without slowing server
+  seed (ANY) = {@@existing_vlist};
+
+  identities_graph = SELECT tgt FROM seed-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt
+                     POST-ACCUM @@minUpdateTime += MinUpdatedTimeTuple(tgt.updated_nanosecond, tgt.id);
+  graph_id = @@minUpdateTime.id;
+
+  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS", "ens", "sns", "genome"];
+
+  IF reverse_flag == 1 THEN
+    vset = SELECT v FROM Identities:v-((PartOfIdentitiesGraph>):e)-identities_graph
+           WHERE (@@domainSystems.contains(v.platform) == TRUE AND v.reverse == TRUE) OR (@@domainSystems.contains(v.platform) == FALSE)
+           LIMIT 500;
+    tmp1 = SELECT v1 FROM vset:v1-((Proof_Forward>|Proof_Backward>):e1)-vset:v2
+            ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Proof");
+    tmp2 = SELECT v1 FROM vset:v1-((<Proof_Forward|<Proof_Backward):e2)-vset:v2
+          ACCUM @@edges += IdentityConnection(v2, v1, e2.source, "Proof");
+    tmp4 = SELECT v1  FROM vset:v1-((Hold_Identity>):e1)-vset:i-((Resolve>):e2)-vset:v2
+          WHERE i.platform != "genome" AND i.platform != "ens" AND i.platform != "sns"
+          ACCUM @@edges += IdentityConnection(v1, i, e1.source, "Hold"),
+                i.@owner_address += Address(v1.platform, v1.identity), 
+                i.@resolve_address += Address(v2.platform, v2.identity);
+    tmp5 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
+          WHERE v2.platform != "genome" AND v2.platform != "ens" AND v2.platform != "sns"
+          ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Hold"),
+                v2.@owner_address += Address(v1.platform, v1.identity);
+    tmp3 = SELECT v1 FROM vset:v1-((Resolve>):r)-vset:v2
+          WHERE v1.platform == "genome" OR v1.platform == "ens" OR v1.platform != "sns"
+          ACCUM
+            @@edges += IdentityConnection(v1, v2, r.source, "Resolve"),
+            v1.@resolve_address += Address(v2.platform, v2.identity);
+    tmp3_1 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
+          WHERE v2.platform == "genome" OR v2.platform == "ens" OR v2.platform == "sns"
+          ACCUM v2.@owner_address += Address(v1.platform, v1.identity);
+
+    tmp6 = SELECT v1 FROM vset:v1-((Reverse_Resolve>):e1)-vset:v2
+          ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Reverse_Resolve");
+    PRINT graph_id, vset as vertices, @@edges as edges;
+
+  ELSE IF reverse_flag == 2 THEN
+    vset = SELECT v FROM Identities:v-((PartOfIdentitiesGraph>):e)-identities_graph
+           WHERE (@@domainSystems.contains(v.platform) == TRUE AND v.reverse == FALSE) OR (@@domainSystems.contains(v.platform) == FALSE)
+           LIMIT 500;
+    tmp1 = SELECT v1 FROM vset:v1-((Proof_Forward>|Proof_Backward>):e1)-vset:v2
+            ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Proof");
+    tmp2 = SELECT v1 FROM vset:v1-((<Proof_Forward|<Proof_Backward):e2)-vset:v2
+          ACCUM @@edges += IdentityConnection(v2, v1, e2.source, "Proof");
+    tmp4 = SELECT v1  FROM vset:v1-((Hold_Identity>):e1)-vset:i-((Resolve>):e2)-vset:v2
+          WHERE i.platform != "genome" AND i.platform != "ens" AND i.platform != "sns"
+          ACCUM @@edges += IdentityConnection(v1, i, e1.source, "Hold"),
+                i.@owner_address += Address(v1.platform, v1.identity), 
+                i.@resolve_address += Address(v2.platform, v2.identity);
+    tmp5 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
+          WHERE v2.platform != "genome" AND v2.platform != "ens" AND v2.platform != "sns"
+          ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Hold"),
+                v2.@owner_address += Address(v1.platform, v1.identity);
+    tmp3 = SELECT v1 FROM vset:v1-((Resolve>):r)-vset:v2
+          WHERE v1.platform == "genome" OR v1.platform == "ens" OR v1.platform == "sns"
+          ACCUM
+            @@edges += IdentityConnection(v1, v2, r.source, "Resolve"),
+            v1.@resolve_address += Address(v2.platform, v2.identity);
+    tmp3_1 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
+          WHERE v2.platform == "genome" OR v2.platform == "ens" OR v2.platform == "sns"
+          ACCUM v2.@owner_address += Address(v1.platform, v1.identity);
+    tmp6 = SELECT v1 FROM vset:v1-((Reverse_Resolve>):e1)-vset:v2
+          ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Reverse_Resolve");
+    PRINT graph_id, vset as vertices, @@edges as edges;
+
+  ELSE
+    vset = SELECT v FROM Identities:v-((PartOfIdentitiesGraph>):e)-identities_graph LIMIT 500;
+    tmp1 = SELECT v1 FROM vset:v1-((Proof_Forward>|Proof_Backward>):e1)-vset:v2
+            ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Proof");
+    tmp2 = SELECT v1 FROM vset:v1-((<Proof_Forward|<Proof_Backward):e2)-vset:v2
+          ACCUM @@edges += IdentityConnection(v2, v1, e2.source, "Proof");
+    tmp4 = SELECT v1  FROM vset:v1-((Hold_Identity>):e1)-vset:i-((Resolve>):e2)-vset:v2
+          WHERE i.platform != "genome" AND i.platform != "ens" AND i.platform != "sns"
+          ACCUM @@edges += IdentityConnection(v1, i, e1.source, "Hold"),
+                i.@owner_address += Address(v1.platform, v1.identity), 
+                i.@resolve_address += Address(v2.platform, v2.identity);
+    tmp5 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
+          WHERE v2.platform != "genome" AND v2.platform != "ens" AND v2.platform != "sns"
+          ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Hold"),
+                v2.@owner_address += Address(v1.platform, v1.identity);
+    tmp3 = SELECT v1 FROM vset:v1-((Resolve>):r)-vset:v2
+          WHERE v1.platform == "genome" OR v1.platform == "ens" OR v1.platform == "sns"
+          ACCUM
+            @@edges += IdentityConnection(v1, v2, r.source, "Resolve"),
+            v1.@resolve_address += Address(v2.platform, v2.identity);
+    tmp3_1 = SELECT v1 FROM vset:v1-((Hold_Identity>):e1)-vset:v2
+          WHERE v2.platform == "genome" OR v2.platform == "ens" OR v2.platform == "sns"
+          ACCUM v2.@owner_address += Address(v1.platform, v1.identity);
+
+    tmp6 = SELECT v1 FROM vset:v1-((Reverse_Resolve>):e1)-vset:v2
+          ACCUM @@edges += IdentityConnection(v1, v2, e1.source, "Reverse_Resolve");
+    PRINT graph_id, vset as vertices, @@edges as edges;
+  END;
+}
+
+CREATE OR REPLACE QUERY neighbors(VERTEX<Identities> p, INT depth) FOR GRAPH SocialGraph { 
+  SetAccum<EDGE> @@edges;
+  SetAccum<VERTEX> @@vertices;
+  OrAccum @visited = FALSE;
+  OrAccum @visited2 = FALSE;
+
+  seed (Identities) = {p};
+  WHILE(seed.size()>0) LIMIT depth DO
+    SetAccum<VERTEX> @@pool;
+    proof = SELECT v FROM seed-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:v-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed
+           WHERE v.@visited == FALSE
+           ACCUM v.@visited = TRUE, @@edges += pf, @@edges += pw
+           POST-ACCUM @@vertices += v, @@pool += v;
+    hold = SELECT v FROM seed-((Hold_Identity>|<Hold_Identity):e)-Identities:v
+           WHERE v.@visited2 == FALSE AND v.platform != "genome" AND v.platform != "ens" AND v.platform != "sns"
+           ACCUM v.@visited2 = TRUE, @@edges += e
+           POST-ACCUM @@vertices += v, @@pool += v;
+    seed (Identities) = {@@pool};
+  END;
+  PRINT @@vertices AS vertices, @@edges AS edges;
+}
+
+CREATE OR REPLACE QUERY neighbors_with_source_reverse(VERTEX<Identities> p, INT depth=10, INT reverse_flag=0) FOR GRAPH SocialGraph SYNTAX V2 {
+  MinAccum<INT> @min_dis;
+  OrAccum @or_visited = false;
+  OrAccum @or_visited2 = false;
+  OrAccum @reverse = false;
+  ListAccum<VERTEX<Identities>> @path_list;
+  SetAccum<STRING> @source_list;
+  SetAccum<EDGE> @@edge_set;
+  SetAccum<VERTEX<Identities>> @@vertices;
+  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS", "ens", "sns", "genome"];
+
+  ##### Initialization  #####
+  seed (Identities) = {p};
+  seed = SELECT s
+           FROM seed:s
+     ACCUM s.@or_visited += true,
+           s.@or_visited2 += true,
+           s.@min_dis = 0,
+           s.@path_list = s;
+  ResultSet (Identities) = seed;
+
+  ##### Calculate distances and paths #####
+  WHILE(seed.size()>0) LIMIT depth DO
+    SetAccum<VERTEX> @@pool;
+    proof = SELECT t
+      FROM seed:s1-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:t-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed:s2
+        WHERE t.@or_visited == false AND s1 == s2
+          ACCUM
+            t.@min_dis += s1.@min_dis + 1,
+            t.@path_list = s1.@path_list + [t],
+            t.@source_list += s1.@source_list,
+            t.@source_list += pf.source,
+            t.@source_list += pw.source,
+            t.@or_visited += true
+          POST-ACCUM @@pool += t
+        ORDER BY getvid(t);
+    ResultSet (Identities) = ResultSet UNION proof;
+
+    hold = SELECT v
+      FROM seed:s-((Hold_Identity>|<Hold_Identity):e)-Identities:v
+        WHERE v.@or_visited2 == false AND (v.platform != "ENS" AND v.platform != "ens" AND s.platform != "ENS" AND s.platform != "ens")
+        ACCUM
+          v.@min_dis += s.@min_dis + 1,
+          v.@path_list = s.@path_list + [v],
+          v.@source_list += s.@source_list,
+          v.@source_list += e.source,
+          v.@or_visited2 += true
+        POST-ACCUM @@pool += v
+      ORDER BY getvid(v);
+    ResultSet (Identities) = ResultSet UNION hold;
+
+    seed (Identities) = {@@pool};
+  END;
+  
+  address = SELECT addr FROM ResultSet:start-((<Reverse_Resolve):r)-ResultSet:addr
+            WHERE @@domainSystems.contains(r.system) == TRUE
+            ACCUM start.@reverse += true;
+  
+  address2 = SELECT addr FROM ResultSet:addr-((Reverse_Resolve_Contract>):r)-Contracts:c
+            WHERE r.system == "genome" OR r.system == "ens" OR r.system == "sns"
+            ACCUM addr.@reverse += true;
+  
+  IF reverse_flag == 0 THEN
+    PRINT ResultSet as vertices;
+  ELSE IF reverse_flag == 1 THEN
+    PRINT ResultSet as vertices WHERE (@@domainSystems.contains(ResultSet.platform) == TRUE AND ResultSet.@reverse == TRUE) OR
+      (@@domainSystems.contains(ResultSet.platform) == FALSE);
+  ELSE IF reverse_flag == 2 THEN
+    PRINT ResultSet as vertices WHERE (@@domainSystems.contains(ResultSet.platform) == TRUE AND ResultSet.@reverse == FALSE) OR
+      (@@domainSystems.contains(ResultSet.platform) == FALSE);
+  END;
+}
+
+CREATE OR REPLACE QUERY neighbors_with_source(VERTEX<Identities> p, INT depth=10) FOR GRAPH SocialGraph SYNTAX V2 { 
+  MinAccum<INT> @min_dis;
+  OrAccum @or_visited = false;
+  OrAccum @or_visited2 = false;
+  ListAccum<VERTEX<Identities>> @path_list;
+  SetAccum<STRING> @source_list;
+  SetAccum<EDGE> @@edge_set;
+
+  ##### Initialization  #####
+  seed (Identities) = {p};
+  seed = SELECT s
+           FROM seed:s
+     ACCUM s.@or_visited += true,
+           s.@min_dis = 0,
+           s.@path_list = s;
+  ResultSet = {p};
+
+  ##### Calculate distances and paths #####
+  WHILE(seed.size()>0) LIMIT depth DO
+    SetAccum<VERTEX> @@pool;
+    proof = SELECT t
+      FROM seed:s1-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:t-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed:s2
+        WHERE t.@or_visited == false AND s1 == s2
+          ACCUM
+            t.@min_dis += s1.@min_dis + 1,
+            t.@path_list = s1.@path_list + [t],
+            t.@source_list += s1.@source_list,
+            t.@source_list += pf.source,
+            t.@source_list += pw.source,
+            t.@or_visited += true
+          POST-ACCUM @@pool += t
+        ORDER BY getvid(t);
+    ResultSet = ResultSet UNION proof;
+
+    hold = SELECT v
+      FROM seed:s-((Hold_Identity>|<Hold_Identity):e)-Identities:v
+        WHERE v.@or_visited2 == false
+        ACCUM
+          v.@min_dis += s.@min_dis + 1,
+          v.@path_list = s.@path_list + [v],
+          v.@source_list += s.@source_list,
+          v.@source_list += e.source,
+          v.@or_visited2 += true
+        POST-ACCUM @@pool += v
+      ORDER BY getvid(v);
+    ResultSet = ResultSet UNION hold;
+
+    seed (Identities) = {@@pool};
+  END;
+  PRINT ResultSet AS vertices;
+}
+
+CREATE OR REPLACE QUERY identity_by_source(VERTEX<Identities> p, STRING source) FOR GRAPH SocialGraph SYNTAX V2 {
+  start (Identities) = {p};
+  vertices = SELECT v FROM start-((Proof_Forward>|Proof_Backward>):e)-Identities:v
+            WHERE e.source == source;
+  PRINT vertices;
+}
+
+CREATE OR REPLACE QUERY owners_by_ids(SET<STRING> ids) FOR GRAPH SocialGraph SYNTAX V2 {
+  start (Identities) = SELECT s FROM Identities:s WHERE s.id IN ids;
+  # SumAccum<STRING> @query_id;
+  MapAccum<VERTEX<Identities>, VERTEX<Identities>> @@owners_map;
+  vertices = SELECT v FROM start:s-((<Hold_Identity):e)-Identities:v
+            WHERE v.platform == "ethereum"
+            ACCUM @@owners_map += (s -> v);
+  FOREACH (query_id, owner) IN @@owners_map DO
+    identity (Identities) = { owner };
+    PRINT query_id as query_id, identity;
+  END;
+}
+
+CREATE OR REPLACE QUERY query_keybase_connections(STRING p) FOR GRAPH SocialGraph SYNTAX V2 {
+  SetAccum<STRING> @@vlist;
+  SetAccum<VERTEX> @@existing_vlist;
+  @@vlist += p;
+  @@existing_vlist = to_vertex_set(@@vlist, "Identities"); // check existence of a vertex without slowing server
+  seed (ANY) = {@@existing_vlist};
+  ListAccum<STRING> @@keybase_platform = ["twitter", "keybase", "github", "reddit", "mstdn.jp", "lobste.rs", "hackernews"];
+  SetAccum<VERTEX> @@vertices;
+  OrAccum @visited = FALSE;
+
+  WHILE(seed.size()>0) LIMIT 2 DO
+    SetAccum<VERTEX> @@pool;
+    proof = SELECT v FROM seed-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pf)-Identities:v-((Proof_Forward>|<Proof_Forward|Proof_Backward>|<Proof_Backward):pw)-seed
+           WHERE v.@visited == FALSE AND @@keybase_platform.contains(v.platform) == TRUE
+           ACCUM v.@visited = TRUE
+           POST-ACCUM @@vertices += v, @@pool += v;
+    seed (Identities) = {@@pool};
+  END;
+  ResultSet (Identities) = {@@vertices};
+  PRINT ResultSet as vertices;
+}
+
+CREATE OR REPLACE QUERY identities_by_ids(SET<STRING> ids) FOR GRAPH SocialGraph SYNTAX V2 {
+  vertices = SELECT s FROM Identities:s WHERE s.id IN ids;
+  PRINT vertices;
+}
+
+CREATE OR REPLACE QUERY identity_owned_by(VERTEX<Identities> p, STRING platform) FOR GRAPH SocialGraph SYNTAX V2 {
+  start (Identities) = {p};
+  owner = SELECT v FROM start-((<Hold_Identity):e)-Identities:v
+        WHERE e.source == platform;
+  PRINT owner;
+}
+
+CREATE OR REPLACE QUERY hold_nft(STRING id, STRING chain, STRING address) FOR GRAPH SocialGraph SYNTAX V2 {
+  SetAccum<EDGE> @@holds;
+  contract = SELECT v FROM Identities:s-((Hold_Contract>):e)-Contracts:v
+        WHERE v.chain == chain AND v.address == address AND e.id == id
+        ACCUM
+          @@holds += e;
+  PRINT @@holds AS holds;
+}
+
+CREATE OR REPLACE QUERY nfts(VERTEX<Identities> p, SET<STRING> categories, INT numPerPage = 100, INT pageNum = 0) FOR GRAPH SocialGraph {
+  SetAccum<EDGE> @@edges;
+  start (Identities) = {p};
+  
+  IF categories.size() > 0 THEN
+    hold = SELECT v FROM start-((Hold_Contract>):e)-Contracts:v
+          WHERE v.category IN categories
+          ACCUM @@edges += e
+          ORDER BY getvid(v)
+          LIMIT numPerPage OFFSET pageNum * numPerPage;
+  ELSE
+    hold = SELECT v FROM start-((Hold_Contract>):e)-Contracts:v
+          ACCUM @@edges += e
+          ORDER BY getvid(v)
+          LIMIT numPerPage OFFSET pageNum * numPerPage;
+  END;
+  PRINT @@edges AS edges;
+}
+
+CREATE OR REPLACE QUERY reverse_domains(VERTEX<Identities> p, SET<STRING> domainSystems) FOR GRAPH SocialGraph {
+  OrAccum @reverse = FALSE;
+  SetAccum<EDGE> @@reverse_records;
+
+  seed (Identities) = {p};
+  identity_record = SELECT v FROM seed-((Reverse_Resolve>):e1)-Identities:v-((Resolve>):e2)-seed
+                    ACCUM @@reverse_records += e1;
+  contract_record = SELECT v FROM seed-((Reverse_Resolve_Contract>):e1)-Contracts:v-((Resolve_Contract>):e2)-seed
+                    ACCUM @@reverse_records += e1;
+
+  PRINT @@reverse_records as reverse_records;
+}
+
+CREATE OR REPLACE QUERY domain2(STRING name, STRING system) FOR GRAPH SocialGraph {
+  EDGE record;
+  EDGE hold;
+  EDGE reverse_edge;
+  OrAccum @@reverse;
+  IF system == "ENS" OR system == "ens" THEN
+    resolved = SELECT v FROM Contracts:c-((Resolve_Contract>):e)-Identities:v
+              WHERE e.system == system AND e.name == name
+              ACCUM
+                record = e;
+    reverse_record = SELECT v FROM Identities:v-((Reverse_Resolve_Contract>):e)-Contracts:c
+              WHERE e.system == system AND e.name == name
+              ACCUM
+                reverse_edge = e,
+                @@reverse += TRUE;
+    owner = SELECT s FROM Identities:s-((Hold_Contract>):e)-Contracts:v
+              WHERE e.id == name
+              ACCUM
+                hold = e;
+    PRINT record, hold, resolved, owner, @@reverse as reverse, reverse_record;
+  ELSE
+    resolved = SELECT v FROM Identities:s-((Resolve>):e)-Identities:v
+              WHERE e.system == system AND e.name == name
+              ACCUM
+                record = e;
+    reverse_record = SELECT v FROM Identities:v-((Reverse_Resolve>):e)-Identities:tgt
+              WHERE e.system == system AND e.name == name
+              ACCUM
+                reverse_edge = e,
+                @@reverse += TRUE;
+    owner = SELECT s FROM Identities:s-((Hold_Identity>):e)-Identities:v
+              WHERE v.platform == system AND v.identity == name
+              ACCUM
+                hold = e;
+    PRINT record, hold, resolved, owner, @@reverse as reverse, reverse_record;
+  END;
+}
+
+
+CREATE OR REPLACE QUERY domain(STRING name, STRING system) FOR GRAPH SocialGraph {
+  EDGE record;
+  EDGE hold;
+  IF system == "ENS" OR system == "ens" THEN
+    resolved = SELECT v FROM Contracts:c-((Resolve_Contract>):e)-Identities:v
+              WHERE e.system == system AND e.name == name
+              ACCUM
+                record = e;
+    owner = SELECT s FROM Identities:s-((Hold_Contract>):e)-Contracts:v
+              WHERE e.id == name
+              ACCUM
+                hold = e;
+    PRINT record, hold, resolved, owner;
+  ELSE
+    resolved = SELECT v FROM Identities:s-((Resolve>):e)-Identities:v
+              WHERE e.system == system AND e.name == name
+              ACCUM
+                record = e;
+    owner = SELECT s FROM Identities:s-((Hold_Identity>):e)-Identities:v
+              WHERE v.platform == system AND v.identity == name
+              ACCUM
+                hold = e;
+    PRINT record, hold, resolved, owner;
+  END;
+}
+
+CREATE OR REPLACE QUERY contracts_by_ids(SET<STRING> ids) FOR GRAPH SocialGraph SYNTAX V2 {
+  vertices = SELECT s FROM Contracts:s WHERE s.id IN ids;
+  PRINT vertices;
+}
+
+
+INSTALL QUERY ALL

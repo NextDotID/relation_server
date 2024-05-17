@@ -2,15 +2,15 @@
 mod tests;
 
 use crate::config::C;
-use crate::graph::edge::hold::Hold;
-use crate::graph::vertex::{contract::Chain, contract::ContractCategory, Contract};
-
-use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
-use crate::util::naive_now;
-use crate::{
-    error::Error,
-    graph::{create_identity_to_contract_record, new_db_connection, vertex::Identity},
+use crate::error::Error;
+use crate::tigergraph::edge::Hold;
+use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
+use crate::tigergraph::vertex::{Contract, Identity};
+use crate::upstream::{
+    Chain, ContractCategory, DataFetcher, DataSource, Fetcher, Platform, Target,
+    TargetProcessedList,
 };
+use crate::util::{make_http_client, naive_now};
 
 use async_trait::async_trait;
 use gql_client::Client;
@@ -119,13 +119,14 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
     }
 
     let ens_vec = res.addrs.first().unwrap();
-    let db = new_db_connection().await?;
+    let cli = make_http_client();
 
     for ens in ens_vec.ens.iter() {
         let from: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
             platform: Platform::Ethereum,
             identity: identity.to_lowercase(),
+            uid: None,
             created_at: None,
             // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
             display_name: None,
@@ -133,6 +134,8 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
             avatar_url: None,
             profile_url: None,
             updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
         };
         let to: Contract = Contract {
             uuid: Uuid::new_v4(),
@@ -150,8 +153,10 @@ async fn fetch_ens_by_eth_wallet(identity: &str) -> Result<TargetProcessedList, 
             created_at: None,
             updated_at: naive_now(),
             fetcher: DataFetcher::RelationService,
+            expired_at: None,
         };
-        create_identity_to_contract_record(&db, &from, &to, &ownership).await?;
+        // hold record
+        create_identity_to_contract_hold_record(&cli, &from, &to, &ownership).await?;
     }
     Ok(ens_vec
         .ens
@@ -215,6 +220,7 @@ async fn fetch_eth_wallet_by_ens(id: &str) -> Result<TargetProcessedList, Error>
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: address.to_lowercase(),
+        uid: None,
         // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
         display_name: None,
         profile_url: None,
@@ -222,6 +228,8 @@ async fn fetch_eth_wallet_by_ens(id: &str) -> Result<TargetProcessedList, Error>
         created_at: None,
         added_at: naive_now(),
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
     let to = Contract {
         uuid: Uuid::new_v4(),
@@ -239,9 +247,11 @@ async fn fetch_eth_wallet_by_ens(id: &str) -> Result<TargetProcessedList, Error>
         created_at: None,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: None,
     };
-    let db = new_db_connection().await?;
-    create_identity_to_contract_record(&db, &from, &to, &hold).await?;
+    // hold record
+    let cli = make_http_client();
+    create_identity_to_contract_hold_record(&cli, &from, &to, &hold).await?;
 
     Ok(vec![Target::Identity(Platform::Ethereum, address)])
 }

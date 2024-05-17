@@ -1,9 +1,9 @@
-[db]
-host = "http://127.0.0.1:8529"
-username = "root"
-password = "ieNgoo5roong9Chu"
-db = "relation_server_development"
-schema_path = "./src/config/db/schema.yaml"
+[tdb]
+host = "http://localhost:9001"
+username = "tigergraph"
+password = "tigergraph"
+identity_graph_token = "01234567abcdefgh01234567abcdefgh"
+social_graph_token = "01234567abcdefgh01234567abcdefgh"
 
 [web]
 listen = "127.0.0.1"
@@ -11,6 +11,7 @@ port = 3722
 
 [upstream.proof_service]
 url = "https://proof-service.next.id"
+api_key = "x-api-key"
 
 [upstream.aggregation_service]
 url = "https://7x16bogxfb.execute-api.us-east-1.amazonaws.com/v1/identity/search"
@@ -20,6 +21,7 @@ url = "https://raw.githubusercontent.com/Uniswap/sybil-list/master/verified.json
 
 [upstream.keybase_service]
 url = "https://keybase.io/_/api/1.0/user/lookup.json"
+stable_url = "http://ec2-18-167-90-166.ap-east-1.compute.amazonaws.com/data_server/keybase"
 
 [upstream.knn3_service]
 url = "https://mw.graphql.knn3.xyz/"
@@ -34,10 +36,10 @@ ens = "https://api.thegraph.com/subgraphs/name/ensdomains/ens"
 url = "https://ens.fafrd.workers.dev/ens/"
 
 [upstream.dotbit_service]
-url = "https://indexer-basic.did.id"
+url = "https://indexer-v1.did.id"
 
 [upstream.lens_api]
-url = "https://api.lens.dev/playground"
+url = "https://api-v2.lens.dev/playground"
 
 [upstream.unstoppable_api]
 url = "https://resolve.unstoppabledomains.com"
@@ -46,5 +48,18 @@ token = "4cb4358d-ce8b-4bf5-fill-yourstokenid"
 [upstream.datamgr_api]
 url = "https://cryptodata.store"
 
+[upstream.warpcast_api]
+url = "https://api.warpcast.com"
+token = "MK-ABC123..."
+
 [upstream.spaceid_api]
 url = "https://api.prd.space.id"
+
+[upstream.crossbell_api]
+url = "https://indexer.crossbell.io/v1/graphql"
+
+[upstream.solana_rpc]
+rpc_url = "https://api.mainnet-beta.solana.com"
+
+[upstream.genome_api]
+rpc_url = "http://ec2-18-167-90-166.ap-east-1.compute.amazonaws.com/data_server/genome"

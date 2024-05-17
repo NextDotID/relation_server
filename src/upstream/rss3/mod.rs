@@ -1,19 +1,18 @@
 #[cfg(test)]
 mod tests;
-use crate::{
-    config::C,
-    error::Error,
-    graph::{
-        create_identity_to_contract_record,
-        edge::hold::Hold,
-        new_db_connection,
-        vertex::{contract::Chain, contract::ContractCategory, Contract, Identity},
-    },
-    upstream::{DataSource, Fetcher, Platform, Target, TargetProcessedList},
-    util::{make_client, naive_now, parse_body, request_with_timeout},
+
+use crate::config::C;
+use crate::error::Error;
+use crate::tigergraph::edge::Hold;
+use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
+use crate::tigergraph::vertex::{Contract, Identity};
+use crate::upstream::{
+    Chain, ContractCategory, DataSource, Fetcher, Platform, Target, TargetProcessedList,
+};
+use crate::util::{
+    make_client, make_http_client, naive_now, parse_body, request_with_timeout, utc_to_naive,
 };
 use async_trait::async_trait;
-use chrono::{DateTime, NaiveDateTime};
 use futures::future::join_all;
 use http::uri::InvalidUri;
 use hyper::{Body, Method};
@@ -130,9 +129,14 @@ async fn fetch_nfts_by_account(
             .body(Body::empty())
             .map_err(|_err| Error::ParamError(format!("Rss3 Build Request Error {}", _err)))?;
 
-        let mut resp = request_with_timeout(&client, req).await.map_err(|err| {
-            Error::ManualHttpClientError(format!("Rss3 fetch fetch | error: {:?}", err.to_string()))
-        })?;
+        let mut resp = request_with_timeout(&client, req, None)
+            .await
+            .map_err(|err| {
+                Error::ManualHttpClientError(format!(
+                    "Rss3 fetch fetch | error: {:?}",
+                    err.to_string()
+                ))
+            })?;
 
         let body: Rss3Response = parse_body(&mut resp).await?;
         if body.total == 0 {
@@ -165,21 +169,31 @@ async fn fetch_nfts_by_account(
 }
 
 async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
-    let creataed_at = DateTime::parse_from_rfc3339(&p.timestamp).unwrap();
-    let created_at_naive = NaiveDateTime::from_timestamp(creataed_at.timestamp(), 0);
-    let db = new_db_connection().await?;
+    // let creataed_at = DateTime::parse_from_rfc3339(&p.timestamp).unwrap();
+    // let created_at_naive = NaiveDateTime::from_timestamp_opt(creataed_at.timestamp(), 0);
+    let created_at_naive = match p.timestamp.as_ref() {
+        "" => None,
+        timestamp => match utc_to_naive(timestamp.to_string()) {
+            Ok(naive_dt) => Some(naive_dt),
+            Err(_) => None, // You may want to handle this error differently
+        },
+    };
+    let cli = make_http_client();
 
     let from: Identity = Identity {
         uuid: Some(Uuid::new_v4()),
         platform: Platform::Ethereum,
         identity: p.owner.to_lowercase(),
-        created_at: Some(created_at_naive),
+        uid: None,
+        created_at: created_at_naive,
         // Don't use ETH's wallet as display_name, use ENS reversed lookup instead.
         display_name: None,
         added_at: naive_now(),
         avatar_url: None,
         profile_url: None,
         updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
     };
 
     if p.actions.len() == 0 {
@@ -206,10 +220,26 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
     {
         return Ok(vec![]);
     }
+    let mut nft_category = ContractCategory::Unknown;
+    let standard = real_action.metadata.standard.clone();
+    if let Some(standard) = standard {
+        if standard == "ERC-721".to_string() {
+            nft_category = ContractCategory::ERC721;
+        } else if standard == "ERC-1155".to_string() {
+            nft_category = ContractCategory::ERC1155;
+        }
+    }
 
-    let mut nft_category =
-        ContractCategory::from_str(real_action.metadata.standard.as_ref().unwrap().as_str())
-            .unwrap_or_default();
+    // let mut nft_category = ContractCategory::from_str(
+    //     real_action
+    //         .metadata
+    //         .standard
+    //         .as_ref()
+    //         .unwrap()
+    //         .to_lowercase()
+    //         .as_str(),
+    // )
+    // .unwrap_or_default();
 
     if real_action.tag_type == "poap".to_string() {
         nft_category = ContractCategory::POAP;
@@ -242,11 +272,12 @@ async fn save_item(p: ResultItem) -> Result<TargetProcessedList, Error> {
         source: DataSource::Rss3,
         transaction: Some(p.hash),
         id: nft_id.clone(),
-        created_at: Some(created_at_naive),
+        created_at: created_at_naive,
         updated_at: naive_now(),
         fetcher: DataFetcher::RelationService,
+        expired_at: None,
     };
-    create_identity_to_contract_record(&db, &from, &to, &hold).await?;
+    create_identity_to_contract_hold_record(&cli, &from, &to, &hold).await?;
 
     Ok(vec![Target::NFT(
         chain,

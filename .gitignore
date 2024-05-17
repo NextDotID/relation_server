@@ -6,3 +6,9 @@
 /config/*.toml
 !/config/main.sample.toml
 .env
+
+/gsql_client/.env
+/gsql_client/gsql_server_ip_config
+
+# Nix related
+/result

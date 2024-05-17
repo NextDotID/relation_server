@@ -2,21 +2,20 @@ use tracing::{span, Instrument, Level};
 
 use crate::{
     error::Error,
-    graph::{
+    tigergraph::{
         edge::Hold,
-        new_db_connection,
-        vertex::contract::Chain,
-        vertex::Identity,
-        vertex::{contract::ContractCategory, Contract},
+        vertex::{Contract, Identity},
     },
-    upstream::{the_graph::TheGraph, DataFetcher, DataSource, Fetcher, Platform, Target},
-    util::parse_timestamp,
+    upstream::{
+        the_graph::TheGraph, Chain, ContractCategory, DataFetcher, DataSource, Fetcher, Platform,
+        Target,
+    },
+    util::{make_http_client, parse_timestamp},
 };
 
 #[tokio::test]
 async fn test_find_ens_by_wallet() -> Result<(), Error> {
-    let db = new_db_connection().await?;
-    db.truncate().await;
+    let client = make_http_client();
 
     let target = Target::Identity(
         Platform::Ethereum,
@@ -25,13 +24,13 @@ async fn test_find_ens_by_wallet() -> Result<(), Error> {
     let targets = TheGraph::fetch(&target).await?;
     println!("targets {:?}", targets);
 
-    Identity::find_by_platform_identity(&db, &Platform::Ethereum, &target.identity()?)
+    Identity::find_by_platform_identity(&client, &Platform::Ethereum, &target.identity()?)
         .await
         .expect("Fail to find identity")
         .expect("Record not found");
 
     Contract::find_by_chain_address(
-        &db,
+        &client,
         &Chain::Ethereum,
         &ContractCategory::ENS.default_contract_address().unwrap(),
     )
@@ -40,7 +39,7 @@ async fn test_find_ens_by_wallet() -> Result<(), Error> {
     .expect("ENS Contract not found in DB");
 
     let hold = Hold::find_by_id_chain_address(
-        &db,
+        &client,
         "vitalik.eth",
         &Chain::Ethereum,
         &ContractCategory::ENS.default_contract_address().unwrap(),
@@ -56,8 +55,7 @@ async fn test_find_ens_by_wallet() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_find_wallet_by_ens() -> Result<(), Error> {
-    let db = new_db_connection().await?;
-    db.truncate().await;
+    let client = make_http_client();
 
     let target = Target::NFT(
         Chain::Ethereum,
@@ -74,7 +72,7 @@ async fn test_find_wallet_by_ens() -> Result<(), Error> {
     );
 
     Identity::find_by_platform_identity(
-        &db,
+        &client,
         &Platform::Ethereum,
         "0xd8da6bf26964af9d7eed9e03e53415d37aa96045",
     )
@@ -83,7 +81,7 @@ async fn test_find_wallet_by_ens() -> Result<(), Error> {
     .expect("Record not found");
 
     Contract::find_by_chain_address(
-        &db,
+        &client,
         &Chain::Ethereum,
         &ContractCategory::ENS.default_contract_address().unwrap(),
     )
@@ -92,7 +90,7 @@ async fn test_find_wallet_by_ens() -> Result<(), Error> {
     .expect("ENS Contract not found in DB");
 
     let hold = Hold::find_by_id_chain_address(
-        &db,
+        &client,
         "vitalik.eth",
         &Chain::Ethereum,
         &ContractCategory::ENS.default_contract_address().unwrap(),
@@ -109,23 +107,22 @@ async fn test_find_wallet_by_ens() -> Result<(), Error> {
 
 #[tokio::test]
 async fn test_wrapped_ens_find_by_wallet() -> Result<(), Error> {
-    let db = new_db_connection().await?;
-    db.truncate().await;
     // It has `nykma.eth` wrapped.
     let owner = "0x0da0ee86269797618032e56a69b1aad095c581fc".to_string();
     let target = Target::Identity(Platform::Ethereum, owner);
 
     let log = span!(Level::TRACE, "test_wrapped_domains");
     let address_targets = TheGraph::fetch(&target).instrument(log).await?;
-    let _wrapped_ens = address_targets.iter().find(|t| t.nft_id().unwrap() == "nykma.eth").unwrap();
+    let _wrapped_ens = address_targets
+        .iter()
+        .find(|t| t.nft_id().unwrap() == "nykma.eth")
+        .unwrap();
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_wrapped_ens_find_by_ens() -> Result<(), Error> {
-    let db = new_db_connection().await?;
-    db.truncate().await;
     let owner = "0x0da0ee86269797618032e56a69b1aad095c581fc";
     let ens = Target::NFT(
         Chain::Ethereum,
@@ -135,7 +132,10 @@ async fn test_wrapped_ens_find_by_ens() -> Result<(), Error> {
     );
     let log = span!(Level::TRACE, "test_wrapped_domains");
     let address_targets = TheGraph::fetch(&ens).instrument(log).await?;
-    let _wrapped_ens = address_targets.iter().find(|t| t.identity().unwrap() == owner).unwrap();
+    let _wrapped_ens = address_targets
+        .iter()
+        .find(|t| t.identity().unwrap() == owner)
+        .unwrap();
 
     Ok(())
 }

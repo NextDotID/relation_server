@@ -1,0 +1,37 @@
+name: "Build Nix package on NixOS"
+
+on:
+  push:
+
+jobs:
+  nix-build:
+    runs-on:
+      labels: [nixos, X64]
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Building package
+      run: nix build '.#main'
+    - name: Build docker image
+      run: |
+        nix build '.#docker'
+        ls -lah $(readlink ./result)
+        docker load -i ./result
+    - name: Login to Container registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Generate docker image tag
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+    - name: Retag and push
+      if: github.repository == 'nextdotid/relation_server'
+      run: |
+        docker tag nextdotid/relation_server:latest ${DOCKER_METADATA_OUTPUT_TAGS}
+        docker push ${DOCKER_METADATA_OUTPUT_TAGS}

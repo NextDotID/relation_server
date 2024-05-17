@@ -1,27 +1,23 @@
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    config::C,
-    error::Error,
-    graph::{
-        create_identity_to_contract_record,
-        edge::{hold::Hold, resolve::DomainNameSystem, Resolve},
-        new_db_connection,
-        vertex::{
-            contract::{Chain, ContractCategory},
-            Contract, ContractRecord, Identity,
-        },
-        Edge, Vertex,
-    },
-    upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList},
-    util::{naive_now, parse_timestamp},
+use crate::config::C;
+use crate::error::Error;
+use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::upsert::create_contract_to_identity_resolve_record;
+use crate::tigergraph::upsert::create_ens_identity_ownership;
+use crate::tigergraph::upsert::create_identity_domain_resolve_record;
+use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
+use crate::tigergraph::vertex::{Contract, Identity};
+use crate::upstream::{
+    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target,
+    TargetProcessedList,
 };
-use aragog::DatabaseConnection;
+use crate::util::{make_http_client, naive_now, parse_timestamp};
 use async_trait::async_trait;
-use gql_client::Client;
+use gql_client::Client as GQLClient;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 use uuid::Uuid;
 
 #[derive(Serialize)]
@@ -43,6 +39,7 @@ struct Domain {
     /// Creation timestamp (in secods)
     #[serde(rename = "createdAt")]
     created_at: String,
+    registration: Option<Registration>,
     /// ETH event logs for this ENS.
     events: Vec<DomainEvent>,
     /// Reverse resolve record set on this ENS.
@@ -50,6 +47,15 @@ struct Domain {
     resolved_address: Option<Account>,
     /// Owner info
     owner: Account,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct Registration {
+    #[allow(dead_code)]
+    #[serde(rename = "registrationDate")]
+    registration_date: String,
+    #[serde(rename = "expiryDate")]
+    expiry_date: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -76,6 +82,10 @@ const QUERY_BY_ENS: &str = r#"
             domains(where: { name: $target }) {
                 name
                 createdAt
+                registration {
+                    registrationDate
+                    expiryDate
+                }
                 events(first: 1) {
                     transactionID
                 }
@@ -91,6 +101,10 @@ const QUERY_BY_ENS: &str = r#"
               domain {
                 name
                 createdAt
+                registration {
+                    registrationDate
+                    expiryDate
+                }
                 events(first: 1) {
                     transactionID
                 }
@@ -113,6 +127,10 @@ const QUERY_BY_WALLET: &str = r#"
             domains(where: { owner: $target }) {
                 name
                 createdAt
+                registration {
+                    registrationDate
+                    expiryDate
+                }
                 events(first: 1) {
                     transactionID
                 }
@@ -128,6 +146,10 @@ const QUERY_BY_WALLET: &str = r#"
               domain {
                 name
                 createdAt
+                registration {
+                    registrationDate
+                    expiryDate
+                }
                 events(first: 1) {
                     transactionID
                 }
@@ -163,11 +185,11 @@ impl Fetcher for TheGraph {
     }
 }
 
-/// TODO: reverse lookup for ENS is not provided by official TheGraph for now.
+/// reverse lookup for ENS is not provided by official TheGraph for now.
 /// See also: https://github.com/ensdomains/ens-subgraph/issues/25
 /// Consider deploy a self-hosted reverse lookup service like:
 /// https://github.com/fafrd/ens-reverse-lookup
-async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
+async fn fetch_domains(target: &Target) -> Result<Vec<Domain>, Error> {
     let query: String;
     let target_var: String;
     match target {
@@ -181,7 +203,7 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
         }
     }
 
-    let client = Client::new(&C.upstream.the_graph.ens);
+    let client = GQLClient::new(&C.upstream.the_graph.ens);
     let vars = QueryVars { target: target_var };
 
     let resp = client.query_with_vars::<QueryResponse, QueryVars>(&query, vars);
@@ -206,7 +228,12 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
         return Ok(vec![]);
     }
     let res = data.unwrap();
-    debug!(?target, wrapped = res.wrapped_domains.len(), domains = res.domains.len(), "Records found.");
+    debug!(
+        ?target,
+        wrapped = res.wrapped_domains.len(),
+        domains = res.domains.len(),
+        "Records found."
+    );
     let mut merged_domains: Vec<Domain> = vec![];
     // Rewrite correct owner info for wrapped domains.
     for wd in res.wrapped_domains.into_iter() {
@@ -217,44 +244,114 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
     }
     for domain in res.domains.into_iter() {
         if merged_domains.iter().any(|md| md.name == domain.name) {
-            debug!(?target, domain = domain.name, "TheGraph: Wrapped ENS found before. Skip this.");
+            debug!(
+                ?target,
+                domain = domain.name,
+                "TheGraph: Wrapped ENS found before. Skip this."
+            );
             continue;
         } else {
             merged_domains.push(domain);
         }
     }
+    Ok(merged_domains)
+}
 
+/// Focus on `ENS Domains` Saveing.
+async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
+    let merged_domains = fetch_domains(target).await?;
     if merged_domains.is_empty() {
         info!(?target, "TheGraph: No result");
         return Ok(vec![]);
     }
-    let db = new_db_connection().await?;
+
+    let cli = make_http_client();
     let mut next_targets: TargetProcessedList = vec![];
 
     for domain in merged_domains.into_iter() {
-        // Create own record
-        let contract_record = create_or_update_own(&db, &domain).await?;
+        let creation_tx = domain
+            .events
+            .first()
+            .map(|event| event.transaction_id.clone());
+        let ens_created_at = parse_timestamp(&domain.created_at).ok();
+        let ens_expired_at = match &domain.registration {
+            Some(registration) => parse_timestamp(&registration.expiry_date).ok(),
+            None => None,
+        };
 
-        // Deal with resolve target.
+        let owner = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Ethereum,
+            identity: domain.owner.id.clone(),
+            uid: None,
+            created_at: None,
+            display_name: None,
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
+        };
+        let ens_domain: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::ENS,
+            identity: domain.name.clone(),
+            uid: None,
+            created_at: ens_created_at,
+            display_name: Some(domain.name.clone()),
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: ens_expired_at,
+            reverse: Some(false),
+        };
+        let contract = Contract {
+            uuid: Uuid::new_v4(),
+            category: ContractCategory::ENS,
+            address: ContractCategory::ENS.default_contract_address().unwrap(),
+            chain: Chain::Ethereum,
+            symbol: None,
+            updated_at: naive_now(),
+        };
+        let ownership: Hold = Hold {
+            uuid: Uuid::new_v4(),
+            transaction: creation_tx,
+            id: domain.name.clone(),
+            source: DataSource::TheGraph,
+            created_at: ens_created_at,
+            updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
+            expired_at: ens_expired_at,
+        };
+
         let resolved_address = domain.resolved_address.map(|r| r.id);
         match resolved_address.clone() {
+            None => {
+                // Resolve record not existed anymore. Maybe deleted by user.
+                trace!(?target, "TheGraph: Resolve address not existed.");
+            }
             Some(address) => {
-                if address != "0x0000000000000000000000000000000000000000".to_string() {
+                // Filter zero address (without last 4 digits)
+                if !address.starts_with("0x000000000000000000000000000000000000") {
                     // Create resolve record
                     debug!(?target, address, domain = domain.name, "TheGraph: Resolved");
                     let resolve_target = Identity {
                         uuid: Some(Uuid::new_v4()),
                         platform: Platform::Ethereum,
                         identity: address.clone(),
+                        uid: None,
                         created_at: None,
                         display_name: None,
                         added_at: naive_now(),
                         avatar_url: None,
                         profile_url: None,
                         updated_at: naive_now(),
-                    }
-                    .create_or_update(&db)
-                    .await?;
+                        expired_at: None,
+                        reverse: Some(false),
+                    };
+
                     let resolve = Resolve {
                         uuid: Uuid::new_v4(),
                         source: DataSource::TheGraph,
@@ -264,17 +361,29 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                         updated_at: naive_now(),
                     };
 
-                    // 'reverse' resolution
-                    resolve
-                        .connect(&db, &resolve_target, &contract_record)
-                        .await?;
+                    // regular resolved address
+                    create_identity_domain_resolve_record(
+                        &cli,
+                        &ens_domain,
+                        &resolve_target,
+                        &resolve,
+                    )
+                    .await?;
+                    create_contract_to_identity_resolve_record(
+                        &cli,
+                        &contract,
+                        &resolve_target,
+                        &resolve,
+                    )
+                    .await?;
                 }
             }
-            None => {
-                // Resolve record not existed anymore. Maybe deleted by user.
-                // TODO: Should find existed connection and delete it.
-            }
         }
+
+        // create owner-hold-ens(contract)
+        // ENS ownership create `Hold_Identity` connection but only EvmAddress connected to HyperVertex
+        create_ens_identity_ownership(&cli, &owner, &ens_domain, &ownership).await?;
+        create_identity_to_contract_hold_record(&cli, &owner, &contract, &ownership).await?;
 
         // Append up_next
         match target {
@@ -296,61 +405,6 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
             }
         }
     }
+
     Ok(next_targets)
-}
-
-/// Focus on `Hold` record.
-async fn create_or_update_own(
-    db: &DatabaseConnection,
-    domain: &Domain,
-) -> Result<ContractRecord, Error> {
-    let creation_tx = domain
-        .events
-        .first() // TODO: really?
-        .map(|event| event.transaction_id.clone());
-    let ens_created_at = parse_timestamp(&domain.created_at).ok();
-    let owner = Identity {
-        uuid: Some(Uuid::new_v4()),
-        platform: Platform::Ethereum,
-        identity: domain.owner.id.clone(),
-        created_at: None,
-        display_name: None,
-        added_at: naive_now(),
-        avatar_url: None,
-        profile_url: None,
-        updated_at: naive_now(),
-    };
-    let conrtract = Contract {
-        uuid: Uuid::new_v4(),
-        category: ContractCategory::ENS,
-        address: ContractCategory::ENS.default_contract_address().unwrap(),
-        chain: Chain::Ethereum,
-        symbol: None,
-        updated_at: naive_now(),
-    };
-    let ownership: Hold = Hold {
-        uuid: Uuid::new_v4(),
-        transaction: creation_tx,
-        id: domain.name.clone(),
-        source: DataSource::TheGraph,
-        created_at: ens_created_at,
-        updated_at: naive_now(),
-        fetcher: DataFetcher::RelationService,
-    };
-    let (owner_record, contract_record, _hold_record) =
-        create_identity_to_contract_record(db, &owner, &conrtract, &ownership).await?;
-
-    let resolve = Resolve {
-        uuid: Uuid::new_v4(),
-        source: DataSource::TheGraph,
-        system: DomainNameSystem::ENS,
-        name: domain.name.clone(),
-        fetcher: DataFetcher::RelationService,
-        updated_at: naive_now(),
-    };
-    // As the same time record 'regular' resolution
-    resolve
-        .connect(&db, &contract_record, &owner_record)
-        .await?;
-    Ok(contract_record)
 }

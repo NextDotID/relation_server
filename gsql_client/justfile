@@ -1,0 +1,61 @@
+# Local Variables:
+# mode: justfile
+# End:
+
+### You need install `jq` (https://stedolan.github.io/jq/download/)
+### sudo apt-get install jq / brew install jq
+
+set dotenv-load
+set export
+
+# Path to your TOML file
+SECRET_FILE := "secret.toml"
+RESTPP_HOST := "http://$DB_HOST:9000/requesttoken"
+
+# Commands
+gsql := 'java -jar tigergraph-3.10.1-gsql_client.jar'
+
+default:
+	just --list
+
+# gsql recipe
+gsql ARGS="":
+	{{gsql}} {{ARGS}}
+
+# Environment preparation.
+prepare:
+	@if [ ! -f gsql_server_ip_config ]; then printf "$DB_HOST" > gsql_server_ip_config; fi
+
+# Do database migration.
+migrate:
+	{{gsql}} $DB_MIGRATIONS/global.gsql
+	{{gsql}} $DB_MIGRATIONS/SCHEMA_CHANGE.gsql
+	{{gsql}} $DB_MIGRATIONS/LoadingJob_SocialGraph.gsql
+
+# Create token for GraphName
+create-token SECRET="secret" GRAPH="graph":
+	curl -s -X POST {{RESTPP_HOST}} -d '{"secret":"{{SECRET}}", "graph":"{{GRAPH}}", "lifetime":"315360000"}' | jq -r '.token'
+
+create-secret-and-token GRAPH="graph":
+	gsql_secret=`just gsql "BEGIN USE GRAPH {{GRAPH}} \ CREATE SECRET END" | grep -E -o "(\w{32})"` && \
+	gsql_token=`just create-token $gsql_secret {{GRAPH}}` && \
+	echo $gsql_secret $gsql_token
+
+# Generate secrets and update TOML file
+generate-secrets:
+	identity_results=`just create-secret-and-token IdentityGraph` && \
+	identity_secret=`echo $identity_results | awk '{print $1}'` && \
+	identity_token=`echo $identity_results | awk '{print $2}'` && \
+	echo "[tdb.secret]\nidentity_graph_secret = \"$identity_secret\"\n\n\
+	[tdb.token]\nidentity_graph_token = \"$identity_token\"\n" > $DB_AUTH/{{SECRET_FILE}}
+
+auth:
+	{{gsql}} "ALTER PASSWORD"
+
+# Clearing and Initializing the Graph Store
+clean:
+	{{gsql}} "CLEAR GRAPH STORE -HARD"
+
+# Delete all the database data, schema, related definitions
+drop-all:
+	{{gsql}} "DROP ALL"

@@ -1,13 +1,16 @@
 // Upstreams
 mod aggregation;
+mod crossbell;
 mod dotbit;
 mod ens_reverse;
 mod farcaster;
+mod genome;
 mod keybase;
 mod knn3;
-mod lens;
+mod lensv2;
 mod proof_client;
 mod rss3;
+mod solana;
 mod space_id;
 mod sybil_list;
 mod unstoppable;
@@ -17,26 +20,28 @@ mod tests;
 mod the_graph;
 mod types;
 
-use std::{
-    collections::HashSet,
-    sync::{Arc, Mutex},
-};
-
 use crate::{
     error::Error,
     upstream::{
-        aggregation::Aggregation, dotbit::DotBit, ens_reverse::ENSReverseLookup,
-        farcaster::Farcaster, keybase::Keybase, knn3::Knn3, lens::Lens, proof_client::ProofClient,
-        rss3::Rss3, space_id::SpaceId, sybil_list::SybilList, the_graph::TheGraph,
+        aggregation::Aggregation, crossbell::Crossbell, dotbit::DotBit,
+        ens_reverse::ENSReverseLookup, farcaster::Farcaster, genome::Genome, keybase::Keybase,
+        knn3::Knn3, lensv2::LensV2, proof_client::ProofClient, rss3::Rss3, solana::Solana,
+        space_id::SpaceId, sybil_list::SybilList, the_graph::TheGraph,
         unstoppable::UnstoppableDomains,
     },
     util::hashset_append,
 };
 use async_trait::async_trait;
 use futures::{future::join_all, StreamExt};
+use std::{collections::HashSet, sync::Arc};
+use tokio::sync::Mutex;
 use tracing::{event, info, warn, Level};
 
-pub(crate) use types::{DataFetcher, DataSource, Platform, Target, TargetProcessedList};
+pub(crate) use types::vec_string_to_vec_datasource;
+pub(crate) use types::{
+    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Platform, ProofLevel,
+    Target, TargetProcessedList,
+};
 
 lazy_static! {
     /// Global processing queue to prevent duplicated query. i.e. multiple same request from frontend.
@@ -54,92 +59,124 @@ pub trait Fetcher {
 }
 
 /// Find all available (platform, identity) in all `Upstream`s.
-#[tracing::instrument(name = "fetch_all", level = "trace")]
-pub async fn fetch_all(initial_target: Target) -> Result<(), Error> {
+/// `depth` controls how many fetch layers should `fetch_all` blocks.
+/// The rest `up_next` will be fetched asynchronously.  `None` means
+/// fetch till exhausted.
+// #[tracing::instrument(name = "fetch_all", level = "trace")]
+#[async_recursion::async_recursion]
+pub async fn fetch_all(targets: TargetProcessedList, depth: Option<u16>) -> Result<(), Error> {
     let mut round: u16 = 0;
-    const CONCURRENT: usize = 5;
-    if FETCHING.lock().unwrap().contains(&initial_target) {
-        event!(Level::INFO, ?initial_target, "Fetching. Skipped.");
-        return Ok(());
-    }
 
-    FETCHING.lock().unwrap().insert(initial_target.clone());
-    // queues of this session.
-    let mut up_next = HashSet::from([initial_target.clone()]);
+    let mut fetching = FETCHING.lock().await;
+    let mut up_next: HashSet<Target> = HashSet::from_iter(
+        targets
+            .clone()
+            .into_iter()
+            .filter(|target| !fetching.contains(target)),
+    );
+    up_next.iter().for_each(|target| {
+        fetching.insert(target.clone());
+        ()
+    });
+    drop(fetching);
     let mut processed: HashSet<Target> = HashSet::new();
+
+    // FETCHING.lock().await.insert(initial_target.clone());
+    // queues of this session.
+    // let mut up_next = HashSet::from([initial_target.clone()]);
+    // let mut processed: HashSet<Target> = HashSet::new();
 
     while up_next.len() > 0 {
         round += 1;
-        let futures: Vec<_> = up_next
-            .iter()
-            .filter(|target| !processed.contains(target))
-            .map(|target| fetch_one(target))
-            .collect();
-        // Limit concurrent tasks to 5.
-        event!(
-            Level::DEBUG,
-            round,
-            to_be_fetched = futures.len(),
-            "Fetching"
-        );
-        let futures_stream = futures::stream::iter(futures).buffer_unordered(CONCURRENT);
-
-        let mut result: Vec<Target> = futures_stream
-            .collect::<Vec<Result<Vec<Target>, Error>>>()
-            .await
-            .into_iter()
-            .flat_map(|handle_result| -> Vec<Target> {
-                match handle_result {
-                    Ok(result) => {
-                        event!(
-                            Level::DEBUG,
-                            round,
-                            fetched_length = result.len(),
-                            "Round completed."
-                        );
-                        result
-                    }
-                    Err(err) => {
-                        event!(Level::WARN, round, %err, "Error happened in fetching task");
-                        vec![]
-                    }
-                }
-            })
-            .collect();
-        result.dedup();
+        let result = fetch_many(
+            up_next
+                .clone()
+                .into_iter()
+                .filter(|target| !processed.contains(target))
+                .collect(),
+            Some(round),
+        )
+        .await?;
+        if depth.is_some() && depth.unwrap() <= round {
+            // Fork as background job to continue fetching.
+            tokio::spawn(fetch_all(up_next.into_iter().collect(), None));
+            break;
+        }
 
         // Add previous up_next into processed, and replace with new up_next
         hashset_append(&mut processed, up_next.into_iter().collect());
         up_next = HashSet::from_iter(result.into_iter());
     }
 
-    FETCHING.lock().unwrap().remove(&initial_target);
+    let mut fetching = FETCHING.lock().await;
+    targets.iter().for_each(|target| {
+        fetching.remove(&target);
+        ()
+    });
+    drop(fetching);
+
     event!(
         Level::INFO,
         round,
+        ?depth,
         processed = processed.len(),
         "Fetch completed."
     );
     Ok(())
 }
 
+/// Fetch targets in parallel of 5.
+/// `round` is only for log purpose.
+pub async fn fetch_many(targets: Vec<Target>, round: Option<u16>) -> Result<Vec<Target>, Error> {
+    const CONCURRENT: usize = 5;
+    let futures: Vec<_> = targets.iter().map(|target| fetch_one(target)).collect();
+    let futures_stream = futures::stream::iter(futures).buffer_unordered(CONCURRENT);
+
+    let mut result: TargetProcessedList = futures_stream
+        .collect::<Vec<Result<Vec<Target>, Error>>>()
+        .await
+        .into_iter()
+        .flat_map(|handle_result| -> Vec<Target> {
+            match handle_result {
+                Ok(result) => {
+                    event!(
+                        Level::DEBUG,
+                        ?round,
+                        fetched_length = result.len(),
+                        "Round completed."
+                    );
+                    result
+                }
+                Err(err) => {
+                    event!(Level::WARN, ?round, %err, "Error happened in fetching task");
+                    vec![]
+                }
+            }
+        })
+        .collect();
+    result.dedup();
+    Ok(result)
+}
 /// Find one (platform, identity) pair in all upstreams.
 /// Returns amount of identities just fetched for next iter.
 pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
     let mut up_next: TargetProcessedList = join_all(vec![
-        // Aggregation::fetch(target),
+        Farcaster::fetch(target),
+        LensV2::fetch(target),
+        Aggregation::fetch(target),
         SybilList::fetch(target),
         Keybase::fetch(target),
         ProofClient::fetch(target),
         Rss3::fetch(target),
         Knn3::fetch(target),
-        TheGraph::fetch(target),
         ENSReverseLookup::fetch(target),
         DotBit::fetch(target),
         UnstoppableDomains::fetch(target),
-        Farcaster::fetch(target),
         SpaceId::fetch(target),
-        Lens::fetch(target),
+        Genome::fetch(target),
+        Crossbell::fetch(target),
+        TheGraph::fetch(target),
+        Solana::fetch(target),
     ])
     .await
     .into_iter()
@@ -154,6 +191,18 @@ pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
     })
     .collect();
     up_next.dedup();
+    // Filter zero address
+    up_next = up_next
+        .into_iter()
+        .filter(|target| match target {
+            Target::Identity(Platform::Ethereum, address) => {
+                // Filter zero address (without last 4 digits)
+                return !address.starts_with("0x000000000000000000000000000000000000");
+            }
+            Target::Identity(_, _) => true,
+            Target::NFT(_, _, _, _) => true,
+        })
+        .collect();
 
     Ok(up_next)
 }
@@ -165,53 +214,3 @@ pub async fn prefetch() -> Result<(), Error> {
     info!("Prefetch completed.");
     Ok(())
 }
-
-// Start an upstream fetching worker.
-// NOTE: how about represent worker as a `struct`?
-// pub fn start_fetch_worker<'a>(
-//     up_next_queue: &mut HashSet<Target>,
-//     processed: &mut HashSet<Target>,
-//     worker_name: String,
-// ) {
-//     const SLEEP_DURATION: core::time::Duration = Duration::from_millis(300);
-//     info!("Upstream worker {}: started.", worker_name);
-//     tokio::spawn(async move {
-//         loop {
-//             match fetch_one(up_next_queue, processed).await {
-//                 Ok(0) => {
-//                     debug!("Upstream worker {}: nothing fetched.", worker_name);
-//                     sleep(SLEEP_DURATION).await
-//                 }
-//                 Ok(up_next_len) => {
-//                     debug!("Upstream worker {}: {} fetched.", worker_name, up_next_len);
-//                     // Start next fetch process immediately.
-//                 }
-//                 Err(err) => {
-//                     debug!(
-//                         "Upstream worker {}: error when fetching upstreams: {}",
-//                         worker_name, err
-//                     );
-//                     sleep(SLEEP_DURATION).await;
-//                 }
-//             }
-//         }
-//     });
-//     // FIXME: Do we need to make a new thread for this?
-//     // Pros: multi-core CPU support(?), fault-tolerant
-//     // Cons: none?
-//     // thread::Builder::new()
-//     //     .name(worker_name.clone())
-//     //     .spawn(move || {
-//     //     });
-// }
-
-// Start a batch of upstream fetching workers.
-// pub fn start_fetch_workers(
-//     up_next_queue: &mut HashSet<Target>,
-//     processed: &mut HashSet<Target>,
-//     count: usize,
-// ) {
-//     for i in 0..count {
-//         start_fetch_worker(up_next_queue, processed, format!("{}", i));
-//     }
-// }
