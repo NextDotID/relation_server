@@ -5,9 +5,9 @@ use crate::config::C;
 use crate::error::Error;
 use crate::tigergraph::edge::{Hold, Resolve};
 use crate::tigergraph::upsert::create_contract_to_identity_resolve_record;
-use crate::tigergraph::upsert::create_ens_identity_ownership;
 use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
+use crate::tigergraph::upsert::{create_ens_identity_ownership, create_ens_identity_resolve};
 use crate::tigergraph::vertex::{Contract, Identity};
 use crate::upstream::{
     Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target,
@@ -331,6 +331,10 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
             None => {
                 // Resolve record not existed anymore. Maybe deleted by user.
                 trace!(?target, "TheGraph: Resolve address not existed.");
+                // Save owner address
+                create_ens_identity_ownership(&cli, &owner, &ens_domain, &ownership).await?;
+                create_identity_to_contract_hold_record(&cli, &owner, &contract, &ownership)
+                    .await?;
             }
             Some(address) => {
                 // Filter zero address (without last 4 digits)
@@ -361,29 +365,56 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
                         updated_at: naive_now(),
                     };
 
-                    // regular resolved address
-                    create_identity_domain_resolve_record(
-                        &cli,
-                        &ens_domain,
-                        &resolve_target,
-                        &resolve,
-                    )
-                    .await?;
-                    create_contract_to_identity_resolve_record(
-                        &cli,
-                        &contract,
-                        &resolve_target,
-                        &resolve,
-                    )
-                    .await?;
+                    let domain_owner = domain.owner.id.clone();
+                    if address != domain_owner {
+                        // Save hold, resolve but not connect IdentityGraph HyperVetex
+                        // create owner-hold-ens(contract)
+                        create_ens_identity_ownership(&cli, &owner, &ens_domain, &ownership)
+                            .await?;
+                        create_identity_to_contract_hold_record(
+                            &cli, &owner, &contract, &ownership,
+                        )
+                        .await?;
+
+                        // create ens-resolve-address(contract)
+                        create_ens_identity_resolve(&cli, &ens_domain, &resolve_target, &resolve)
+                            .await?;
+                        create_contract_to_identity_resolve_record(
+                            &cli,
+                            &contract,
+                            &resolve_target,
+                            &resolve,
+                        )
+                        .await?;
+                    } else {
+                        // Save ens_identity as Identity in IdentityGraph
+                        // create owner-hold-ens(contract)
+                        create_ens_identity_ownership(&cli, &owner, &ens_domain, &ownership)
+                            .await?;
+                        create_identity_to_contract_hold_record(
+                            &cli, &owner, &contract, &ownership,
+                        )
+                        .await?;
+
+                        // create ens-resolve-addres(IdentityGraph)
+                        create_identity_domain_resolve_record(
+                            &cli,
+                            &ens_domain,
+                            &resolve_target,
+                            &resolve,
+                        )
+                        .await?;
+                        create_contract_to_identity_resolve_record(
+                            &cli,
+                            &contract,
+                            &resolve_target,
+                            &resolve,
+                        )
+                        .await?;
+                    }
                 }
             }
         }
-
-        // create owner-hold-ens(contract)
-        // ENS ownership create `Hold_Identity` connection but only EvmAddress connected to HyperVertex
-        create_ens_identity_ownership(&cli, &owner, &ens_domain, &ownership).await?;
-        create_identity_to_contract_hold_record(&cli, &owner, &contract, &ownership).await?;
 
         // Append up_next
         match target {

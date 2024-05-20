@@ -525,6 +525,36 @@ pub async fn create_identity_to_identity_hold_record(
     Ok(())
 }
 
+pub async fn create_ens_identity_resolve(
+    client: &Client<HttpConnector>,
+    ens_identity: &Identity,
+    evm_address: &Identity,
+    resolve: &Resolve,
+) -> Result<(), Error> {
+    let resolve_identity = resolve.wrapper(ens_identity, evm_address, RESOLVE);
+    let edges = Edges(vec![resolve_identity]);
+    let upsert_edge_req: UpsertEdge = edges.into();
+
+    // Only create EvmAddress as an Identity connect to HyperVertex in case evm_address owner_address!=resolve_address
+    let vertex_wrapper = IsolatedVertexWrapper {
+        vertex: evm_address.to_owned(),
+    };
+    let upsert_isolated_vertex_req: UpsertIsolatedVertex = vertex_wrapper.try_into()?;
+
+    let vertices = Vertices(vec![ens_identity.to_owned()]);
+    let vertices_map: HashMap<String, HashMap<String, HashMap<String, Attribute>>> =
+        vertices.into();
+    let ens_wrapper = UpsertVertices {
+        vertices: vertices_map,
+    };
+    let upsert_ens_req: UpsertVertices = ens_wrapper.into();
+
+    upsert_isolated_vertex(&client, &upsert_isolated_vertex_req, Graph::SocialGraph).await?;
+    upsert_vertices(client, &upsert_ens_req, Graph::SocialGraph).await?;
+    upsert_edge(&client, &upsert_edge_req, Graph::SocialGraph).await?;
+    Ok(())
+}
+
 pub async fn create_ens_identity_ownership(
     client: &Client<HttpConnector>,
     evm_address: &Identity,
