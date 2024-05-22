@@ -7,7 +7,7 @@ use crate::{
     config::C,
     error::Error,
     tigergraph::{
-        edge::{Edge, Hold, Proof, Resolve, Wrapper},
+        edge::{Edge, Hold, HoldRecord, Proof, ProofRecord, Resolve, ResolveRecord, Wrapper},
         edge::{
             HOLD_CONTRACT, HOLD_IDENTITY, PROOF_EDGE, PROOF_REVERSE_EDGE, RESOLVE,
             RESOLVE_CONTRACT, REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT,
@@ -301,35 +301,227 @@ where
         let mut edges_map = HashMap::new();
         let mut vertices_map: HashMap<String, HashMap<String, HashMap<String, Attribute>>> =
             HashMap::new();
+
         for edge_wrapper in edges.0 {
-            let target_vertex_id: HashMap<String, HashMap<String, Attribute>> = HashMap::from([(
-                edge_wrapper.target.primary_key(),
-                edge_wrapper.edge.to_attributes_map(),
-            )]);
-            let target_vertex_type =
-                HashMap::from([(edge_wrapper.target.vertex_type(), target_vertex_id)]);
-            let edge_type_map = HashMap::from([(edge_wrapper.edge.e_type(), target_vertex_type)]);
-            let source_vertex_type = edges_map
-                .entry(edge_wrapper.source.vertex_type())
-                .or_insert(HashMap::new());
-            source_vertex_type.insert(edge_wrapper.source.primary_key(), edge_type_map);
+            let source_vertex_type = edge_wrapper.source.vertex_type();
+            let source_vertex_id = edge_wrapper.source.primary_key();
+            let edge_type = edge_wrapper.edge.e_type();
+            let target_vertex_type = edge_wrapper.target.vertex_type();
+            let target_vertex_id = edge_wrapper.target.primary_key();
+            let edge_attributes = edge_wrapper.edge.to_attributes_map();
+
+            edges_map
+                .entry(source_vertex_type.clone())
+                .or_insert_with(HashMap::new)
+                .entry(source_vertex_id.clone())
+                .or_insert_with(HashMap::new)
+                .entry(edge_type.clone())
+                .or_insert_with(HashMap::new)
+                .entry(target_vertex_type.clone())
+                .or_insert_with(HashMap::new)
+                .insert(target_vertex_id.clone(), edge_attributes);
 
             // Insert source data
-            {
-                let outer_map_key = edge_wrapper.source.vertex_type().clone();
-                let inner_map_key = edge_wrapper.source.primary_key().clone();
-
-                let inner_map = vertices_map.entry(outer_map_key).or_insert(HashMap::new());
-                inner_map.insert(inner_map_key, edge_wrapper.source.to_attributes_map());
-            }
+            vertices_map
+                .entry(source_vertex_type.clone())
+                .or_insert_with(HashMap::new)
+                .insert(
+                    source_vertex_id.clone(),
+                    edge_wrapper.source.to_attributes_map(),
+                );
 
             // Insert target data
-            {
-                let outer_map_key = edge_wrapper.target.vertex_type().clone();
-                let inner_map_key = edge_wrapper.target.primary_key().clone();
+            vertices_map
+                .entry(target_vertex_type.clone())
+                .or_insert_with(HashMap::new)
+                .insert(
+                    target_vertex_id.clone(),
+                    edge_wrapper.target.to_attributes_map(),
+                );
+        }
 
-                let inner_map = vertices_map.entry(outer_map_key).or_insert(HashMap::new());
-                inner_map.insert(inner_map_key, edge_wrapper.target.to_attributes_map());
+        UpsertGraph {
+            vertices: vertices_map,
+            edges: Some(edges_map),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum EdgeWrapperEnum {
+    ProofForward(EdgeWrapper<ProofRecord, Identity, Identity>),
+    ProofBackward(EdgeWrapper<ProofRecord, Identity, Identity>),
+    HoldIdentity(EdgeWrapper<HoldRecord, Identity, Identity>),
+    HoldContract(EdgeWrapper<HoldRecord, Identity, Contract>),
+    Resolve(EdgeWrapper<ResolveRecord, Identity, Identity>),
+    ReverseResolve(EdgeWrapper<ResolveRecord, Identity, Identity>),
+    ResolveContract(EdgeWrapper<ResolveRecord, Contract, Identity>),
+    ReverseResolveContract(EdgeWrapper<ResolveRecord, Identity, Contract>),
+    // PartOfIdentitiesGraph(EdgeWrapper<PartOfIdentitiesGraph, Identity, IdentitiesGraph>),
+}
+
+impl Transfer for EdgeWrapperEnum {
+    fn to_attributes_map(&self) -> HashMap<String, Attribute> {
+        match self {
+            EdgeWrapperEnum::ProofForward(wrapper) => wrapper.edge.to_attributes_map(),
+            EdgeWrapperEnum::ProofBackward(wrapper) => wrapper.edge.to_attributes_map(),
+            EdgeWrapperEnum::HoldIdentity(wrapper) => wrapper.edge.to_attributes_map(),
+            EdgeWrapperEnum::HoldContract(wrapper) => wrapper.edge.to_attributes_map(),
+            EdgeWrapperEnum::Resolve(wrapper) => wrapper.edge.to_attributes_map(),
+            EdgeWrapperEnum::ReverseResolve(wrapper) => wrapper.edge.to_attributes_map(),
+            EdgeWrapperEnum::ResolveContract(wrapper) => wrapper.edge.to_attributes_map(),
+            EdgeWrapperEnum::ReverseResolveContract(wrapper) => wrapper.edge.to_attributes_map(),
+            // EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => wrapper.edge.to_attributes_map(),
+        }
+    }
+
+    fn to_json_value(&self) -> Value {
+        match self {
+            EdgeWrapperEnum::ProofForward(wrapper) => wrapper.edge.to_json_value(),
+            EdgeWrapperEnum::ProofBackward(wrapper) => wrapper.edge.to_json_value(),
+            EdgeWrapperEnum::HoldIdentity(wrapper) => wrapper.edge.to_json_value(),
+            EdgeWrapperEnum::HoldContract(wrapper) => wrapper.edge.to_json_value(),
+            EdgeWrapperEnum::Resolve(wrapper) => wrapper.edge.to_json_value(),
+            EdgeWrapperEnum::ReverseResolve(wrapper) => wrapper.edge.to_json_value(),
+            EdgeWrapperEnum::ResolveContract(wrapper) => wrapper.edge.to_json_value(),
+            EdgeWrapperEnum::ReverseResolveContract(wrapper) => wrapper.edge.to_json_value(),
+            // EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => wrapper.edge.to_json_value(),
+        }
+    }
+}
+
+impl EdgeWrapperEnum {
+    pub fn source(&self) -> &dyn Vertex {
+        match self {
+            EdgeWrapperEnum::ProofForward(wrapper) => &wrapper.source,
+            EdgeWrapperEnum::ProofBackward(wrapper) => &wrapper.source,
+            EdgeWrapperEnum::HoldIdentity(wrapper) => &wrapper.source,
+            EdgeWrapperEnum::HoldContract(wrapper) => &wrapper.source,
+            EdgeWrapperEnum::Resolve(wrapper) => &wrapper.source,
+            EdgeWrapperEnum::ReverseResolve(wrapper) => &wrapper.source,
+            EdgeWrapperEnum::ResolveContract(wrapper) => &wrapper.source,
+            EdgeWrapperEnum::ReverseResolveContract(wrapper) => &wrapper.source,
+            // EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => &wrapper.source,
+        }
+    }
+
+    pub fn target(&self) -> &dyn Vertex {
+        match self {
+            EdgeWrapperEnum::ProofForward(wrapper) => &wrapper.target,
+            EdgeWrapperEnum::ProofBackward(wrapper) => &wrapper.target,
+            EdgeWrapperEnum::HoldIdentity(wrapper) => &wrapper.target,
+            EdgeWrapperEnum::HoldContract(wrapper) => &wrapper.target,
+            EdgeWrapperEnum::Resolve(wrapper) => &wrapper.target,
+            EdgeWrapperEnum::ReverseResolve(wrapper) => &wrapper.target,
+            EdgeWrapperEnum::ResolveContract(wrapper) => &wrapper.target,
+            EdgeWrapperEnum::ReverseResolveContract(wrapper) => &wrapper.target,
+            // EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => &wrapper.target,
+        }
+    }
+
+    pub fn e_type(&self) -> &str {
+        match self {
+            EdgeWrapperEnum::ProofForward(_) => PROOF_EDGE,
+            EdgeWrapperEnum::ProofBackward(_) => PROOF_REVERSE_EDGE,
+            EdgeWrapperEnum::HoldIdentity(_) => HOLD_IDENTITY,
+            EdgeWrapperEnum::HoldContract(_) => HOLD_CONTRACT,
+            EdgeWrapperEnum::Resolve(_) => RESOLVE,
+            EdgeWrapperEnum::ReverseResolve(_) => REVERSE_RESOLVE,
+            EdgeWrapperEnum::ResolveContract(_) => RESOLVE_CONTRACT,
+            EdgeWrapperEnum::ReverseResolveContract(_) => REVERSE_RESOLVE_CONTRACT,
+            // EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => <PartOfIdentitiesGraph as Edge<_, _, _>>::e_type(&wrapper.edge),
+        }
+    }
+}
+
+impl EdgeWrapperEnum {
+    pub fn new_proof_forward(wrapper: EdgeWrapper<ProofRecord, Identity, Identity>) -> Self {
+        EdgeWrapperEnum::ProofForward(wrapper)
+    }
+
+    pub fn new_proof_backward(wrapper: EdgeWrapper<ProofRecord, Identity, Identity>) -> Self {
+        EdgeWrapperEnum::ProofBackward(wrapper)
+    }
+
+    pub fn new_hold_identity(wrapper: EdgeWrapper<HoldRecord, Identity, Identity>) -> Self {
+        EdgeWrapperEnum::HoldIdentity(wrapper)
+    }
+
+    pub fn new_hold_contract(wrapper: EdgeWrapper<HoldRecord, Identity, Contract>) -> Self {
+        EdgeWrapperEnum::HoldContract(wrapper)
+    }
+
+    pub fn new_resolve(wrapper: EdgeWrapper<ResolveRecord, Identity, Identity>) -> Self {
+        EdgeWrapperEnum::Resolve(wrapper)
+    }
+
+    pub fn new_reverse_resolve(wrapper: EdgeWrapper<ResolveRecord, Identity, Identity>) -> Self {
+        EdgeWrapperEnum::ReverseResolve(wrapper)
+    }
+
+    pub fn new_resolve_contract(wrapper: EdgeWrapper<ResolveRecord, Contract, Identity>) -> Self {
+        EdgeWrapperEnum::ResolveContract(wrapper)
+    }
+
+    pub fn new_reverse_resolve_contract(
+        wrapper: EdgeWrapper<ResolveRecord, Identity, Contract>,
+    ) -> Self {
+        EdgeWrapperEnum::ReverseResolveContract(wrapper)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct BatchEdges(pub Vec<EdgeWrapperEnum>);
+
+impl From<BatchEdges> for UpsertGraph {
+    fn from(edges: BatchEdges) -> Self {
+        let mut edges_map = HashMap::new();
+        let mut vertices_map: HashMap<String, HashMap<String, HashMap<String, Attribute>>> =
+            HashMap::new();
+
+        for edge_wrapper_enum in edges.0 {
+            let source_vertex_type = edge_wrapper_enum.source().vertex_type();
+            let source_vertex_id = edge_wrapper_enum.source().primary_key();
+            let edge_type = edge_wrapper_enum.e_type();
+            let target_vertex_type = edge_wrapper_enum.target().vertex_type();
+            let target_vertex_id = edge_wrapper_enum.target().primary_key();
+            let edge_attributes = edge_wrapper_enum.to_attributes_map();
+
+            edges_map
+                .entry(source_vertex_type.clone())
+                .or_insert_with(HashMap::new)
+                .entry(source_vertex_id.clone())
+                .or_insert_with(HashMap::new)
+                .entry(edge_type.to_string())
+                .or_insert_with(HashMap::new)
+                .entry(target_vertex_type.clone())
+                .or_insert_with(HashMap::new)
+                .insert(target_vertex_id.clone(), edge_attributes);
+
+            // downcast_ref is a method from the Any trait in Rust,
+            // which allows you to safely attempt to
+            // convert a reference to a trait object (&dyn Any)
+            // back into a reference to a specific concrete type (&T)
+            if let Some(source) = edge_wrapper_enum
+                .source()
+                .as_any()
+                .downcast_ref::<Identity>()
+            {
+                vertices_map
+                    .entry(source_vertex_type.clone())
+                    .or_insert_with(HashMap::new)
+                    .insert(source_vertex_id.clone(), source.to_attributes_map());
+            }
+
+            if let Some(target) = edge_wrapper_enum
+                .target()
+                .as_any()
+                .downcast_ref::<Identity>()
+            {
+                vertices_map
+                    .entry(target_vertex_type.clone())
+                    .or_insert_with(HashMap::new)
+                    .insert(target_vertex_id.clone(), target.to_attributes_map());
             }
         }
 

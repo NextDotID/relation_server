@@ -28,6 +28,7 @@ use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_json::value::{Map, Value};
+use std::any::Any;
 use std::collections::HashMap;
 use std::fmt;
 use tracing::{error, trace};
@@ -90,6 +91,10 @@ impl Vertex for Identity {
 
     fn vertex_type(&self) -> String {
         VERTEX_NAME.to_string()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

@@ -10,6 +10,7 @@ pub use identity::{
 pub use identity_graph::{Address, ExpandIdentityRecord, IdentityConnection, IdentityGraph};
 use serde::{Deserialize, Serialize};
 use serde_json::value::Value;
+use std::any::Any;
 
 /// All `Vertex` records.
 #[async_trait]
@@ -17,6 +18,8 @@ pub trait Vertex {
     fn primary_key(&self) -> String;
 
     fn vertex_type(&self) -> String;
+
+    fn as_any(&self) -> &dyn Any;
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

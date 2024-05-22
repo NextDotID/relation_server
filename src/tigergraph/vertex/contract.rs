@@ -18,6 +18,7 @@ use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_json::value::{Map, Value};
+use std::any::Any;
 use std::collections::HashMap;
 use tracing::{error, trace};
 use uuid::Uuid;
@@ -71,6 +72,10 @@ impl Vertex for Contract {
 
     fn vertex_type(&self) -> String {
         VERTEX_NAME.to_string()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
