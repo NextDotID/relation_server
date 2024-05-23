@@ -29,6 +29,7 @@ use serde_json::value::Value;
 use std::collections::HashMap;
 use strum_macros::{Display, EnumIter, EnumString};
 use tracing::{error, trace};
+use uuid::Uuid;
 
 #[derive(
     Serialize,
@@ -113,6 +114,81 @@ impl Graph {
             SocialGraph => format!("Bearer {}", C.tdb.social_graph_token),
         }
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct IdAllocation {
+    pub graph_id: String,
+    pub updated_nanosecond: i64, // microseconds are one-millionth of a second (1/1,000,000 seconds)
+    pub vids: Vec<String>,
+}
+
+pub struct IdAllocationResponse {
+    pub code: i32,
+    pub msg: Option<String>,
+    pub data: Option<IdAllocationResult>,
+}
+
+pub struct IdAllocationResult {
+    pub graph_id: String,
+    pub updated_nanosecond: i64,
+}
+
+pub async fn id_allocation(req: &IdAllocation) -> Result<IdAllocationResult, Error> {
+    // Err(Error::ParamError("id_allocation failure".to_string()))
+    Ok(IdAllocationResult {
+        graph_id: "aec0c81c-7ab2-42e6-bb74-e7ea8d2cf903".to_string(),
+        updated_nanosecond: 1716471514174958,
+    })
+}
+
+pub async fn batch_upsert(
+    client: &Client<HttpConnector>,
+    edges: Vec<EdgeWrapperEnum>,
+) -> Result<(), Error> {
+    let mut graph: UpsertGraph = BatchEdges(edges).into();
+    let json_raw_2 = serde_json::to_string(&graph).map_err(|err| Error::JSONParseError(err))?;
+    trace!("Graph upsert struct: {}", json_raw_2);
+    let vids = graph.extract_connected_vertices_ids();
+    trace!("Connected Identities vids: {:?}", vids);
+    let generate_id = Uuid::new_v4().to_string();
+    let updated_nanosecond = chrono::Utc::now().naive_utc().and_utc().timestamp_micros();
+    let allocation_req = IdAllocation {
+        graph_id: generate_id.clone(),
+        updated_nanosecond: updated_nanosecond.clone(),
+        vids,
+    };
+    // let allocation_id = id_allocation(&allocation_req).await?;
+    let mut final_identity_graph = generate_id.clone();
+    let mut final_updated_nanosecond: i64 = updated_nanosecond.clone();
+    match id_allocation(&allocation_req).await {
+        Ok(result) => {
+            if generate_id != result.graph_id {
+                trace!(
+                    "Use Allocation ID: allocation_id({}) != generate_id({})",
+                    result.graph_id,
+                    generate_id,
+                );
+                final_identity_graph = result.graph_id;
+                final_updated_nanosecond = result.updated_nanosecond;
+            }
+        }
+        Err(err) => {
+            trace!(
+                "Error during Allocation ID: {:?}, using generate_id({})",
+                err,
+                generate_id,
+            );
+            final_identity_graph = generate_id;
+            final_updated_nanosecond = updated_nanosecond;
+        }
+    }
+    trace!("final_identity_graph: {:?}", final_identity_graph);
+    graph.replace_fake_graph_id(&final_identity_graph, final_updated_nanosecond);
+    let json_raw = serde_json::to_string(&graph).map_err(|err| Error::JSONParseError(err))?;
+    trace!("graph = {}", json_raw);
+    upsert_graph(client, &graph, Graph::SocialGraph).await?;
+    Ok(())
 }
 
 pub async fn delete_vertex_and_edge(
@@ -206,8 +282,8 @@ pub async fn upsert_graph(
             return Err(Error::General(err_message, resp.status()));
         }
     };
-    // let json_raw = serde_json::to_string(&result).map_err(|err| Error::JSONParseError(err))?;
-    // println!("{}", json_raw);
+    let json_raw = serde_json::to_string(&_result).map_err(|err| Error::JSONParseError(err))?;
+    trace!("{}", json_raw);
     trace!("TigerGraph UpsertGraph ...");
     Ok(())
 }
@@ -225,6 +301,60 @@ pub struct UpsertGraph {
             >,
         >,
     >,
+}
+
+impl UpsertGraph {
+    /// Extract all primary IDs from the `vertices` map.
+    pub fn extract_all_vertices_ids(&self) -> Vec<String> {
+        self.vertices
+            .get("Identities")
+            .map(|identities_map| identities_map.keys().cloned().collect())
+            .unwrap_or_else(Vec::new)
+    }
+
+    pub fn extract_connected_vertices_ids(&self) -> Vec<String> {
+        if let Some(edges) = &self.edges {
+            if let Some(identities_graph_edges) = edges.get("IdentitiesGraph") {
+                if let Some(edge_map) = identities_graph_edges.get("fake_uuid_v4") {
+                    if let Some(part_of_reverse_map) = edge_map.get("PartOfIdentitiesGraph_Reverse")
+                    {
+                        if let Some(identities_map) = part_of_reverse_map.get("Identities") {
+                            return identities_map.keys().cloned().collect();
+                        }
+                    }
+                }
+            }
+        }
+        Vec::new()
+    }
+
+    pub fn replace_fake_graph_id(&mut self, new_id: &str, updated_nanosecond: i64) {
+        // if let Some(identities_graph) = self.vertices.get_mut("IdentitiesGraph") {
+        //     if let Some(attributes_map) = identities_graph.remove("fake_uuid_v4") {
+        //         identities_graph.insert(new_id.to_string(), attributes_map);
+        //     }
+        // }
+        if let Some(identities_graph) = self.vertices.get_mut("IdentitiesGraph") {
+            if let Some(mut attributes_map) = identities_graph.remove("fake_uuid_v4") {
+                if let Some(id_attr) = attributes_map.get_mut("id") {
+                    id_attr.value = json!(new_id.to_string());
+                }
+                if let Some(updated_nanosecond_attr) = attributes_map.get_mut("updated_nanosecond")
+                {
+                    updated_nanosecond_attr.value = json!(updated_nanosecond);
+                }
+                identities_graph.insert(new_id.to_string(), attributes_map);
+            }
+        }
+
+        if let Some(edges) = self.edges.as_mut() {
+            if let Some(identities_graph_edges) = edges.get_mut("IdentitiesGraph") {
+                if let Some(edges_map) = identities_graph_edges.remove("fake_uuid_v4") {
+                    identities_graph_edges.insert(new_id.to_string(), edges_map);
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
