@@ -1,8 +1,10 @@
 pub mod hold;
+pub mod part_of_identities_graph;
 pub mod proof;
 pub mod relation;
 pub mod resolve;
 pub use hold::{Hold, HoldRecord, HOLD_CONTRACT, HOLD_IDENTITY};
+pub use part_of_identities_graph::{HyperEdge, HyperEdgeRecord, HYPER_EDGE, HYPER_EDGE_REVERSE};
 pub use proof::{
     Proof, ProofRecord, EDGE_NAME as PROOF_EDGE, REVERSE_EDGE_NAME as PROOF_REVERSE_EDGE,
 };

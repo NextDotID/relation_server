@@ -7,12 +7,15 @@ use crate::{
     config::C,
     error::Error,
     tigergraph::{
-        edge::{Edge, Hold, HoldRecord, Proof, ProofRecord, Resolve, ResolveRecord, Wrapper},
         edge::{
-            HOLD_CONTRACT, HOLD_IDENTITY, PROOF_EDGE, PROOF_REVERSE_EDGE, RESOLVE,
-            RESOLVE_CONTRACT, REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT,
+            Edge, Hold, HoldRecord, HyperEdgeRecord, Proof, ProofRecord, Resolve, ResolveRecord,
+            Wrapper,
         },
-        vertex::{Contract, Identity, Vertex},
+        edge::{
+            HOLD_CONTRACT, HOLD_IDENTITY, HYPER_EDGE_REVERSE, PROOF_EDGE, PROOF_REVERSE_EDGE,
+            RESOLVE, RESOLVE_CONTRACT, REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT,
+        },
+        vertex::{Contract, IdentitiesGraph, Identity, Vertex},
     },
     util::parse_body,
 };
@@ -21,6 +24,7 @@ use http::uri::InvalidUri;
 use hyper::Method;
 use hyper::{client::HttpConnector, Body, Client};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use serde_json::value::Value;
 use std::collections::HashMap;
 use strum_macros::{Display, EnumIter, EnumString};
@@ -357,7 +361,7 @@ pub enum EdgeWrapperEnum {
     ReverseResolve(EdgeWrapper<ResolveRecord, Identity, Identity>),
     ResolveContract(EdgeWrapper<ResolveRecord, Contract, Identity>),
     ReverseResolveContract(EdgeWrapper<ResolveRecord, Identity, Contract>),
-    // PartOfIdentitiesGraph(EdgeWrapper<PartOfIdentitiesGraph, Identity, IdentitiesGraph>),
+    PartOfIdentitiesGraph(EdgeWrapper<HyperEdgeRecord, IdentitiesGraph, Identity>),
 }
 
 impl Transfer for EdgeWrapperEnum {
@@ -371,7 +375,7 @@ impl Transfer for EdgeWrapperEnum {
             EdgeWrapperEnum::ReverseResolve(wrapper) => wrapper.edge.to_attributes_map(),
             EdgeWrapperEnum::ResolveContract(wrapper) => wrapper.edge.to_attributes_map(),
             EdgeWrapperEnum::ReverseResolveContract(wrapper) => wrapper.edge.to_attributes_map(),
-            // EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => wrapper.edge.to_attributes_map(),
+            EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => wrapper.edge.to_attributes_map(),
         }
     }
 
@@ -385,7 +389,7 @@ impl Transfer for EdgeWrapperEnum {
             EdgeWrapperEnum::ReverseResolve(wrapper) => wrapper.edge.to_json_value(),
             EdgeWrapperEnum::ResolveContract(wrapper) => wrapper.edge.to_json_value(),
             EdgeWrapperEnum::ReverseResolveContract(wrapper) => wrapper.edge.to_json_value(),
-            // EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => wrapper.edge.to_json_value(),
+            EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => wrapper.edge.to_json_value(),
         }
     }
 }
@@ -401,7 +405,7 @@ impl EdgeWrapperEnum {
             EdgeWrapperEnum::ReverseResolve(wrapper) => &wrapper.source,
             EdgeWrapperEnum::ResolveContract(wrapper) => &wrapper.source,
             EdgeWrapperEnum::ReverseResolveContract(wrapper) => &wrapper.source,
-            // EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => &wrapper.source,
+            EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => &wrapper.source,
         }
     }
 
@@ -415,7 +419,7 @@ impl EdgeWrapperEnum {
             EdgeWrapperEnum::ReverseResolve(wrapper) => &wrapper.target,
             EdgeWrapperEnum::ResolveContract(wrapper) => &wrapper.target,
             EdgeWrapperEnum::ReverseResolveContract(wrapper) => &wrapper.target,
-            // EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => &wrapper.target,
+            EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => &wrapper.target,
         }
     }
 
@@ -429,7 +433,7 @@ impl EdgeWrapperEnum {
             EdgeWrapperEnum::ReverseResolve(_) => REVERSE_RESOLVE,
             EdgeWrapperEnum::ResolveContract(_) => RESOLVE_CONTRACT,
             EdgeWrapperEnum::ReverseResolveContract(_) => REVERSE_RESOLVE_CONTRACT,
-            // EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => <PartOfIdentitiesGraph as Edge<_, _, _>>::e_type(&wrapper.edge),
+            EdgeWrapperEnum::PartOfIdentitiesGraph(_) => HYPER_EDGE_REVERSE,
         }
     }
 }
@@ -468,10 +472,19 @@ impl EdgeWrapperEnum {
     ) -> Self {
         EdgeWrapperEnum::ReverseResolveContract(wrapper)
     }
+
+    pub fn new_hyper_edge(
+        wrapper: EdgeWrapper<HyperEdgeRecord, IdentitiesGraph, Identity>,
+    ) -> Self {
+        EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper)
+    }
 }
 
+/// List edges.
+pub type EdgeList = Vec<EdgeWrapperEnum>;
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct BatchEdges(pub Vec<EdgeWrapperEnum>);
+pub struct BatchEdges(pub EdgeList);
 
 impl From<BatchEdges> for UpsertGraph {
     fn from(edges: BatchEdges) -> Self {
@@ -505,6 +518,28 @@ impl From<BatchEdges> for UpsertGraph {
             if let Some(source) = edge_wrapper_enum
                 .source()
                 .as_any()
+                .downcast_ref::<IdentitiesGraph>()
+            {
+                vertices_map
+                    .entry(source_vertex_type.clone())
+                    .or_insert_with(HashMap::new)
+                    .insert(source_vertex_id.clone(), source.to_attributes_map());
+            }
+
+            if let Some(target) = edge_wrapper_enum
+                .target()
+                .as_any()
+                .downcast_ref::<IdentitiesGraph>()
+            {
+                vertices_map
+                    .entry(target_vertex_type.clone())
+                    .or_insert_with(HashMap::new)
+                    .insert(target_vertex_id.clone(), target.to_attributes_map());
+            }
+
+            if let Some(source) = edge_wrapper_enum
+                .source()
+                .as_any()
                 .downcast_ref::<Identity>()
             {
                 vertices_map
@@ -517,6 +552,28 @@ impl From<BatchEdges> for UpsertGraph {
                 .target()
                 .as_any()
                 .downcast_ref::<Identity>()
+            {
+                vertices_map
+                    .entry(target_vertex_type.clone())
+                    .or_insert_with(HashMap::new)
+                    .insert(target_vertex_id.clone(), target.to_attributes_map());
+            }
+
+            if let Some(source) = edge_wrapper_enum
+                .source()
+                .as_any()
+                .downcast_ref::<Contract>()
+            {
+                vertices_map
+                    .entry(source_vertex_type.clone())
+                    .or_insert_with(HashMap::new)
+                    .insert(source_vertex_id.clone(), source.to_attributes_map());
+            }
+
+            if let Some(target) = edge_wrapper_enum
+                .target()
+                .as_any()
+                .downcast_ref::<Contract>()
             {
                 vertices_map
                     .entry(target_vertex_type.clone())

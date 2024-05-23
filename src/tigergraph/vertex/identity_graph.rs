@@ -2,17 +2,146 @@ use crate::{
     config::C,
     error::Error,
     tigergraph::{
-        vertex::{Identity, IdentityRecord, VertexRecord},
-        BaseResponse, Graph,
+        vertex::{FromWithParams, Identity, IdentityRecord, Vertex, VertexRecord},
+        Attribute, BaseResponse, Graph, OpCode, Transfer,
     },
     upstream::{Chain, DataSource, Platform},
     util::parse_body,
 };
+use async_trait::async_trait;
 use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::de::{self, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
+use serde_json::value::{Map, Value};
+use std::any::Any;
+use std::collections::HashMap;
 use tracing::error;
+
+pub const VERTEX_NAME: &str = "IdentitiesGraph";
+
+/// IdentitiesGraph
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct IdentitiesGraph {
+    /// UUID of this record
+    pub id: String,
+    /// microseconds are one-millionth of a second (1/1,000,000 seconds)
+    pub updated_nanosecond: i64,
+}
+
+impl Default for IdentitiesGraph {
+    fn default() -> Self {
+        Self {
+            id: String::from("fake_uuid_v4"),
+            updated_nanosecond: Default::default(),
+        }
+    }
+}
+
+impl PartialEq for IdentitiesGraph {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+// #[typetag::serde]
+#[async_trait]
+impl Vertex for IdentitiesGraph {
+    fn primary_key(&self) -> String {
+        self.id.clone()
+    }
+
+    fn vertex_type(&self) -> String {
+        VERTEX_NAME.to_string()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct IdentitiesGraphRecord(pub VertexRecord<IdentitiesGraph>);
+
+impl FromWithParams<IdentitiesGraph> for IdentitiesGraphRecord {
+    fn from_with_params(v_type: String, v_id: String, attributes: IdentitiesGraph) -> Self {
+        IdentitiesGraphRecord(VertexRecord {
+            v_type,
+            v_id,
+            attributes,
+        })
+    }
+}
+
+impl From<VertexRecord<IdentitiesGraph>> for IdentitiesGraphRecord {
+    fn from(record: VertexRecord<IdentitiesGraph>) -> Self {
+        IdentitiesGraphRecord(record)
+    }
+}
+
+impl std::ops::Deref for IdentitiesGraphRecord {
+    type Target = VertexRecord<IdentitiesGraph>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for IdentitiesGraphRecord {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl std::ops::Deref for VertexRecord<IdentitiesGraph> {
+    type Target = IdentitiesGraph;
+
+    fn deref(&self) -> &Self::Target {
+        &self.attributes
+    }
+}
+
+impl std::ops::DerefMut for VertexRecord<IdentitiesGraph> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.attributes
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct IdentitiesGraphAttribute(HashMap<String, Attribute>);
+
+// Implement `Transfer` trait for converting `IdentitiesGraph` into a `HashMap<String, Attribute>`.
+impl Transfer for IdentitiesGraph {
+    fn to_attributes_map(&self) -> HashMap<String, Attribute> {
+        let mut attributes_map = HashMap::new();
+        attributes_map.insert(
+            "id".to_string(),
+            Attribute {
+                value: json!(self.id),
+                op: Some(OpCode::IgnoreIfExists),
+            },
+        );
+        attributes_map.insert(
+            "updated_nanosecond".to_string(),
+            Attribute {
+                value: json!(self.updated_nanosecond),
+                op: Some(OpCode::IgnoreIfExists),
+            },
+        );
+        attributes_map
+    }
+
+    fn to_json_value(&self) -> Value {
+        let mut map = Map::new();
+        map.insert("id".to_string(), json!(self.id));
+        map.insert(
+            "updated_nanosecond".to_string(),
+            json!(self.updated_nanosecond),
+        );
+        Value::Object(map)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IdentityConnection {

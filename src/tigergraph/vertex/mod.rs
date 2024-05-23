@@ -7,7 +7,9 @@ pub use identity::{
     ExpireTimeLoadFn, Identity, IdentityLoadFn, IdentityRecord, IdentityWithSource,
     NeighborReverseLoadFn, NeighborsResponse, OwnerLoadFn,
 };
-pub use identity_graph::{Address, ExpandIdentityRecord, IdentityConnection, IdentityGraph};
+pub use identity_graph::{
+    Address, ExpandIdentityRecord, IdentitiesGraph, IdentityConnection, IdentityGraph,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::value::Value;
 use std::any::Any;
