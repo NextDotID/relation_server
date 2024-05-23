@@ -17,7 +17,7 @@ use crate::{
         },
         vertex::{Contract, IdentitiesGraph, Identity, Vertex},
     },
-    util::parse_body,
+    util::{make_client, parse_body},
 };
 
 use http::uri::InvalidUri;
@@ -123,23 +123,82 @@ pub struct IdAllocation {
     pub vids: Vec<String>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IdAllocationResponse {
     pub code: i32,
     pub msg: Option<String>,
     pub data: Option<IdAllocationResult>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IdAllocationResult {
+    #[serde(rename = "return_graph_id")]
     pub graph_id: String,
+    #[serde(rename = "return_updated_nanosecond")]
     pub updated_nanosecond: i64,
 }
 
-pub async fn id_allocation(req: &IdAllocation) -> Result<IdAllocationResult, Error> {
-    // Err(Error::ParamError("id_allocation failure".to_string()))
-    Ok(IdAllocationResult {
-        graph_id: "aec0c81c-7ab2-42e6-bb74-e7ea8d2cf903".to_string(),
-        updated_nanosecond: 1716471514174958,
-    })
+pub async fn id_allocation(payload: &IdAllocation) -> Result<IdAllocationResult, Error> {
+    let http_client = make_client();
+    let id_allocation_url = C.tdb.host.trim_end_matches(":9000");
+    let uri: http::Uri = format!("{}/id_allocation/allocation", id_allocation_url,)
+        .parse()
+        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+
+    let json_params = serde_json::to_string(payload).map_err(|err| Error::JSONParseError(err))?;
+    let req = hyper::Request::builder()
+        .method(Method::POST)
+        .uri(uri)
+        .body(Body::from(json_params))
+        .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+
+    let mut resp = http_client.request(req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!(
+            "TigerGraph | Fail call allocation: {:?}",
+            err.to_string()
+        ))
+    })?;
+
+    if !resp.status().is_success() {
+        let err_message = format!(
+            "TigerGraph | Fail call allocation, statusCode: {}",
+            resp.status()
+        );
+        error!(err_message);
+        return Err(Error::General(err_message, resp.status()));
+    }
+
+    let data = match parse_body::<IdAllocationResponse>(&mut resp).await {
+        Ok(result) => {
+            if result.code != 0 {
+                let err_resp: UpsertGraphResponse = parse_body(&mut resp).await?;
+                let err_message = format!(
+                    "TigerGraph | Fail call allocation: Code: {:?}, Message: {:?}",
+                    err_resp.base.code, err_resp.base.message
+                );
+                error!(err_message);
+                return Err(Error::General(err_message, resp.status()));
+            }
+            result.data
+        }
+        Err(err) => {
+            let err_message = format!("TigerGraph | call allocation parse_body error: {:?}", err);
+            error!(err_message);
+            return Err(Error::General(err_message, resp.status()));
+        }
+    };
+
+    match data {
+        Some(data) => {
+            if data.graph_id == "".to_string() || data.updated_nanosecond == 0 {
+                return Err(Error::ParamMissing(
+                    "allocation graph_id | updated_nanosecond missing".to_string(),
+                ));
+            }
+            Ok(data)
+        }
+        None => Err(Error::ParamMissing("allocation body missing".to_string())),
+    }
 }
 
 pub async fn batch_upsert(
@@ -147,10 +206,10 @@ pub async fn batch_upsert(
     edges: Vec<EdgeWrapperEnum>,
 ) -> Result<(), Error> {
     let mut graph: UpsertGraph = BatchEdges(edges).into();
-    let json_raw_2 = serde_json::to_string(&graph).map_err(|err| Error::JSONParseError(err))?;
-    trace!("Graph upsert struct: {}", json_raw_2);
+    // let json_raw_2 = serde_json::to_string(&graph).map_err(|err| Error::JSONParseError(err))?;
+    // trace!("Graph upsert struct: {}", json_raw_2);
     let vids = graph.extract_connected_vertices_ids();
-    trace!("Connected Identities vids: {:?}", vids);
+    // trace!("Connected Identities vids: {:?}", vids);
     let generate_id = Uuid::new_v4().to_string();
     let updated_nanosecond = chrono::Utc::now().naive_utc().and_utc().timestamp_micros();
     let allocation_req = IdAllocation {
@@ -158,16 +217,16 @@ pub async fn batch_upsert(
         updated_nanosecond: updated_nanosecond.clone(),
         vids,
     };
-    // let allocation_id = id_allocation(&allocation_req).await?;
+
     let mut final_identity_graph = generate_id.clone();
     let mut final_updated_nanosecond: i64 = updated_nanosecond.clone();
     match id_allocation(&allocation_req).await {
         Ok(result) => {
             if generate_id != result.graph_id {
                 trace!(
-                    "Use Allocation ID: allocation_id({}) != generate_id({})",
+                    "Use Allocation ID: allocation_id({}, nano={})",
                     result.graph_id,
-                    generate_id,
+                    result.updated_nanosecond
                 );
                 final_identity_graph = result.graph_id;
                 final_updated_nanosecond = result.updated_nanosecond;
@@ -175,18 +234,19 @@ pub async fn batch_upsert(
         }
         Err(err) => {
             trace!(
-                "Error during Allocation ID: {:?}, using generate_id({})",
+                "Error during Allocation ID: {:?}, using generate_id({}, nano={})",
                 err,
                 generate_id,
+                updated_nanosecond,
             );
             final_identity_graph = generate_id;
             final_updated_nanosecond = updated_nanosecond;
         }
     }
-    trace!("final_identity_graph: {:?}", final_identity_graph);
+    // trace!("final_identity_graph: {:?}", final_identity_graph);
     graph.replace_fake_graph_id(&final_identity_graph, final_updated_nanosecond);
-    let json_raw = serde_json::to_string(&graph).map_err(|err| Error::JSONParseError(err))?;
-    trace!("graph = {}", json_raw);
+    // let json_raw = serde_json::to_string(&graph).map_err(|err| Error::JSONParseError(err))?;
+    // trace!("graph = {}", json_raw);
     upsert_graph(client, &graph, Graph::SocialGraph).await?;
     Ok(())
 }
