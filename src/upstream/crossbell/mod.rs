@@ -117,7 +117,7 @@ impl Fetcher for Crossbell {
         }
     }
 
-    async fn fetch_and_save(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+    async fn batch_fetch(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
         if !Self::can_fetch(target) {
             return Ok((vec![], vec![]));
         }
