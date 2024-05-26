@@ -748,7 +748,10 @@ async fn fetch_reverse_record(
         return Err(Error::NoResult);
     }
     if resp.result.data.is_none() || resp.result.data.as_ref().unwrap().account.len() == 0 {
-        warn!("das_reverseRecord result is empty, resp {:?}", resp);
+        warn!(
+            "das_reverseRecord result({}) is empty, resp {:?}",
+            identity, resp
+        );
         return Ok(None);
     }
 
