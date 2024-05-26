@@ -2,13 +2,16 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::edge::{
+    Hold, HyperEdge, Resolve, Wrapper, HOLD_CONTRACT, HOLD_IDENTITY, HYPER_EDGE, RESOLVE,
+    REVERSE_RESOLVE,
+};
 use crate::tigergraph::upsert::create_ens_identity_ownership;
 use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
-// use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
-use crate::tigergraph::vertex::{Contract, Identity};
+use crate::tigergraph::vertex::{Contract, IdentitiesGraph, Identity};
+use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
     Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target,
     TargetProcessedList,
@@ -21,7 +24,7 @@ use http::uri::InvalidUri;
 use http::StatusCode;
 use hyper::{Body, Method, Request};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -72,9 +75,256 @@ impl Fetcher for Genome {
         }
     }
 
+    async fn batch_fetch(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+        if !Self::can_fetch(target) {
+            return Ok((vec![], vec![]));
+        }
+        match target.platform()? {
+            Platform::Ethereum => batch_fetch_by_address(target).await,
+            Platform::Genome => batch_fetch_by_domain(target).await,
+            _ => Ok((vec![], vec![])),
+        }
+    }
+
     fn can_fetch(target: &Target) -> bool {
         target.in_platform_supported(vec![Platform::Genome, Platform::Ethereum])
     }
+}
+
+async fn batch_fetch_by_address(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+    let address = target.identity()?.to_lowercase();
+    let domains = get_name(&address).await?;
+    if domains.is_empty() {
+        debug!(?target, "Genome get_name result is empty");
+        return Ok((vec![], vec![]));
+    }
+
+    let mut edges = EdgeList::new();
+    let hv = IdentitiesGraph::default();
+
+    for d in domains.into_iter() {
+        let genome_domain = format!("{}.{}", d.name, d.tld_name);
+        let mut token_id = String::from("");
+        let expired_at_naive = timestamp_to_naive(d.expired_at, 0);
+
+        if let Some(_token_id) = d.token_id.clone() {
+            token_id = _token_id;
+        }
+
+        let gno: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Genome,
+            identity: genome_domain.clone(),
+            uid: None,
+            created_at: None,
+            display_name: Some(genome_domain.clone()),
+            added_at: naive_now(),
+            avatar_url: d.image_url.clone(),
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: expired_at_naive,
+            reverse: Some(d.is_default.clone()),
+        };
+
+        let addr: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Ethereum,
+            identity: d.owner.clone().to_lowercase(),
+            uid: None,
+            created_at: None,
+            display_name: None,
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(d.is_default.clone()),
+        };
+
+        let hold: Hold = Hold {
+            uuid: Uuid::new_v4(),
+            source: DataSource::SpaceId,
+            transaction: Some("".to_string()),
+            id: token_id,
+            created_at: None,
+            updated_at: naive_now(),
+            fetcher: DataFetcher::DataMgrService,
+            expired_at: expired_at_naive,
+        };
+
+        let resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::SpaceId,
+            system: DomainNameSystem::Genome,
+            name: genome_domain.clone(),
+            fetcher: DataFetcher::DataMgrService,
+            updated_at: naive_now(),
+        };
+
+        let contract = Contract {
+            uuid: Uuid::new_v4(),
+            category: ContractCategory::GNS,
+            address: ContractCategory::GNS.default_contract_address().unwrap(),
+            chain: Chain::Gnosis,
+            symbol: Some("GNS".to_string()),
+            updated_at: naive_now(),
+        };
+
+        if d.is_default {
+            // 'reverse' resolution maps from an address back to a name.
+            let reverse: Resolve = Resolve {
+                uuid: Uuid::new_v4(),
+                source: DataSource::SpaceId,
+                system: DomainNameSystem::Genome,
+                name: genome_domain.clone(),
+                fetcher: DataFetcher::DataMgrService,
+                updated_at: naive_now(),
+            };
+            debug!("{} => Genome({}) is_default", address, genome_domain);
+            let rr = reverse.wrapper(&addr, &gno, REVERSE_RESOLVE);
+            edges.push(EdgeWrapperEnum::new_reverse_resolve(rr));
+        }
+
+        edges.push(EdgeWrapperEnum::new_hyper_edge(
+            HyperEdge {}.wrapper(&hv, &addr, HYPER_EDGE),
+        ));
+        edges.push(EdgeWrapperEnum::new_hyper_edge(
+            HyperEdge {}.wrapper(&hv, &gno, HYPER_EDGE),
+        ));
+
+        // 'regular' resolution involves mapping from a name to an address.
+        let rs = resolve.wrapper(&gno, &addr, RESOLVE);
+        // hold record
+        let hd = hold.wrapper(&addr, &gno, HOLD_IDENTITY);
+        let hdc = hold.wrapper(&addr, &contract, HOLD_CONTRACT);
+        edges.push(EdgeWrapperEnum::new_resolve(rs));
+        edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+        edges.push(EdgeWrapperEnum::new_hold_contract(hdc));
+    }
+
+    // after genome, nothing return for next target
+    Ok((vec![], edges))
+}
+
+async fn batch_fetch_by_domain(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+    let name = target.identity()?.to_lowercase();
+    let name_with_out_tld: &str = name.trim_end_matches(".gno");
+    let domains: Vec<Metadata> = get_address(name_with_out_tld).await?; // get_address(domain)
+    if domains.is_empty() {
+        debug!(?target, "Genome get_address result is empty");
+        return Ok((vec![], vec![]));
+    }
+    let address = domains.first().unwrap().owner.clone();
+    let mut next_targets = TargetProcessedList::new();
+    next_targets.push(Target::Identity(
+        Platform::Ethereum,
+        address.clone().to_lowercase(),
+    ));
+
+    let mut edges = EdgeList::new();
+    let hv = IdentitiesGraph::default();
+
+    for d in domains.into_iter() {
+        let genome_domain = format!("{}.{}", d.name, d.tld_name);
+        let mut token_id = String::from("");
+        let expired_at_naive = timestamp_to_naive(d.expired_at, 0);
+
+        if let Some(_token_id) = d.token_id.clone() {
+            token_id = _token_id;
+        }
+        let gno: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Genome,
+            identity: genome_domain.clone(),
+            uid: None,
+            created_at: None,
+            display_name: Some(genome_domain.clone()),
+            added_at: naive_now(),
+            avatar_url: d.image_url.clone(),
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: expired_at_naive,
+            reverse: Some(d.is_default.clone()),
+        };
+
+        let addr: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Ethereum,
+            identity: d.owner.clone().to_lowercase(),
+            uid: None,
+            created_at: None,
+            display_name: None,
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(d.is_default.clone()),
+        };
+
+        let hold: Hold = Hold {
+            uuid: Uuid::new_v4(),
+            source: DataSource::SpaceId,
+            transaction: Some("".to_string()),
+            id: token_id,
+            created_at: None,
+            updated_at: naive_now(),
+            fetcher: DataFetcher::DataMgrService,
+            expired_at: expired_at_naive,
+        };
+
+        let resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::SpaceId,
+            system: DomainNameSystem::Genome,
+            name: genome_domain.clone(),
+            fetcher: DataFetcher::DataMgrService,
+            updated_at: naive_now(),
+        };
+
+        let contract = Contract {
+            uuid: Uuid::new_v4(),
+            category: ContractCategory::GNS,
+            address: ContractCategory::GNS.default_contract_address().unwrap(),
+            chain: Chain::Gnosis,
+            symbol: Some("GNS".to_string()),
+            updated_at: naive_now(),
+        };
+
+        if d.is_default {
+            // 'reverse' resolution maps from an address back to a name.
+            let reverse: Resolve = Resolve {
+                uuid: Uuid::new_v4(),
+                source: DataSource::SpaceId,
+                system: DomainNameSystem::Genome,
+                name: genome_domain.clone(),
+                fetcher: DataFetcher::DataMgrService,
+                updated_at: naive_now(),
+            };
+            debug!("{} => Genome({}) is_default", address, genome_domain);
+            let rr = reverse.wrapper(&addr, &gno, REVERSE_RESOLVE);
+            edges.push(EdgeWrapperEnum::new_reverse_resolve(rr));
+        }
+
+        edges.push(EdgeWrapperEnum::new_hyper_edge(
+            HyperEdge {}.wrapper(&hv, &addr, HYPER_EDGE),
+        ));
+        edges.push(EdgeWrapperEnum::new_hyper_edge(
+            HyperEdge {}.wrapper(&hv, &gno, HYPER_EDGE),
+        ));
+
+        // 'regular' resolution involves mapping from a name to an address.
+        let rs = resolve.wrapper(&gno, &addr, RESOLVE);
+        // hold record
+        let hd = hold.wrapper(&addr, &gno, HOLD_IDENTITY);
+        let hdc = hold.wrapper(&addr, &contract, HOLD_CONTRACT);
+        info!("hdc = {:?}", hdc);
+        edges.push(EdgeWrapperEnum::new_resolve(rs));
+        edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+        edges.push(EdgeWrapperEnum::new_hold_contract(hdc));
+    }
+
+    Ok((next_targets, edges))
 }
 
 async fn fetch_connections_by_platform_identity(
@@ -147,7 +397,7 @@ async fn fetch_domain_by_address(
         let hold: Hold = Hold {
             uuid: Uuid::new_v4(),
             source: DataSource::SpaceId,
-            transaction: None,
+            transaction: Some("".to_string()),
             id: token_id,
             created_at: None,
             updated_at: naive_now(),
@@ -259,7 +509,7 @@ async fn fetch_address_by_domain(
         let hold: Hold = Hold {
             uuid: Uuid::new_v4(),
             source: DataSource::SpaceId,
-            transaction: None,
+            transaction: Some("".to_string()),
             id: token_id,
             created_at: None,
             updated_at: naive_now(),
