@@ -2,18 +2,18 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::edge::Hold;
-use crate::tigergraph::edge::Resolve;
+use crate::tigergraph::edge::{
+    Hold, HyperEdge, Resolve, Wrapper, HOLD_IDENTITY, HYPER_EDGE, RESOLVE, REVERSE_RESOLVE,
+};
 use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
-use crate::tigergraph::vertex::Identity;
-// use crate::graph::{new_db_connection, vertex::Identity};
+use crate::tigergraph::vertex::{IdentitiesGraph, Identity};
+use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
     DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
 };
 use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};
-// use aragog::DatabaseConnection;
 use async_trait::async_trait;
 use futures::future::join_all;
 use http::uri::InvalidUri;
@@ -113,9 +113,230 @@ impl Fetcher for UnstoppableDomains {
         }
     }
 
+    async fn batch_fetch(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+        if !Self::can_fetch(target) {
+            return Ok((vec![], vec![]));
+        }
+
+        match target.platform()? {
+            Platform::Ethereum => batch_fetch_by_wallet(target).await,
+            Platform::UnstoppableDomains => batch_fetch_by_handle(target).await,
+            _ => Ok((vec![], vec![])),
+        }
+    }
+
     fn can_fetch(target: &Target) -> bool {
         target.in_platform_supported(vec![Platform::UnstoppableDomains, Platform::Ethereum])
     }
+}
+
+async fn batch_fetch_by_wallet(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+    let address = target.identity()?.to_lowercase();
+
+    let mut cnt: u32 = 0;
+    let mut next = String::from("");
+    let mut edges = EdgeList::new();
+    let hv = IdentitiesGraph::default();
+
+    while cnt < u32::MAX {
+        let result = fetch_domain(&address, &next).await?;
+        cnt += result.data.len() as u32;
+
+        for item in result.data.iter() {
+            let mut addr: Identity = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: Platform::Ethereum,
+                identity: address.clone(),
+                uid: None,
+                created_at: None,
+                display_name: None,
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: None,
+                updated_at: naive_now(),
+                expired_at: None,
+                reverse: Some(false),
+            };
+
+            let mut ud: Identity = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: Platform::UnstoppableDomains,
+                identity: item.id.clone(),
+                uid: None,
+                created_at: None,
+                display_name: Some(item.attributes.meta.domain.clone()),
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: None,
+                updated_at: naive_now(),
+                expired_at: None,
+                reverse: Some(false),
+            };
+            let hold: Hold = Hold {
+                uuid: Uuid::new_v4(),
+                source: DataSource::UnstoppableDomains,
+                transaction: None,
+                id: item
+                    .attributes
+                    .meta
+                    .token_id
+                    .clone()
+                    .unwrap_or("".to_string()),
+                created_at: None,
+                updated_at: naive_now(),
+                fetcher: DataFetcher::RelationService,
+                expired_at: None,
+            };
+
+            let resolve: Resolve = Resolve {
+                uuid: Uuid::new_v4(),
+                source: DataSource::UnstoppableDomains,
+                system: DomainNameSystem::UnstoppableDomains,
+                name: item.id.clone(),
+                fetcher: DataFetcher::RelationService,
+                updated_at: naive_now(),
+            };
+
+            if item.attributes.meta.reverse {
+                // reverse = true
+                // 'reverse' resolution maps from an address back to a name.
+                let reverse: Resolve = Resolve {
+                    uuid: Uuid::new_v4(),
+                    source: DataSource::UnstoppableDomains,
+                    system: DomainNameSystem::UnstoppableDomains,
+                    name: item.id.clone(),
+                    fetcher: DataFetcher::RelationService,
+                    updated_at: naive_now(),
+                };
+                addr.reverse = Some(true);
+                ud.reverse = Some(false);
+                let rrs = reverse.wrapper(&addr, &ud, REVERSE_RESOLVE);
+                edges.push(EdgeWrapperEnum::new_reverse_resolve(rrs));
+            }
+            edges.push(EdgeWrapperEnum::new_hyper_edge(
+                HyperEdge {}.wrapper(&hv, &addr, HYPER_EDGE),
+            ));
+            edges.push(EdgeWrapperEnum::new_hyper_edge(
+                HyperEdge {}.wrapper(&hv, &ud, HYPER_EDGE),
+            ));
+
+            let hd = hold.wrapper(&addr, &ud, HOLD_IDENTITY);
+            let rs = resolve.wrapper(&ud, &addr, RESOLVE);
+            edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+            edges.push(EdgeWrapperEnum::new_resolve(rs));
+        }
+
+        if result.meta.has_more {
+            next = result.meta.next;
+        } else {
+            break;
+        }
+    }
+    Ok((vec![], edges))
+}
+
+async fn batch_fetch_by_handle(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+    let name = target.identity()?;
+    let result = fetch_owner(&name).await?;
+    if result.meta.owner.is_none() {
+        warn!("UnstoppableDomains target {} | No Result", target);
+        return Ok((vec![], vec![]));
+    }
+
+    if result.meta.owner.clone().unwrap().to_lowercase() == UNKNOWN_OWNER {
+        warn!("UnstoppableDomains owner is zero address {}", target);
+        return Ok((vec![], vec![]));
+    }
+
+    let mut next_targets = TargetProcessedList::new();
+    let mut edges = EdgeList::new();
+    let hv = IdentitiesGraph::default();
+
+    let mut addr: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Ethereum,
+        identity: result.meta.owner.clone().unwrap().to_lowercase(),
+        uid: None,
+        created_at: None,
+        display_name: None,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
+    };
+
+    let mut ud: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::UnstoppableDomains,
+        identity: result.meta.domain.clone(),
+        uid: None,
+        created_at: None,
+        display_name: Some(result.meta.domain.clone()),
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
+    };
+
+    let hold: Hold = Hold {
+        uuid: Uuid::new_v4(),
+        source: DataSource::UnstoppableDomains,
+        transaction: None,
+        id: result.meta.token_id.unwrap_or("".to_string()),
+        created_at: None,
+        updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
+        expired_at: None,
+    };
+
+    let resolve: Resolve = Resolve {
+        uuid: Uuid::new_v4(),
+        source: DataSource::UnstoppableDomains,
+        system: DomainNameSystem::UnstoppableDomains,
+        name: result.meta.domain.clone(),
+        fetcher: DataFetcher::RelationService,
+        updated_at: naive_now(),
+    };
+
+    if result.meta.reverse {
+        // reverse = true
+        // 'reverse' resolution maps from an address back to a name.
+        let reverse: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::UnstoppableDomains,
+            system: DomainNameSystem::UnstoppableDomains,
+            name: result.meta.domain.clone(),
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+        addr.reverse = Some(true);
+        ud.reverse = Some(true);
+        let rrs = reverse.wrapper(&addr, &ud, REVERSE_RESOLVE);
+        edges.push(EdgeWrapperEnum::new_reverse_resolve(rrs));
+    }
+
+    edges.push(EdgeWrapperEnum::new_hyper_edge(
+        HyperEdge {}.wrapper(&hv, &addr, HYPER_EDGE),
+    ));
+    edges.push(EdgeWrapperEnum::new_hyper_edge(
+        HyperEdge {}.wrapper(&hv, &ud, HYPER_EDGE),
+    ));
+
+    let hd = hold.wrapper(&addr, &ud, HOLD_IDENTITY);
+    let rs = resolve.wrapper(&ud, &addr, RESOLVE);
+    edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+    edges.push(EdgeWrapperEnum::new_resolve(rs));
+
+    next_targets.push(Target::Identity(
+        Platform::Ethereum,
+        result.meta.owner.clone().unwrap().to_lowercase(),
+    ));
+
+    Ok((next_targets, edges))
 }
 
 async fn fetch_connections_by_platform_identity(
