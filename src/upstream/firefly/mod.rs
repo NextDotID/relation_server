@@ -2,21 +2,14 @@
 mod tests;
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::edge::{Edge, Hold, Proof, Resolve, Wrapper};
-use crate::tigergraph::edge::{
-    HOLD_CONTRACT, HOLD_IDENTITY, PROOF_EDGE, PROOF_REVERSE_EDGE, RESOLVE, RESOLVE_CONTRACT,
-    REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT,
-};
-use crate::tigergraph::upsert::create_identity_to_identity_proof_two_way_binding;
-use crate::tigergraph::vertex::{Contract, Identity};
-use crate::tigergraph::{BatchEdges, EdgeWrapperEnum, UpsertGraph};
+use crate::tigergraph::edge::{HyperEdge, Proof, Wrapper};
+use crate::tigergraph::edge::{HYPER_EDGE, PROOF_EDGE, PROOF_REVERSE_EDGE};
+use crate::tigergraph::vertex::{IdentitiesGraph, Identity};
+use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
-    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform,
-    ProofLevel, TargetProcessedList,
+    DataFetcher, DataSource, Fetcher, Platform, ProofLevel, TargetProcessedList,
 };
-use crate::util::{
-    make_client, make_http_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive,
-};
+use crate::util::{make_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive};
 
 use async_trait::async_trait;
 use http::uri::InvalidUri;
@@ -24,7 +17,7 @@ use http::StatusCode;
 use hyper::{Body, Method, Request};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 use uuid::Uuid;
 
 use super::Target;
@@ -55,10 +48,17 @@ impl Fetcher for Firefly {
         if !Self::can_fetch(target) {
             return Ok(vec![]);
         }
+        Ok(vec![])
+    }
+
+    async fn batch_fetch(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+        if !Self::can_fetch(target) {
+            return Ok((vec![], vec![]));
+        }
 
         match target {
             Target::Identity(platform, identity) => {
-                fetch_connections_by_platform_identity(platform, identity).await
+                batch_fetch_connections(platform, identity).await
             }
             Target::NFT(_, _, _, _) => todo!(),
         }
@@ -73,17 +73,19 @@ impl Fetcher for Firefly {
     }
 }
 
-async fn fetch_connections_by_platform_identity(
+async fn batch_fetch_connections(
     platform: &Platform,
     identity: &str,
-) -> Result<TargetProcessedList, Error> {
-    let cli = make_http_client();
+) -> Result<(TargetProcessedList, EdgeList), Error> {
     let records = search_records(platform, identity).await?;
     if records.is_empty() {
         debug!("Aggregation search result is empty");
+        return Ok((vec![], vec![]));
     }
+    debug!("Aggregation search records found {}.", records.len(),);
     let mut next_targets: Vec<Target> = Vec::new();
-    let mut proofs: Vec<EdgeWrapperEnum> = Vec::new();
+    let mut edges: Vec<EdgeWrapperEnum> = Vec::new();
+    let hv = IdentitiesGraph::default();
 
     for (from_idx, from_v) in records.iter().enumerate() {
         let mut data_source = DataSource::Firefly;
@@ -119,7 +121,6 @@ async fn fetch_connections_by_platform_identity(
             if to_idx >= from_idx {
                 continue;
             }
-            info!("{}, {}", from_idx, to_idx);
             let to_update_naive = timestamp_to_naive(to_v.update_time, 0);
             let to_platform =
                 Platform::from_str(to_v.platform.as_str()).unwrap_or(Platform::Unknown);
@@ -141,6 +142,14 @@ async fn fetch_connections_by_platform_identity(
                 reverse: Some(false),
             };
 
+            // add identity connected to hyper vertex
+            edges.push(EdgeWrapperEnum::new_hyper_edge(
+                HyperEdge {}.wrapper(&hv, &from, HYPER_EDGE),
+            ));
+            edges.push(EdgeWrapperEnum::new_hyper_edge(
+                HyperEdge {}.wrapper(&hv, &to, HYPER_EDGE),
+            ));
+
             let proof_forward = Proof {
                 uuid: Uuid::new_v4(),
                 source: data_source,
@@ -160,56 +169,16 @@ async fn fetch_connections_by_platform_identity(
                 updated_at: naive_now(),
                 fetcher: DataFetcher::DataMgrService,
             };
-            let hold: Hold = Hold {
-                uuid: Uuid::new_v4(),
-                source: data_source,
-                transaction: None,
-                id: from_v.account_id.clone(),
-                created_at: None,
-                updated_at: naive_now(),
-                fetcher: DataFetcher::DataMgrService,
-                expired_at: None,
-            };
-
-            let resolve: Resolve = Resolve {
-                uuid: Uuid::new_v4(),
-                source: data_source,
-                system: DomainNameSystem::Genome,
-                name: from_v.account_id.clone(),
-                fetcher: DataFetcher::DataMgrService,
-                updated_at: naive_now(),
-            };
-
-            let contract = Contract {
-                uuid: Uuid::new_v4(),
-                category: ContractCategory::GNS,
-                address: ContractCategory::GNS.default_contract_address().unwrap(),
-                chain: Chain::Gnosis,
-                symbol: Some("GNS".to_string()),
-                updated_at: naive_now(),
-            };
 
             let pf = proof_forward.wrapper(&from, &to, PROOF_EDGE);
             let pb = proof_backward.wrapper(&to, &from, PROOF_REVERSE_EDGE);
-            let hd = hold.wrapper(&from, &to, HOLD_IDENTITY);
-            let hdc = hold.wrapper(&from, &contract, HOLD_CONTRACT);
-            let rsc = resolve.wrapper(&contract, &to, REVERSE_RESOLVE_CONTRACT);
 
-            proofs.push(EdgeWrapperEnum::new_proof_forward(pf));
-            proofs.push(EdgeWrapperEnum::new_proof_backward(pb));
-            proofs.push(EdgeWrapperEnum::new_hold_identity(hd));
-            // proofs.push(EdgeWrapperEnum::new_hold_contract(hdc));
-            // proofs.push(EdgeWrapperEnum::new_resolve_contract(rsc));
+            edges.push(EdgeWrapperEnum::new_proof_forward(pf));
+            edges.push(EdgeWrapperEnum::new_proof_backward(pb));
         }
     }
-    let json_raw = serde_json::to_string(&proofs).map_err(|err| Error::JSONParseError(err))?;
-    info!("batch insert proofs: {}\n\n", json_raw);
-    let edges: BatchEdges = BatchEdges(proofs);
-    let graph: UpsertGraph = edges.into();
-    let json_raw_2 = serde_json::to_string(&graph).map_err(|err| Error::JSONParseError(err))?;
-    info!("batch insert proofs format: {}", json_raw_2);
 
-    Ok(next_targets)
+    Ok((next_targets, edges))
 }
 
 async fn search_records(
@@ -263,7 +232,6 @@ async fn search_records(
                 ));
             }
             let return_data: Vec<AggregationRecord> = result.data.map_or(vec![], |res| res);
-            debug!("Aggregation search records found {}.", return_data.len(),);
             return_data
         }
         Err(err) => {
