@@ -53,8 +53,16 @@ pub async fn batch_fetch_by_username(
     let mut edges = EdgeList::new();
     let hv = IdentitiesGraph::default();
     let user = user_by_username(username).await?;
+    if user.is_none() {
+        return Ok((vec![], vec![]));
+    }
+    let user = user.unwrap();
     let fid = user.fid;
     let verifications = get_verifications(fid).await?;
+    if verifications.is_none() {
+        return Ok((vec![], vec![]));
+    }
+    let verifications = verifications.unwrap();
     // isolated vertex
     if verifications.is_empty() {
         let isolated_farcaster: Identity = Identity {
@@ -159,6 +167,14 @@ pub async fn batch_fetch_by_signer(
 
     let fid = user.fid;
     let verifications = get_verifications(fid).await?;
+    if verifications.is_none() {
+        return Ok((vec![], vec![]));
+    }
+    let verifications = verifications.unwrap();
+    if verifications.is_empty() {
+        return Ok((vec![], vec![]));
+    }
+
     for verification in verifications.iter() {
         let protocol: Platform = verification.protocol.parse()?;
         let mut verification_address = verification.address.clone();
@@ -229,8 +245,16 @@ pub async fn fetch_by_username(
 ) -> Result<TargetProcessedList, Error> {
     let cli = make_http_client();
     let user = user_by_username(username).await?;
+    if user.is_none() {
+        return Ok(vec![]);
+    }
+    let user = user.unwrap();
     let fid = user.fid;
     let verifications = get_verifications(fid).await?;
+    if verifications.is_none() {
+        return Ok(vec![]);
+    }
+    let verifications = verifications.unwrap();
     // isolated vertex
     if verifications.is_empty() {
         let u: Identity = Identity {
@@ -275,6 +299,10 @@ pub async fn fetch_by_signer(
     let user = user.unwrap();
     let fid = user.fid;
     let verifications = get_verifications(fid).await?;
+    if verifications.is_none() {
+        return Ok(vec![]);
+    }
+    let verifications = verifications.unwrap();
     for verification in verifications.iter() {
         let target = save_verifications(&cli, &user, verification).await?;
         targets.push(target);
@@ -338,18 +366,14 @@ async fn save_verifications(
 
 // {"errors":[{"message":"No FID associated with username checkyou"}]}
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct WarpcastError {
-    pub errors: Vec<Message>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Message {
     pub message: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UserProfileResponse {
-    pub result: UserProfileResult,
+    pub errors: Option<Vec<Message>>,
+    pub result: Option<UserProfileResult>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -399,7 +423,8 @@ pub struct Location {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct VerificationResponse {
-    pub result: VerificationResult,
+    pub errors: Option<Vec<Message>>,
+    pub result: Option<VerificationResult>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -417,7 +442,7 @@ pub struct Verification {
     pub protocol: String,
 }
 
-async fn user_by_username(username: &str) -> Result<User, Error> {
+async fn user_by_username(username: &str) -> Result<Option<User>, Error> {
     let client = make_client();
     let uri: http::Uri = format!(
         "{}/v2/user-by-username?username={}",
@@ -457,19 +482,29 @@ async fn user_by_username(username: &str) -> Result<User, Error> {
         })?;
 
     let result = match parse_body::<UserProfileResponse>(&mut resp).await {
-        Ok(r) => r,
-        Err(_) => {
-            let w_err = parse_body::<WarpcastError>(&mut resp).await?;
-            let err_message = format!(
-                "Warpcast fetch error| failed to fetch user-by-username?username={}, message: {:?}",
-                username, w_err
-            );
-            error!(err_message);
-            return Err(Error::ManualHttpClientError(err_message));
+        Ok(r) => match r.errors {
+            Some(errors) => {
+                let err_message = format!(
+                    "Warpcast fetch error| failed to fetch user-by-username?username={}, message: {:?}",
+                    username, errors
+                );
+                error!(err_message);
+                None
+            }
+            None => match r.result {
+                None => None,
+                Some(res) => Some(res.user),
+            },
+        },
+        Err(err) => {
+            return Err(Error::ManualHttpClientError(format!(
+                "Warpcast fetch error | parse_body error: {}",
+                err
+            )));
         }
     };
 
-    Ok(result.result.user)
+    Ok(result)
 }
 
 async fn user_by_verification(address: &str) -> Result<Option<User>, Error> {
@@ -524,21 +559,31 @@ async fn user_by_verification(address: &str) -> Result<Option<User>, Error> {
         })?;
 
     let result = match parse_body::<UserProfileResponse>(&mut resp).await {
-        Ok(r) => r,
-        Err(_) => {
-            let w_err = parse_body::<WarpcastError>(&mut resp).await?;
-            let err_message = format!(
-                "Warpcast fetch error| failed to fetch user-by-verification?address={}, message: {:?}",
-                address, w_err
-            );
-            error!(err_message);
-            return Err(Error::ManualHttpClientError(err_message));
+        Ok(r) => match r.errors {
+            Some(errors) => {
+                let err_message = format!(
+                    "Warpcast fetch error| failed to fetch user-by-verification?address={}, message: {:?}",
+                    address, errors
+                );
+                error!(err_message);
+                None
+            }
+            None => match r.result {
+                None => None,
+                Some(res) => Some(res.user),
+            },
+        },
+        Err(err) => {
+            return Err(Error::ManualHttpClientError(format!(
+                "Warpcast fetch error | parse_body error: {}",
+                err
+            )));
         }
     };
-    Ok(Some(result.result.user))
+    Ok(result)
 }
 
-async fn get_verifications(fid: i64) -> Result<Vec<Verification>, Error> {
+async fn get_verifications(fid: i64) -> Result<Option<Vec<Verification>>, Error> {
     let client = make_client();
     let uri: http::Uri = format!(
         "{}/v2/verifications?fid={}",
@@ -578,16 +623,26 @@ async fn get_verifications(fid: i64) -> Result<Vec<Verification>, Error> {
         })?;
 
     let result = match parse_body::<VerificationResponse>(&mut resp).await {
-        Ok(r) => r,
-        Err(_) => {
-            let w_err = parse_body::<WarpcastError>(&mut resp).await?;
-            let err_message = format!(
-                "Warpcast fetch error| failed to fetch verifications?fid={}, message: {:?}",
-                fid, w_err
-            );
-            error!(err_message);
-            return Err(Error::ManualHttpClientError(err_message));
+        Ok(r) => match r.errors {
+            Some(errors) => {
+                let err_message = format!(
+                    "Warpcast fetch error| failed to fetch verifications?fid={}, message: {:?}",
+                    fid, errors
+                );
+                error!(err_message);
+                None
+            }
+            None => match r.result {
+                None => None,
+                Some(res) => Some(res.verifications),
+            },
+        },
+        Err(err) => {
+            return Err(Error::ManualHttpClientError(format!(
+                "Warpcast fetch error | parse_body error: {}",
+                err
+            )));
         }
     };
-    Ok(result.result.verifications)
+    Ok(result)
 }
