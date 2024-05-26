@@ -2,11 +2,13 @@
 mod tests;
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::edge::{Hold, HyperEdge, Resolve, Wrapper};
+use crate::tigergraph::edge::{HOLD_IDENTITY, HYPER_EDGE, RESOLVE, REVERSE_RESOLVE};
 use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
-use crate::tigergraph::vertex::Identity;
+use crate::tigergraph::vertex::{IdentitiesGraph, Identity};
+use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
     DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
 };
@@ -38,6 +40,22 @@ impl Fetcher for DotBit {
         }
     }
 
+    async fn fetch_and_save(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+        if !Self::can_fetch(target) {
+            return Ok((vec![], vec![]));
+        }
+
+        match target.platform()? {
+            Platform::Dotbit => batch_fetch_by_handle(target).await,
+            Platform::Ethereum => batch_fetch_by_wallet(target).await,
+            Platform::CKB => batch_fetch_by_wallet(target).await,
+            Platform::Tron => batch_fetch_by_wallet(target).await,
+            Platform::Polygon => batch_fetch_by_wallet(target).await,
+            Platform::BNBSmartChain => batch_fetch_by_wallet(target).await,
+            _ => Ok((vec![], vec![])),
+        }
+    }
+
     fn can_fetch(target: &Target) -> bool {
         target.in_platform_supported(vec![
             Platform::Dotbit,
@@ -51,12 +69,12 @@ impl Fetcher for DotBit {
 }
 
 /// API docs https://github.com/dotbitHQ/das-account-indexer/blob/main/API.md
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AccInfoRequestParams {
     pub account: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AccInfoRequest {
     pub jsonrpc: String,
     pub id: i32,
@@ -64,13 +82,13 @@ pub struct AccInfoRequest {
     pub params: Vec<AccInfoRequestParams>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OutPoint {
     pub tx_hash: String,
     pub index: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AccountInfo {
     pub account: String,
     pub account_alias: Option<String>,
@@ -82,41 +100,41 @@ pub struct AccountInfo {
     pub display_name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AccountInfoData {
     pub out_point: Option<OutPoint>,
     pub account_info: Option<AccountInfo>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AccountInfoResult {
     pub errno: Option<i32>,
     pub errmsg: Option<String>,
     pub data: Option<AccountInfoData>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AccountInfoResponse {
     pub id: Option<i32>,
     pub jsonrpc: String,
     pub result: AccountInfoResult,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RequestKeyInfo {
     pub coin_type: String,
     pub chain_id: String,
     pub key: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RequestTypeKeyInfoParams {
     #[serde(rename = "type")]
     pub req_type: String,
     pub key_info: RequestKeyInfo,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ReverseRecordRequest {
     pub jsonrpc: String,
     pub id: i32,
@@ -124,7 +142,7 @@ pub struct ReverseRecordRequest {
     pub params: Vec<RequestTypeKeyInfoParams>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AccountItem {
     pub account: String,
     pub account_alias: Option<String>,
@@ -132,33 +150,33 @@ pub struct AccountItem {
     pub expired_at: Option<i64>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ReverseResult {
     pub errno: Option<i32>,
     pub errmsg: Option<String>,
     pub data: Option<AccountItem>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ReverseResponse {
     pub id: Option<i32>,
     pub jsonrpc: String,
     pub result: ReverseResult,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AccountListData {
     pub account_list: Vec<AccountItem>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AccountListResult {
     pub errno: Option<i32>,
     pub errmsg: Option<String>,
     pub data: Option<AccountListData>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AccountListResponse {
     pub id: Option<i32>,
     pub jsonrpc: String,
@@ -166,6 +184,348 @@ pub struct AccountListResponse {
 }
 
 const UNKNOWN_OWNER: &str = "0x0000000000000000000000000000000000000000";
+
+async fn query_by_handle(_platform: &Platform, name: &str) -> Result<AccountInfoData, Error> {
+    let request_acc = AccInfoRequestParams {
+        account: name.to_string(),
+    };
+    let params = AccInfoRequest {
+        jsonrpc: "2.0".to_string(),
+        id: 1,
+        method: "das_accountInfo".to_string(),
+        params: vec![request_acc],
+    };
+    let json_params = serde_json::to_vec(&params)?;
+
+    let client = make_client();
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri(C.upstream.dotbit_service.url.clone())
+        .body(Body::from(json_params))
+        .map_err(|_err| Error::ParamError(format!("Dotbit Build Request Error {}", _err)))?;
+
+    let mut result = request_with_timeout(&client, req, Some(std::time::Duration::from_secs(30)))
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "Dotbit fetch | das_accountInfo error: {:?}",
+                err.to_string()
+            ))
+        })?;
+
+    let resp: AccountInfoResponse = parse_body(&mut result).await?;
+    if resp.result.errno.map_or(false, |e| e != 0) {
+        warn!("fail to fetch the result from .bit, resp {:?}", resp);
+        return Err(Error::NoResult);
+    }
+
+    let info = resp.result.data.unwrap();
+    let account_info = info.clone().account_info.unwrap();
+    // tricky way to remove the unexpected case...
+    // will be removed after confirmied with .bit team how to define its a .bit NFT on Ethereum
+    // https://talk.did.id/t/convert-your-bit-to-nft-on-ethereum-now/481
+    if account_info.owner_key == UNKNOWN_OWNER {
+        warn!(".bit profile owner is zero address");
+        return Err(Error::NoResult);
+    }
+
+    let account_platform: Platform = account_info.owner_algorithm_id.into();
+    if account_platform == Platform::Unknown {
+        let warn_message = format!(
+            ".bit profile owner_algorithm_id(value={}) map to platform is Unknown",
+            account_info.owner_algorithm_id
+        );
+        warn!(warn_message);
+        return Err(Error::ParamError(warn_message));
+    }
+
+    Ok(info)
+}
+
+async fn query_by_wallet(platform: &Platform, address: &str) -> Result<Vec<AccountItem>, Error> {
+    // das_accountList
+    let coin_type: CoinType = platform.clone().into();
+    if coin_type == CoinType::Unknown {
+        return Ok(vec![]);
+    }
+    let request_params = get_req_params(&coin_type, address);
+    let params = ReverseRecordRequest {
+        jsonrpc: "2.0".to_string(),
+        id: 1,
+        method: "das_accountList".to_string(),
+        params: vec![request_params],
+    };
+    let json_params = serde_json::to_vec(&params)?;
+
+    let client = make_client();
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri(C.upstream.dotbit_service.url.clone())
+        .body(Body::from(json_params))
+        .map_err(|_err| Error::ParamError(format!("Dotbit Build Request Error {}", _err)))?;
+
+    let mut result = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "Dotbit fetch | das_accountList error: {:?}",
+                err.to_string()
+            ))
+        })?;
+
+    let resp: AccountListResponse = parse_body(&mut result).await?;
+    if resp.result.errno.map_or(false, |e| e != 0) {
+        warn!("fail to fetch the result from .bit, resp {:?}", resp);
+        return Err(Error::NoResult);
+    }
+    if resp.result.data.is_none() {
+        warn!("fail to fetch the result from .bit, resp {:?}", resp);
+        return Err(Error::NoResult);
+    }
+
+    Ok(resp.result.data.unwrap().account_list)
+}
+
+async fn query_reverse_record(platform: &Platform, identity: &str) -> Result<AccountItem, Error> {
+    let coin_type: CoinType = platform.clone().into();
+    if coin_type == CoinType::Unknown {
+        return Err(Error::ParamError(format!(
+            "platform({}) convert to dotbit coin_type: unknown",
+            platform.to_string()
+        )));
+    }
+    // fetch addr's reverse record: das_reverseRecord
+    let request_params = get_req_params(&coin_type, identity);
+    let params = ReverseRecordRequest {
+        jsonrpc: "2.0".to_string(),
+        id: 1,
+        method: "das_reverseRecord".to_string(),
+        params: vec![request_params],
+    };
+    let json_params = serde_json::to_vec(&params)?;
+
+    let client = make_client();
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri(C.upstream.dotbit_service.url.clone())
+        .body(Body::from(json_params))
+        .map_err(|_err| Error::ParamError(format!("Dotbit Build Request Error {}", _err)))?;
+
+    let mut result = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "Dotbit fetch | das_reverseRecord error: {:?}",
+                err.to_string()
+            ))
+        })?;
+    let resp: ReverseResponse = parse_body(&mut result).await?;
+    if resp.result.errno.map_or(false, |e| e != 0) {
+        warn!("fail to fetch the result from .bit, resp {:?}", resp);
+        return Err(Error::NoResult);
+    }
+    if resp.result.data.is_none() || resp.result.data.as_ref().unwrap().account.len() == 0 {
+        warn!("das_reverseRecord result is empty, resp {:?}", resp);
+        return Err(Error::NoResult);
+    }
+
+    Ok(resp.result.data.unwrap())
+}
+
+async fn batch_fetch_by_wallet(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+    let platform = target.platform()?;
+    let identity = target.identity()?;
+
+    // fetch addr's hold dotbit records
+    let result = query_by_wallet(&platform, &identity).await?;
+    // fetch addr's reverse record
+
+    let default_dotbit = match query_reverse_record(&platform, &identity).await {
+        Ok(record) => record.account,
+        Err(_) => "".to_string(),
+    };
+    let reverse_flag = !default_dotbit.is_empty(); //  if default_dotbit is an empty string, reverse = false
+
+    let mut edges = EdgeList::new();
+    let hv = IdentitiesGraph::default();
+
+    let mut wallet: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: platform.clone(),
+        identity: identity.to_string().to_lowercase().clone(),
+        uid: None,
+        created_at: None,
+        display_name: None,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(reverse_flag),
+    };
+
+    for i in result.into_iter() {
+        let create_at_naive = option_timestamp_to_naive(i.registered_at, 0);
+        let expired_at_naive = option_timestamp_to_naive(i.expired_at, 0);
+        let domain_name = i.account.to_string();
+        let mut dotbit: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Dotbit,
+            identity: domain_name.clone(),
+            uid: None,
+            created_at: create_at_naive,
+            display_name: Some(domain_name.clone()),
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: expired_at_naive,
+            reverse: Some(false),
+        };
+
+        let hold: Hold = Hold {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Dotbit,
+            transaction: None,
+            id: "".to_string(),
+            created_at: create_at_naive,
+            updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
+            expired_at: expired_at_naive,
+        };
+
+        let resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Dotbit,
+            system: DomainNameSystem::DotBit,
+            name: domain_name.clone(),
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+
+        if reverse_flag && domain_name == default_dotbit {
+            let reverse: Resolve = Resolve {
+                uuid: Uuid::new_v4(),
+                source: DataSource::Dotbit,
+                system: DomainNameSystem::DotBit,
+                name: domain_name.clone(),
+                fetcher: DataFetcher::RelationService,
+                updated_at: naive_now(),
+            };
+            dotbit.reverse = Some(true);
+            wallet.reverse = Some(true);
+            let rrs = reverse.wrapper(&wallet, &dotbit, REVERSE_RESOLVE);
+            edges.push(EdgeWrapperEnum::new_reverse_resolve(rrs));
+        }
+
+        edges.push(EdgeWrapperEnum::new_hyper_edge(
+            HyperEdge {}.wrapper(&hv, &wallet, HYPER_EDGE),
+        ));
+        edges.push(EdgeWrapperEnum::new_hyper_edge(
+            HyperEdge {}.wrapper(&hv, &dotbit, HYPER_EDGE),
+        ));
+
+        // hold record
+        let hd = hold.wrapper(&wallet, &dotbit, HOLD_IDENTITY);
+        // 'regular' resolution involves mapping from a name to an address.
+        let rs = resolve.wrapper(&dotbit, &wallet, RESOLVE);
+        edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+        edges.push(EdgeWrapperEnum::new_resolve(rs));
+    }
+
+    // after fetch by wallet, nothing return for next target
+    Ok((vec![], edges))
+}
+
+async fn batch_fetch_by_handle(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+    let platform = target.platform()?;
+    let identity = target.identity()?;
+
+    let info = query_by_handle(&platform, &identity).await?;
+    let account_info = info.account_info.unwrap();
+    let out_point = info.out_point.unwrap();
+
+    let account_addr = account_info.owner_key.to_lowercase();
+    let account_platform: Platform = account_info.owner_algorithm_id.into();
+
+    let mut next_targets = TargetProcessedList::new();
+    next_targets.push(Target::Identity(
+        account_platform.clone(),
+        account_addr.clone(),
+    ));
+
+    let mut edges = EdgeList::new();
+    let hv = IdentitiesGraph::default();
+
+    let created_at_naive = timestamp_to_naive(account_info.create_at_unix, 0);
+    let expired_at_naive = timestamp_to_naive(account_info.expired_at_unix, 0);
+
+    let wallet: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: account_platform,
+        identity: account_addr.clone(),
+        uid: None,
+        created_at: created_at_naive,
+        display_name: None,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
+    };
+
+    let dotbit: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Dotbit,
+        identity: identity.to_string(),
+        uid: None,
+        created_at: created_at_naive,
+        display_name: Some(identity.to_string()),
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+        expired_at: expired_at_naive,
+        reverse: Some(false),
+    };
+
+    let hold: Hold = Hold {
+        uuid: Uuid::new_v4(),
+        source: DataSource::Dotbit,
+        transaction: Some(out_point.tx_hash),
+        id: out_point.index.to_string(),
+        created_at: created_at_naive,
+        updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
+        expired_at: expired_at_naive,
+    };
+
+    let resolve: Resolve = Resolve {
+        uuid: Uuid::new_v4(),
+        source: DataSource::Dotbit,
+        system: DomainNameSystem::DotBit,
+        name: identity.to_string(),
+        fetcher: DataFetcher::RelationService,
+        updated_at: naive_now(),
+    };
+
+    edges.push(EdgeWrapperEnum::new_hyper_edge(
+        HyperEdge {}.wrapper(&hv, &wallet, HYPER_EDGE),
+    ));
+    edges.push(EdgeWrapperEnum::new_hyper_edge(
+        HyperEdge {}.wrapper(&hv, &dotbit, HYPER_EDGE),
+    ));
+
+    // hold record
+    let hd = hold.wrapper(&wallet, &dotbit, HOLD_IDENTITY);
+    // 'regular' resolution involves mapping from a name to an address.
+    let rs = resolve.wrapper(&dotbit, &wallet, RESOLVE);
+    edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+    edges.push(EdgeWrapperEnum::new_resolve(rs));
+
+    Ok((next_targets, edges))
+}
 
 async fn fetch_connections_by_platform_identity(
     platform: &Platform,
