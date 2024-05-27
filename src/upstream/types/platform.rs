@@ -74,6 +74,12 @@ pub enum Platform {
     #[graphql(name = "facebook")]
     Facebook,
 
+    /// Instagram
+    #[strum(serialize = "instagram")]
+    #[serde(rename = "instagram")]
+    #[graphql(name = "instagram")]
+    Instagram,
+
     /// Mastodon maintained by Sujitech
     #[strum(serialize = "mstdnjp")]
     #[serde(rename = "mstdnjp")]
@@ -206,6 +212,7 @@ impl From<Platform> for DomainNameSystem {
             Platform::Crossbell => DomainNameSystem::SpaceId,
             Platform::ENS => DomainNameSystem::ENS,
             Platform::SNS => DomainNameSystem::SNS,
+            Platform::Genome => DomainNameSystem::Genome,
             _ => DomainNameSystem::Unknown,
         }
     }
