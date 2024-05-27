@@ -280,7 +280,7 @@ impl Transfer for Identity {
         attributes_map
     }
 
-    fn to_json_value(&self) -> Value {
+    fn to_json_value(&self) -> Map<String, Value> {
         let mut map = Map::new();
         map.insert("id".to_string(), json!(self.primary_key()));
         map.insert(
@@ -321,7 +321,7 @@ impl Transfer for Identity {
             "reverse".to_string(),
             self.reverse.map_or(json!(false), |reverse| json!(reverse)),
         );
-        Value::Object(map)
+        map
     }
 }
 

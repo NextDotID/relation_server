@@ -17,6 +17,7 @@ use http::uri::InvalidUri;
 use hyper::Method;
 use hyper::{client::HttpConnector, Body, Client};
 use serde::{Deserialize, Serialize};
+use serde_json::value::Value;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use tracing::{error, trace};
@@ -286,12 +287,12 @@ where
         let from_record = VertexRecord::from_with_json_value(
             warpper.source.vertex_type(),
             warpper.source.primary_key(),
-            warpper.source.to_json_value(),
+            Value::Object(warpper.source.to_json_value()),
         );
         let to_record = VertexRecord::from_with_json_value(
             warpper.target.vertex_type(),
             warpper.target.primary_key(),
-            warpper.target.to_json_value(),
+            Value::Object(warpper.target.to_json_value()),
         );
         let from_str =
             serde_json::to_string(&from_record).map_err(|err| Error::JSONParseError(err))?;
@@ -319,7 +320,7 @@ where
         let vertex_record = VertexRecord::from_with_json_value(
             warpper.vertex.vertex_type(),
             warpper.vertex.primary_key(),
-            warpper.vertex.to_json_value(),
+            Value::Object(warpper.vertex.to_json_value()),
         );
         let vertex_str =
             serde_json::to_string(&vertex_record).map_err(|err| Error::JSONParseError(err))?;

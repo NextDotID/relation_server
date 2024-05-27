@@ -132,14 +132,14 @@ impl Transfer for IdentitiesGraph {
         attributes_map
     }
 
-    fn to_json_value(&self) -> Value {
+    fn to_json_value(&self) -> Map<String, Value> {
         let mut map = Map::new();
         map.insert("id".to_string(), json!(self.id));
         map.insert(
             "updated_nanosecond".to_string(),
             json!(self.updated_nanosecond),
         );
-        Value::Object(map)
+        map
     }
 }
 

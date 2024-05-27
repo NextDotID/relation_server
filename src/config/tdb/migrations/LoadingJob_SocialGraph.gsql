@@ -2,6 +2,61 @@ CREATE GRAPH SocialGraph (Identities, Proof_Forward, Proof_Backward, Contracts, 
 
 USE GRAPH SocialGraph
 
+CREATE OR REPLACE QUERY insert_contract_connection(STRING edges_str) FOR GRAPH SocialGraph SYNTAX v2 {
+  JSONARRAY edges = parse_json_array(edges_str);
+  SumAccum<INT> @@created_edges;
+  INT array_size = edges.size();
+  FOREACH idx IN RANGE[0, array_size - 1] DO
+    JSONOBJECT edge_obj = edges.getJsonObject(idx);
+    STRING edge_type = edge_obj.getString("edge_type");
+    STRING from_id = edge_obj.getString("from_id");
+    STRING to_id = edge_obj.getString("to_id");
+    IF edge_type == "Hold_Contract" THEN
+      INSERT INTO Hold_Contract(FROM, TO, DISCRIMINATOR(source, transaction, id), uuid, created_at, updated_at, fetcher, expired_at)
+        VALUES (
+          from_id Identities,
+          to_id Contracts,
+          edge_obj.getString("source"),
+          edge_obj.getString("transaction"),
+          edge_obj.getString("id"),
+          edge_obj.getString("uuid"),
+          to_datetime(edge_obj.getString("created_at")),
+          now(),
+          edge_obj.getString("fetcher"),
+          to_datetime(edge_obj.getString("expired_at"))
+        );
+      @@created_edges += 1;
+    ELSE IF edge_type == "Reverse_Resolve_Contract" THEN
+      INSERT INTO Reverse_Resolve_Contract(FROM, TO, DISCRIMINATOR(source, system, name), uuid, updated_at, fetcher)
+        VALUES (
+          from_id Identities,
+          to_id Contracts,
+          edge_obj.getString("source"),
+          edge_obj.getString("system"),
+          edge_obj.getString("name"),
+          edge_obj.getString("uuid"),
+          now(),
+          edge_obj.getString("fetcher")
+        );
+      @@created_edges += 1;
+    ELSE IF edge_type == "Resolve_Contract" THEN
+      INSERT INTO Resolve_Contract(FROM, TO, DISCRIMINATOR(source, system, name), uuid, updated_at, fetcher)
+        VALUES (
+          from_id Contracts,
+          to_id Identities,
+          edge_obj.getString("source"),
+          edge_obj.getString("system"),
+          edge_obj.getString("name"),
+          edge_obj.getString("uuid"),
+          now(),
+          edge_obj.getString("fetcher")
+        );
+      @@created_edges += 1;
+    END;
+  END;
+  PRINT @@created_edges as created_edges;
+}
+
 CREATE OR REPLACE QUERY upsert_isolated_vertex(STRING vertex_str, INT updated_nanosecond) FOR GRAPH SocialGraph SYNTAX v2 {
   TYPEDEF TUPLE< INT updated_nanosecond, STRING id > MinUpdatedTimeTuple;
   JSONOBJECT from_v = parse_json_object(vertex_str);

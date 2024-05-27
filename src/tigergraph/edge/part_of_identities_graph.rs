@@ -92,9 +92,9 @@ impl Transfer for HyperEdgeRecord {
         attributes_map
     }
 
-    fn to_json_value(&self) -> Value {
+    fn to_json_value(&self) -> Map<String, Value> {
         let map = Map::new();
-        Value::Object(map)
+        map
     }
 }
 
