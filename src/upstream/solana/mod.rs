@@ -2,16 +2,18 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::edge::Hold;
-use crate::tigergraph::edge::Proof;
-use crate::tigergraph::edge::Resolve;
+use crate::tigergraph::edge::{
+    Hold, HyperEdge, Proof, Resolve, Wrapper, HOLD_CONTRACT, HOLD_IDENTITY, HYPER_EDGE, PROOF_EDGE,
+    PROOF_REVERSE_EDGE, RESOLVE, REVERSE_RESOLVE,
+};
 use crate::tigergraph::upsert::create_ens_identity_ownership;
 use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
 use crate::tigergraph::upsert::create_identity_to_identity_proof_two_way_binding;
 use crate::tigergraph::upsert::create_isolated_vertex;
-use crate::tigergraph::vertex::{Contract, Identity};
+use crate::tigergraph::vertex::{Contract, IdentitiesGraph, Identity};
+use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::ProofLevel;
 use crate::upstream::{Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem};
 use crate::util::{make_http_client, naive_now};
@@ -54,9 +56,422 @@ impl Fetcher for Solana {
         }
     }
 
+    async fn batch_fetch(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+        if !Self::can_fetch(target) {
+            return Ok((vec![], vec![]));
+        }
+
+        match target.platform()? {
+            Platform::Solana => batch_fetch_by_wallet(target).await,
+            Platform::SNS => batch_fetch_by_sns_handle(target).await,
+            Platform::Twitter => batch_fetch_by_twitter_handle(target).await,
+            _ => Ok((vec![], vec![])),
+        }
+    }
+
     fn can_fetch(target: &Target) -> bool {
         target.in_platform_supported(vec![Platform::Solana, Platform::SNS, Platform::Twitter])
     }
+}
+
+async fn batch_fetch_by_wallet(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+    let owner: String = target.identity()?;
+    let rpc_client = get_rpc_client(C.upstream.solana_rpc.rpc_url.clone());
+    let verified_owner = Pubkey::from_str(&owner)?;
+    let resolve_domains = fetch_resolve_domains(&rpc_client, &owner).await?;
+
+    let mut next_targets = TargetProcessedList::new();
+    let mut edges = EdgeList::new();
+    let hv = IdentitiesGraph::default();
+
+    let mut solana = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Solana,
+        identity: verified_owner.to_string(),
+        uid: None,
+        created_at: None,
+        display_name: None,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: Some(format!(
+            "https://www.sns.id/profile?pubkey={}&subView=Show+All",
+            owner
+        )),
+        updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
+    };
+
+    edges.push(EdgeWrapperEnum::new_hyper_edge(
+        HyperEdge {}.wrapper(&hv, &solana, HYPER_EDGE),
+    ));
+
+    if resolve_domains.is_empty() {
+        trace!(?target, "Solana resolve domains is null");
+        return Ok((vec![], edges));
+    }
+
+    let favourite_domain = fetch_register_favourite(&rpc_client, &owner).await?;
+    match favourite_domain {
+        Some(favourite_domain) => {
+            let format_sol = format_domain(&favourite_domain);
+            trace!(?target, "Favourite Domain Founded({})", format_sol);
+            solana.reverse = Some(true); // set reverse
+            solana.display_name = Some(format_sol.clone());
+            let farvourite_sns = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: Platform::SNS,
+                identity: format_sol.clone(),
+                uid: None,
+                created_at: None,
+                display_name: Some(format_sol.clone()),
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: Some(format!(
+                    "https://www.sns.id/domain?domain={}",
+                    favourite_domain
+                )),
+                updated_at: naive_now(),
+                expired_at: None,
+                reverse: Some(true),
+            };
+
+            let reverse: Resolve = Resolve {
+                uuid: Uuid::new_v4(),
+                source: DataSource::Solana,
+                system: DomainNameSystem::SNS,
+                name: format_sol.clone(),
+                fetcher: DataFetcher::RelationService,
+                updated_at: naive_now(),
+            };
+            edges.push(EdgeWrapperEnum::new_hyper_edge(HyperEdge {}.wrapper(
+                &hv,
+                &farvourite_sns,
+                HYPER_EDGE,
+            )));
+            let rr = reverse.wrapper(&solana, &farvourite_sns, REVERSE_RESOLVE);
+            edges.push(EdgeWrapperEnum::new_reverse_resolve(rr));
+        }
+        None => trace!(?target, "Favourite Domain Not Set"),
+    };
+
+    let twitter_handle = get_handle_and_registry_key(&rpc_client, &owner).await?;
+    match twitter_handle {
+        Some(twitter_handle) => {
+            let format_twitter = twitter_handle.to_lowercase();
+            let twitter = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: Platform::Twitter,
+                identity: format_twitter.clone(),
+                uid: None,
+                created_at: None,
+                display_name: Some(format_twitter.clone()),
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: None,
+                updated_at: naive_now(),
+                expired_at: None,
+                reverse: Some(false),
+            };
+
+            let proof_forward: Proof = Proof {
+                uuid: Uuid::new_v4(),
+                source: DataSource::SNS,
+                level: ProofLevel::VeryConfident,
+                record_id: None,
+                created_at: None,
+                updated_at: naive_now(),
+                fetcher: DataFetcher::RelationService,
+            };
+
+            let proof_backward: Proof = Proof {
+                uuid: Uuid::new_v4(),
+                source: DataSource::SNS,
+                level: ProofLevel::VeryConfident,
+                record_id: None,
+                created_at: None,
+                updated_at: naive_now(),
+                fetcher: DataFetcher::RelationService,
+            };
+
+            edges.push(EdgeWrapperEnum::new_hyper_edge(
+                HyperEdge {}.wrapper(&hv, &twitter, HYPER_EDGE),
+            ));
+            let pf = proof_forward.wrapper(&solana, &twitter, PROOF_EDGE);
+            let pb = proof_backward.wrapper(&twitter, &solana, PROOF_REVERSE_EDGE);
+
+            edges.push(EdgeWrapperEnum::new_proof_forward(pf));
+            edges.push(EdgeWrapperEnum::new_proof_backward(pb));
+
+            next_targets.push(Target::Identity(Platform::Twitter, format_twitter.clone()))
+        }
+        None => trace!(?target, "Twitter Record Not Set"),
+    }
+
+    trace!(
+        ?target,
+        domains = resolve_domains.len(),
+        "Solana Resolve Domains"
+    );
+    for domain in resolve_domains.iter() {
+        let format_sol_handle = format_domain(domain);
+        let sns = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::SNS,
+            identity: format_sol_handle.clone(),
+            uid: None,
+            created_at: None,
+            display_name: Some(format_sol_handle.clone()),
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: Some(format!("https://www.sns.id/domain?domain={}", domain)),
+            updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
+        };
+
+        let hold: Hold = Hold {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Solana,
+            transaction: Some("".to_string()),
+            id: format_sol_handle.clone(),
+            created_at: None,
+            updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
+            expired_at: None,
+        };
+
+        let resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Solana,
+            system: DomainNameSystem::SNS,
+            name: format_sol_handle.clone(),
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+
+        let contract = Contract {
+            uuid: Uuid::new_v4(),
+            category: ContractCategory::SNS,
+            address: ContractCategory::SNS.default_contract_address().unwrap(),
+            chain: Chain::Solana,
+            symbol: Some("SNS".to_string()),
+            updated_at: naive_now(),
+        };
+
+        edges.push(EdgeWrapperEnum::new_hyper_edge(
+            HyperEdge {}.wrapper(&hv, &sns, HYPER_EDGE),
+        ));
+
+        // hold record
+        let hd = hold.wrapper(&solana, &sns, HOLD_IDENTITY);
+        let hdc = hold.wrapper(&solana, &contract, HOLD_CONTRACT);
+        // resolve record
+        let rs = resolve.wrapper(&sns, &solana, RESOLVE);
+        edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+        edges.push(EdgeWrapperEnum::new_hold_contract(hdc));
+        edges.push(EdgeWrapperEnum::new_resolve(rs));
+    }
+
+    Ok((next_targets, edges))
+}
+
+async fn batch_fetch_by_sns_handle(
+    target: &Target,
+) -> Result<(TargetProcessedList, EdgeList), Error> {
+    let rpc_client = get_rpc_client(C.upstream.solana_rpc.rpc_url.clone());
+    let name = target.identity()?;
+    let domain = trim_domain(name.clone());
+    let owner = fetch_resolve_address(&rpc_client, &domain).await?;
+
+    let mut next_targets = TargetProcessedList::new();
+    let mut edges = EdgeList::new();
+    let hv = IdentitiesGraph::default();
+
+    match owner {
+        Some(owner) => {
+            let solana = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: Platform::Solana,
+                identity: owner.to_string(),
+                uid: None,
+                created_at: None,
+                display_name: None,
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: Some(format!(
+                    "https://www.sns.id/profile?pubkey={}&subView=Show+All",
+                    owner.to_string()
+                )),
+                updated_at: naive_now(),
+                expired_at: None,
+                reverse: Some(false),
+            };
+
+            let sns = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: Platform::SNS,
+                identity: name.clone(),
+                uid: None,
+                created_at: None,
+                display_name: Some(name.clone()),
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: Some(format!("https://www.sns.id/domain?domain={}", name)),
+                updated_at: naive_now(),
+                expired_at: None,
+                reverse: Some(false),
+            };
+
+            let hold: Hold = Hold {
+                uuid: Uuid::new_v4(),
+                source: DataSource::Solana,
+                transaction: Some("".to_string()),
+                id: name.clone(),
+                created_at: None,
+                updated_at: naive_now(),
+                fetcher: DataFetcher::RelationService,
+                expired_at: None,
+            };
+
+            let resolve: Resolve = Resolve {
+                uuid: Uuid::new_v4(),
+                source: DataSource::Solana,
+                system: DomainNameSystem::SNS,
+                name: name.clone(),
+                fetcher: DataFetcher::RelationService,
+                updated_at: naive_now(),
+            };
+
+            let contract = Contract {
+                uuid: Uuid::new_v4(),
+                category: ContractCategory::SNS,
+                address: ContractCategory::SNS.default_contract_address().unwrap(),
+                chain: Chain::Solana,
+                symbol: Some("SNS".to_string()),
+                updated_at: naive_now(),
+            };
+
+            edges.push(EdgeWrapperEnum::new_hyper_edge(
+                HyperEdge {}.wrapper(&hv, &solana, HYPER_EDGE),
+            ));
+            edges.push(EdgeWrapperEnum::new_hyper_edge(
+                HyperEdge {}.wrapper(&hv, &sns, HYPER_EDGE),
+            ));
+
+            // hold record
+            let hd = hold.wrapper(&solana, &sns, HOLD_IDENTITY);
+            let hdc = hold.wrapper(&solana, &contract, HOLD_CONTRACT);
+            // resolve record
+            let rs = resolve.wrapper(&sns, &solana, RESOLVE);
+            edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+            edges.push(EdgeWrapperEnum::new_hold_contract(hdc));
+            edges.push(EdgeWrapperEnum::new_resolve(rs));
+
+            next_targets.push(Target::Identity(Platform::Solana, owner.to_string()));
+        }
+        None => trace!(?target, "Owner not found"),
+    }
+
+    Ok((next_targets, edges))
+}
+
+async fn batch_fetch_by_twitter_handle(
+    target: &Target,
+) -> Result<(TargetProcessedList, EdgeList), Error> {
+    let rpc_client = get_rpc_client(C.upstream.solana_rpc.rpc_url.clone());
+    let twitter_handle = target.identity()?;
+
+    let mut next_targets = TargetProcessedList::new();
+    let mut edges = EdgeList::new();
+    let hv = IdentitiesGraph::default();
+
+    let solana_wallet = get_twitter_registry(&rpc_client, &twitter_handle).await?;
+    match solana_wallet {
+        Some(solana_wallet) => {
+            trace!(
+                ?target,
+                "Solana Wallet Founded by Twitter({}): {}",
+                twitter_handle,
+                solana_wallet.to_string()
+            );
+
+            let solana = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: Platform::Solana,
+                identity: solana_wallet.to_string(),
+                uid: None,
+                created_at: None,
+                display_name: None,
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: Some(format!(
+                    "https://www.sns.id/profile?pubkey={}&subView=Show+All",
+                    solana_wallet.to_string()
+                )),
+                updated_at: naive_now(),
+                expired_at: None,
+                reverse: Some(false),
+            };
+
+            let format_twitter = twitter_handle.to_lowercase();
+            let twitter = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: Platform::Twitter,
+                identity: format_twitter.clone(),
+                uid: None,
+                created_at: None,
+                display_name: Some(format_twitter.clone()),
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: None,
+                updated_at: naive_now(),
+                expired_at: None,
+                reverse: Some(false),
+            };
+
+            let proof_forward: Proof = Proof {
+                uuid: Uuid::new_v4(),
+                source: DataSource::SNS,
+                level: ProofLevel::VeryConfident,
+                record_id: None,
+                created_at: None,
+                updated_at: naive_now(),
+                fetcher: DataFetcher::RelationService,
+            };
+
+            let proof_backward: Proof = Proof {
+                uuid: Uuid::new_v4(),
+                source: DataSource::SNS,
+                level: ProofLevel::VeryConfident,
+                record_id: None,
+                created_at: None,
+                updated_at: naive_now(),
+                fetcher: DataFetcher::RelationService,
+            };
+
+            edges.push(EdgeWrapperEnum::new_hyper_edge(
+                HyperEdge {}.wrapper(&hv, &solana, HYPER_EDGE),
+            ));
+
+            edges.push(EdgeWrapperEnum::new_hyper_edge(
+                HyperEdge {}.wrapper(&hv, &twitter, HYPER_EDGE),
+            ));
+            let pf = proof_forward.wrapper(&solana, &twitter, PROOF_EDGE);
+            let pb = proof_backward.wrapper(&twitter, &solana, PROOF_REVERSE_EDGE);
+
+            edges.push(EdgeWrapperEnum::new_proof_forward(pf));
+            edges.push(EdgeWrapperEnum::new_proof_backward(pb));
+
+            next_targets.push(Target::Identity(
+                Platform::Solana,
+                solana_wallet.to_string(),
+            ));
+        }
+        None => trace!(?target, "Solana Wallet Not Found"),
+    }
+
+    Ok((next_targets, edges))
 }
 
 async fn fetch_by_wallet(target: &Target) -> Result<TargetProcessedList, Error> {

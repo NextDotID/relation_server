@@ -8,6 +8,7 @@ use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::Identity;
+use crate::tigergraph::EdgeList;
 use crate::upstream::{
     DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
 };
@@ -114,6 +115,13 @@ impl Fetcher for Lens {
             Platform::Lens => fetch_by_lens_profile(target).await,
             _ => Ok(vec![]),
         }
+    }
+
+    async fn batch_fetch(_target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+        if !Self::can_fetch(target) {
+            return Ok((vec![], vec![]));
+        }
+        Ok((vec![], vec![]))
     }
 
     fn can_fetch(target: &Target) -> bool {

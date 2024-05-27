@@ -3,11 +3,14 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::edge::{
+    Hold, HyperEdge, Resolve, Wrapper, HOLD_IDENTITY, HYPER_EDGE, RESOLVE, REVERSE_RESOLVE,
+};
 use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
-use crate::tigergraph::vertex::Identity;
+use crate::tigergraph::vertex::{IdentitiesGraph, Identity};
+use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
     DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
 };
@@ -142,9 +145,313 @@ impl Fetcher for LensV2 {
         }
     }
 
+    async fn batch_fetch(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+        if !Self::can_fetch(target) {
+            return Ok((vec![], vec![]));
+        }
+
+        match target.platform()? {
+            Platform::Ethereum => batch_fetch_by_wallet(target).await,
+            Platform::Lens => batch_fetch_by_handle(target).await,
+            _ => Ok((vec![], vec![])),
+        }
+    }
+
     fn can_fetch(target: &Target) -> bool {
         target.in_platform_supported(vec![Platform::Ethereum, Platform::Lens])
     }
+}
+
+async fn query_by_handle(handle_name: &str) -> Result<Vec<Profile>, Error> {
+    let operation = ProfileQueryByHandles::build(ProfilesRequestVariables {
+        handles: Some(vec![Handle(handle_name.to_string())]),
+        owned_by: None,
+    });
+    let response = surf::post(C.upstream.lens_api.url.clone())
+        .run_graphql(operation)
+        .await;
+    if response.is_err() {
+        warn!(
+            "LensV2 {} | Failed to fetch: {}",
+            handle_name,
+            response.unwrap_err(),
+        );
+        return Ok(vec![]);
+    }
+
+    let profiles = response
+        .unwrap()
+        .data
+        .map_or(vec![], |data| data.profiles.items);
+
+    Ok(profiles)
+}
+
+async fn query_by_wallet(wallet: &str) -> Result<Vec<Profile>, Error> {
+    let operation = ProfileQueryByHandles::build(ProfilesRequestVariables {
+        handles: None,
+        owned_by: Some(vec![EvmAddress(wallet.to_string())]),
+    });
+    let response = surf::post(C.upstream.lens_api.url.clone())
+        .run_graphql(operation)
+        .await;
+
+    if response.is_err() {
+        warn!(
+            "LensV2 {} | Failed to fetch: {}",
+            wallet,
+            response.unwrap_err(),
+        );
+        return Ok(vec![]);
+    }
+    let profiles = response
+        .unwrap()
+        .data
+        .map_or(vec![], |data| data.profiles.items);
+
+    Ok(profiles)
+}
+
+async fn batch_fetch_by_handle(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+    let target_var = target.identity()?;
+    let handle_name = target_var.trim_end_matches(".lens");
+    let full_handle = format!("lens/{}", handle_name);
+    let profiles = query_by_handle(&full_handle).await?;
+    if profiles.is_empty() {
+        warn!("LensV2 target {} | No Result", target,);
+        return Ok((vec![], vec![]));
+    }
+    let lens_profile = profiles.first().unwrap().clone();
+    if lens_profile.handle.clone().is_none() {
+        warn!("LensV2 target {} | lens handle is null", target,);
+        return Ok((vec![], vec![]));
+    }
+
+    let mut next_targets = TargetProcessedList::new();
+    let hv = IdentitiesGraph::default();
+    let mut edges = EdgeList::new();
+
+    let evm_owner = lens_profile.owned_by.address.0.to_ascii_lowercase();
+    // fetch default profile id for lens-v2
+    let default_profile_id = get_default_profile_id(&evm_owner).await?;
+
+    let mut is_default = false;
+    if let Some(default_profile_id) = default_profile_id {
+        if lens_profile.id == default_profile_id {
+            trace!(
+                "LensV2 target {} | profile.id {:?} == default_profile_id {:?}",
+                target,
+                lens_profile.id,
+                default_profile_id
+            );
+            is_default = true;
+        }
+    }
+    let handle_info = lens_profile.handle.clone().unwrap();
+    let lens_handle = format!("{}.{}", handle_info.local_name, handle_info.namespace);
+    let lens_display_name = lens_profile
+        .metadata
+        .clone()
+        .map_or(None, |metadata| metadata.display_name);
+    let created_at = utc_to_naive(lens_profile.created_at.clone().0)?;
+
+    let addr: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Ethereum,
+        identity: evm_owner.clone(),
+        uid: None,
+        created_at: None,
+        display_name: None,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(is_default),
+    };
+
+    let lens: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Lens,
+        identity: lens_handle.clone(),
+        uid: Some(lens_profile.id.clone().0.to_string()),
+        created_at: Some(created_at),
+        display_name: lens_display_name,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: Some("https://hey.xyz/u/".to_owned() + &handle_info.local_name),
+        updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(is_default),
+    };
+
+    let hold: Hold = Hold {
+        uuid: Uuid::new_v4(),
+        source: DataSource::Lens,
+        transaction: Some(lens_profile.tx_hash.clone().0),
+        id: lens_profile.id.clone().0.to_string(),
+        created_at: Some(created_at),
+        updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
+        expired_at: None,
+    };
+
+    let resolve: Resolve = Resolve {
+        uuid: Uuid::new_v4(),
+        source: DataSource::Lens,
+        system: DomainNameSystem::Lens,
+        name: lens_handle.clone(),
+        fetcher: DataFetcher::RelationService,
+        updated_at: naive_now(),
+    };
+
+    if is_default {
+        // field `is_default` has been canceled in lens-v2-api
+        // It is an independent query `GetDefaultProfile` and is not returned in the profile field.
+        let reverse: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Lens,
+            system: DomainNameSystem::Lens,
+            name: lens_handle.clone(),
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+        let rrs = reverse.wrapper(&addr, &lens, REVERSE_RESOLVE);
+        edges.push(EdgeWrapperEnum::new_reverse_resolve(rrs));
+    }
+
+    edges.push(EdgeWrapperEnum::new_hyper_edge(
+        HyperEdge {}.wrapper(&hv, &addr, HYPER_EDGE),
+    ));
+    edges.push(EdgeWrapperEnum::new_hyper_edge(
+        HyperEdge {}.wrapper(&hv, &lens, HYPER_EDGE),
+    ));
+
+    let hd = hold.wrapper(&addr, &lens, HOLD_IDENTITY);
+    let rs = resolve.wrapper(&lens, &addr, RESOLVE);
+    edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+    edges.push(EdgeWrapperEnum::new_resolve(rs));
+
+    next_targets.push(Target::Identity(Platform::Ethereum, evm_owner.clone()));
+
+    Ok((next_targets, edges))
+}
+
+async fn batch_fetch_by_wallet(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+    let target_var = target.identity()?;
+    let owned_by_evm = target_var.to_lowercase();
+    let profiles = query_by_wallet(&owned_by_evm).await?;
+    if profiles.is_empty() {
+        warn!("LensV2 target {} | No Result", target,);
+        return Ok((vec![], vec![]));
+    }
+
+    // fetch default profile id for lens-v2
+    let default_profile_id = get_default_profile_id(&owned_by_evm).await?;
+    let hv = IdentitiesGraph::default();
+    let mut edges = EdgeList::new();
+
+    for lens_profile in profiles.iter() {
+        let mut is_default = false;
+        if let Some(default_profile_id) = default_profile_id.clone() {
+            if lens_profile.id == default_profile_id {
+                trace!(
+                    "LensV2 target {} | profile.id {:?} == default_profile_id {:?}",
+                    target,
+                    lens_profile.id,
+                    default_profile_id
+                );
+                is_default = true;
+            }
+        }
+        let evm_owner = lens_profile.owned_by.address.0.to_ascii_lowercase();
+        let handle_info = lens_profile.handle.clone().unwrap();
+        let lens_handle = format!("{}.{}", handle_info.local_name, handle_info.namespace);
+        let lens_display_name = lens_profile
+            .metadata
+            .clone()
+            .map_or(None, |metadata| metadata.display_name);
+        let created_at = utc_to_naive(lens_profile.created_at.clone().0)?;
+
+        let addr: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Ethereum,
+            identity: evm_owner.clone(),
+            uid: None,
+            created_at: None,
+            display_name: None,
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(is_default),
+        };
+
+        let lens: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Lens,
+            identity: lens_handle.clone(),
+            uid: Some(lens_profile.id.clone().0.to_string()),
+            created_at: Some(created_at),
+            display_name: lens_display_name,
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: Some("https://hey.xyz/u/".to_owned() + &handle_info.local_name),
+            updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(is_default),
+        };
+
+        let hold: Hold = Hold {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Lens,
+            transaction: Some(lens_profile.tx_hash.clone().0),
+            id: lens_profile.id.clone().0.to_string(),
+            created_at: Some(created_at),
+            updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
+            expired_at: None,
+        };
+
+        let resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Lens,
+            system: DomainNameSystem::Lens,
+            name: lens_handle.clone(),
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+
+        if is_default {
+            // field `is_default` has been canceled in lens-v2-api
+            // It is an independent query `GetDefaultProfile` and is not returned in the profile field.
+            let reverse: Resolve = Resolve {
+                uuid: Uuid::new_v4(),
+                source: DataSource::Lens,
+                system: DomainNameSystem::Lens,
+                name: lens_handle.clone(),
+                fetcher: DataFetcher::RelationService,
+                updated_at: naive_now(),
+            };
+            let rrs = reverse.wrapper(&addr, &lens, REVERSE_RESOLVE);
+            edges.push(EdgeWrapperEnum::new_reverse_resolve(rrs));
+        }
+
+        edges.push(EdgeWrapperEnum::new_hyper_edge(
+            HyperEdge {}.wrapper(&hv, &addr, HYPER_EDGE),
+        ));
+        edges.push(EdgeWrapperEnum::new_hyper_edge(
+            HyperEdge {}.wrapper(&hv, &lens, HYPER_EDGE),
+        ));
+
+        let hd = hold.wrapper(&addr, &lens, HOLD_IDENTITY);
+        let rs = resolve.wrapper(&lens, &addr, RESOLVE);
+        edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+        edges.push(EdgeWrapperEnum::new_resolve(rs));
+    }
+
+    Ok((vec![], edges))
 }
 
 async fn fetch_by_lens_handle(target: &Target) -> Result<TargetProcessedList, Error> {

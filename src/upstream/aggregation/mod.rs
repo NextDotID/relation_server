@@ -6,6 +6,7 @@ use crate::error::Error;
 use crate::tigergraph::edge::Proof;
 use crate::tigergraph::upsert::create_identity_to_identity_proof_two_way_binding;
 use crate::tigergraph::vertex::Identity;
+use crate::tigergraph::EdgeList;
 use crate::upstream::{DataSource, Fetcher, Platform, ProofLevel, TargetProcessedList};
 use crate::util::{
     make_client, make_http_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive,
@@ -59,6 +60,13 @@ impl Fetcher for Aggregation {
             }
             Target::NFT(_, _, _, _) => todo!(),
         }
+    }
+
+    async fn batch_fetch(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+        if !Self::can_fetch(target) {
+            return Ok((vec![], vec![]));
+        }
+        Ok((vec![], vec![]))
     }
 
     fn can_fetch(target: &Target) -> bool {

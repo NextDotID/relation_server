@@ -17,6 +17,7 @@ use http::uri::InvalidUri;
 use hyper::Method;
 use hyper::{client::HttpConnector, Body, Client};
 use serde::{Deserialize, Serialize};
+use serde_json::value::Value;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use tracing::{error, trace};
@@ -286,12 +287,12 @@ where
         let from_record = VertexRecord::from_with_json_value(
             warpper.source.vertex_type(),
             warpper.source.primary_key(),
-            warpper.source.to_json_value(),
+            Value::Object(warpper.source.to_json_value()),
         );
         let to_record = VertexRecord::from_with_json_value(
             warpper.target.vertex_type(),
             warpper.target.primary_key(),
-            warpper.target.to_json_value(),
+            Value::Object(warpper.target.to_json_value()),
         );
         let from_str =
             serde_json::to_string(&from_record).map_err(|err| Error::JSONParseError(err))?;
@@ -319,7 +320,7 @@ where
         let vertex_record = VertexRecord::from_with_json_value(
             warpper.vertex.vertex_type(),
             warpper.vertex.primary_key(),
-            warpper.vertex.to_json_value(),
+            Value::Object(warpper.vertex.to_json_value()),
         );
         let vertex_str =
             serde_json::to_string(&vertex_record).map_err(|err| Error::JSONParseError(err))?;
@@ -521,6 +522,36 @@ pub async fn create_identity_to_identity_hold_record(
     let upsert_edge_req: UpsertEdge = edges.into();
 
     upsert_hyper_vertex(&client, &upsert_hyper_vertex_req, Graph::SocialGraph).await?;
+    upsert_edge(&client, &upsert_edge_req, Graph::SocialGraph).await?;
+    Ok(())
+}
+
+pub async fn create_ens_identity_resolve(
+    client: &Client<HttpConnector>,
+    ens_identity: &Identity,
+    evm_address: &Identity,
+    resolve: &Resolve,
+) -> Result<(), Error> {
+    let resolve_identity = resolve.wrapper(ens_identity, evm_address, RESOLVE);
+    let edges = Edges(vec![resolve_identity]);
+    let upsert_edge_req: UpsertEdge = edges.into();
+
+    // Only create EvmAddress as an Identity connect to HyperVertex in case evm_address owner_address!=resolve_address
+    let vertex_wrapper = IsolatedVertexWrapper {
+        vertex: evm_address.to_owned(),
+    };
+    let upsert_isolated_vertex_req: UpsertIsolatedVertex = vertex_wrapper.try_into()?;
+
+    let vertices = Vertices(vec![ens_identity.to_owned()]);
+    let vertices_map: HashMap<String, HashMap<String, HashMap<String, Attribute>>> =
+        vertices.into();
+    let ens_wrapper = UpsertVertices {
+        vertices: vertices_map,
+    };
+    let upsert_ens_req: UpsertVertices = ens_wrapper.into();
+
+    upsert_isolated_vertex(&client, &upsert_isolated_vertex_req, Graph::SocialGraph).await?;
+    upsert_vertices(client, &upsert_ens_req, Graph::SocialGraph).await?;
     upsert_edge(&client, &upsert_edge_req, Graph::SocialGraph).await?;
     Ok(())
 }

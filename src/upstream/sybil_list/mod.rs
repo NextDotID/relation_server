@@ -7,6 +7,7 @@ use crate::error::Error;
 use crate::tigergraph::edge::Proof;
 use crate::tigergraph::upsert::create_identity_to_identity_proof_two_way_binding;
 use crate::tigergraph::vertex::Identity;
+use crate::tigergraph::EdgeList;
 use crate::upstream::{DataSource, Fetcher, Platform, ProofLevel, TargetProcessedList};
 use crate::util::make_http_client;
 use crate::util::{make_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive};
@@ -185,6 +186,15 @@ impl Fetcher for SybilList {
                 Ok(vec![])
             }
         }
+    }
+
+    async fn batch_fetch(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+        if !Self::can_fetch(target) {
+            return Ok((vec![], vec![]));
+        }
+
+        // TODO: prefetch: move this logic to `data_process` module as a scheduled asynchronous fetch
+        Ok((vec![], vec![]))
     }
 
     fn can_fetch(target: &Target) -> bool {

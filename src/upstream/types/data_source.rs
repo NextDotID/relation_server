@@ -184,7 +184,7 @@ pub enum DataSource {
     /// Twitter <-> Ethereum
     /// Manually added by Firefly.land team.
     /// Cannot be verified by third party, only trust the team.
-    #[strum(serialize = "hand_writing")]
+    #[strum(serialize = "manually_added")]
     #[serde(rename = "manually_added")]
     #[graphql(name = "manually_added")]
     ManuallyAdded,
