@@ -175,7 +175,7 @@ async fn batch_fetch_by_wallet(target: &Target) -> Result<(TargetProcessedList, 
             let hold: Hold = Hold {
                 uuid: Uuid::new_v4(),
                 source: DataSource::UnstoppableDomains,
-                transaction: None,
+                transaction: Some("".to_string()),
                 id: item
                     .attributes
                     .meta
@@ -388,19 +388,23 @@ async fn fetch_domain(owners: &str, page: &str) -> Result<RecordsForOwnerRespons
         })?;
 
     // Parse response body
-    let result: RecordsForOwnerResponse = match parse_body(&mut body).await {
+    let result = match parse_body::<RecordsForOwnerResponse>(&mut body).await {
         Ok(result) => result,
         Err(_) => {
-            let err: BadResponse = parse_body(&mut body).await?;
-            let err_message = format!(
-                "UnstoppableDomains fetch error, Code: {}, Message: {}",
-                err.code, err.message
-            );
-            error!(err_message);
-            return Err(Error::General(
-                err_message,
-                lambda_http::http::StatusCode::INTERNAL_SERVER_ERROR,
-            ));
+            match parse_body::<BadResponse>(&mut body).await {
+                Ok(bad) => {
+                    let err_message = format!(
+                        "UnstoppableDomains fetch error, Code: {}, Message: {}",
+                        bad.code, bad.message
+                    );
+                    error!(err_message);
+                    return Err(Error::General(
+                        err_message,
+                        lambda_http::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    ));
+                }
+                Err(err) => return Err(err),
+            };
         }
     };
     Ok(result)
@@ -591,16 +595,19 @@ async fn fetch_owner(domains: &str) -> Result<DomainResponse, Error> {
 
     let result = match parse_body::<DomainResponse>(&mut resp).await {
         Ok(result) => result,
-        Err(_) => {
-            let err: BadResponse = parse_body(&mut resp).await?;
-            let err_message = format!(
-                "UnstoppableDomains fetch | errCode: {}, errMessage: {}",
-                err.code, err.message
-            );
-            error!(err_message);
-            return Err(Error::General(err_message, resp.status()));
-        }
+        Err(_) => match parse_body::<BadResponse>(&mut resp).await {
+            Ok(bad) => {
+                let err_message = format!(
+                    "UnstoppableDomains fetch | errCode: {}, errMessage: {}",
+                    bad.code, bad.message
+                );
+                error!(err_message);
+                return Err(Error::General(err_message, resp.status()));
+            }
+            Err(err) => return Err(err),
+        },
     };
+
     Ok(result)
 }
 
