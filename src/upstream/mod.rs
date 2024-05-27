@@ -4,7 +4,6 @@ mod crossbell;
 mod dotbit;
 mod ens_reverse;
 mod farcaster;
-mod firefly;
 mod genome;
 mod keybase;
 mod knn3;
@@ -15,6 +14,8 @@ mod solana;
 mod space_id;
 mod sybil_list;
 mod unstoppable;
+// mod firefly;
+// mod opensea;
 
 #[cfg(test)]
 mod tests;
@@ -26,9 +27,9 @@ use crate::{
     tigergraph::{batch_upsert, EdgeList},
     upstream::{
         crossbell::Crossbell, dotbit::DotBit, ens_reverse::ENSReverseLookup, farcaster::Farcaster,
-        firefly::Firefly, genome::Genome, keybase::Keybase, knn3::Knn3, lensv2::LensV2,
-        proof_client::ProofClient, rss3::Rss3, solana::Solana, space_id::SpaceId,
-        sybil_list::SybilList, the_graph::TheGraph, unstoppable::UnstoppableDomains,
+        genome::Genome, keybase::Keybase, knn3::Knn3, lensv2::LensV2, proof_client::ProofClient,
+        rss3::Rss3, solana::Solana, space_id::SpaceId, sybil_list::SybilList, the_graph::TheGraph,
+        unstoppable::UnstoppableDomains,
     },
     util::{hashset_append, make_http_client},
 };
@@ -56,7 +57,7 @@ pub trait Fetcher {
     async fn fetch(target: &Target) -> Result<TargetProcessedList, Error>;
 
     /// Fetch all vertices and edges from given source and return them
-    async fn fetch_and_save(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error>;
+    async fn batch_fetch(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error>;
 
     /// Determine if this upstream can fetch this target.
     fn can_fetch(target: &Target) -> bool;
@@ -134,7 +135,6 @@ pub async fn fetch_all(targets: TargetProcessedList, depth: Option<u16>) -> Resu
     Ok(())
 
     // let mut round: u16 = 0;
-
     // let mut fetching = FETCHING.lock().await;
     // let mut up_next: HashSet<Target> = HashSet::from_iter(
     //     targets
@@ -175,14 +175,12 @@ pub async fn fetch_all(targets: TargetProcessedList, depth: Option<u16>) -> Resu
     //     hashset_append(&mut processed, up_next.into_iter().collect());
     //     up_next = HashSet::from_iter(result.into_iter());
     // }
-
     // let mut fetching = FETCHING.lock().await;
     // targets.iter().for_each(|target| {
     //     fetching.remove(&target);
     //     ()
     // });
     // drop(fetching);
-
     // event!(
     //     Level::INFO,
     //     round,
@@ -202,10 +200,9 @@ pub async fn fetch_many(
     const CONCURRENT: usize = 5;
     let futures: Vec<_> = targets
         .iter()
-        .map(|target| fetch_one_and_save(target))
+        .map(|target| batch_fetch_upstream(target))
         .collect();
     let futures_stream = futures::stream::iter(futures).buffer_unordered(CONCURRENT);
-
     let (mut all_targets, all_edges) = futures_stream
         .fold(
             (TargetProcessedList::new(), EdgeList::new()),
@@ -230,8 +227,9 @@ pub async fn fetch_many(
         )
         .await;
     all_targets.dedup();
-    // event!(Level::INFO, "fetch_many all_targets {:?}", all_targets);
 
+    // Instead of upsert edges after each `Round completed`,
+    // wait for all data sources to be added after fetch_all ends.
     Ok((all_targets, all_edges))
 
     // const CONCURRENT: usize = 5;
@@ -274,7 +272,6 @@ pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
         LensV2::fetch(target),
         ProofClient::fetch(target),
         Keybase::fetch(target),
-        // Firefly::fetch(target),
         SybilList::fetch(target),
         Rss3::fetch(target),
         Knn3::fetch(target),
@@ -314,30 +311,45 @@ pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
     Ok(up_next)
 }
 
-pub async fn fetch_one_and_save(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+pub async fn batch_fetch_upstream(
+    target: &Target,
+) -> Result<(TargetProcessedList, EdgeList), Error> {
     let mut up_next = TargetProcessedList::new();
     let mut all_edges = EdgeList::new();
 
-    let _ = join_all(vec![Firefly::fetch_and_save(target)])
-        .await
-        .into_iter()
-        .for_each(|res| {
-            if let Ok((next_targets, edges)) = res {
-                up_next.extend(next_targets);
-                all_edges.extend(edges);
-            } else if let Err(err) = res {
-                warn!(
-                    "Error happened when fetching and saving {}: {}",
-                    target, err
-                );
-                // Don't break the procedure, continue with other results
-            }
-        });
-
-    // let json_raw_2 = serde_json::to_string(&all_edges).map_err(|err| Error::JSONParseError(err))?;
-    // info!("BatchEdges format: {}", json_raw_2);
-    // let cli = make_http_client();
-    // batch_upsert(&cli, all_edges).await?;
+    let _ = join_all(vec![
+        TheGraph::batch_fetch(target),
+        ENSReverseLookup::batch_fetch(target),
+        Farcaster::batch_fetch(target),
+        LensV2::batch_fetch(target),
+        ProofClient::batch_fetch(target),
+        Keybase::batch_fetch(target),
+        Rss3::batch_fetch(target),
+        DotBit::batch_fetch(target),
+        UnstoppableDomains::batch_fetch(target),
+        SpaceId::batch_fetch(target),
+        Genome::batch_fetch(target),
+        Crossbell::batch_fetch(target),
+        Solana::batch_fetch(target),
+        // SybilList::batch_fetch(target), // move this logic to `data_process` as a scheduled asynchronous fetch
+        // Knn3::batch_fetch(target), // Temporarily cancel
+        // Firefly::batch_fetch(target), // Temporarily cancel
+        // OpenSea::batch_fetch(target), // Temporarily cancel
+    ])
+    .await
+    .into_iter()
+    .for_each(|res| {
+        if let Ok((next_targets, edges)) = res {
+            up_next.extend(next_targets);
+            all_edges.extend(edges);
+        } else if let Err(err) = res {
+            warn!(
+                "Error happened when fetching and saving {}: {}",
+                target, err
+            );
+            // Don't break the procedure, continue with other results
+        }
+    });
 
     up_next.dedup();
     // Filter zero address
