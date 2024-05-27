@@ -6,6 +6,7 @@ use crate::error::Error;
 use crate::tigergraph::edge::Hold;
 use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
 use crate::tigergraph::vertex::{Contract, Identity};
+use crate::tigergraph::EdgeList;
 use crate::upstream::{
     Chain, ContractCategory, DataFetcher, DataSource, Fetcher, Platform, Target,
     TargetProcessedList,
@@ -61,6 +62,13 @@ impl Fetcher for Knn3 {
             Target::Identity(_, identity) => fetch_ens_by_eth_wallet(identity).await,
             Target::NFT(_, _, _, id) => fetch_eth_wallet_by_ens(id).await,
         }
+    }
+
+    async fn batch_fetch(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+        if !Self::can_fetch(target) {
+            return Ok((vec![], vec![]));
+        }
+        Ok((vec![], vec![]))
     }
 
     fn can_fetch(_target: &Target) -> bool {
