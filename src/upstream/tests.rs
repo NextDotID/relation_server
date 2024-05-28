@@ -30,6 +30,7 @@ async fn test_fetch_all() -> Result<(), Error> {
     //     Some(5),
     // )
     // .await?;
+
     // fetch_all(
     //     vec![Target::Identity(
     //         Platform::Ethereum,
@@ -38,6 +39,15 @@ async fn test_fetch_all() -> Result<(), Error> {
     //     Some(5),
     // )
     // .await?;
+
+    fetch_all(
+        vec![Target::Identity(
+            Platform::Ethereum,
+            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".into(),
+        )],
+        Some(5),
+    )
+    .await?;
 
     // fetch_all(
     //     vec![Target::NFT(
@@ -50,16 +60,16 @@ async fn test_fetch_all() -> Result<(), Error> {
     // )
     // .await?;
 
-    fetch_all(
-        vec![Target::NFT(
-            Chain::Ethereum,
-            ContractCategory::ENS,
-            ContractCategory::ENS.default_contract_address().unwrap(),
-            "vitalik.eth".to_string(),
-        )],
-        Some(5),
-    )
-    .await?;
+    // fetch_all(
+    //     vec![Target::NFT(
+    //         Chain::Ethereum,
+    //         ContractCategory::ENS,
+    //         ContractCategory::ENS.default_contract_address().unwrap(),
+    //         "vitalik.eth".to_string(),
+    //     )],
+    //     Some(5),
+    // )
+    // .await?;
 
     // fetch_all(
     //     vec![Target::Identity(Platform::CKB, "ckb1qzfhdsa4syv599s2s3nfrctwga70g0tu07n9gpnun9ydlngf5vsnwqggq7v6mzt3n8wv9y2n6h9z429ta0auek7v05yq0xdd39cenhxzj9fatj324z47h77vm0x869nu03m".into())],

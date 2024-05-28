@@ -206,6 +206,8 @@ pub async fn batch_upsert(
     client: &Client<HttpConnector>,
     edges: Vec<EdgeWrapperEnum>,
 ) -> Result<(), Error> {
+    // let json_raw = serde_json::to_string(&edges).map_err(|err| Error::JSONParseError(err))?;
+    // trace!("edges = {}", json_raw);
     let mut graph: UpsertGraph = BatchEdges(edges.clone()).into();
     // let json_raw_2 = serde_json::to_string(&graph).map_err(|err| Error::JSONParseError(err))?;
     // trace!("Graph upsert struct: {}", json_raw_2);
@@ -786,6 +788,58 @@ impl From<BatchEdges> for UpsertGraph {
                 .or_insert_with(HashMap::new)
                 .insert(target_vertex_id.clone(), edge_attributes);
 
+            // Helper function to merge vertex attributes
+            fn merge_vertex_attributes(
+                vertices_map: &mut HashMap<String, HashMap<String, HashMap<String, Attribute>>>,
+                vertex_type: &str,
+                vertex_id: &str,
+                new_attributes: HashMap<String, Attribute>,
+            ) {
+                if let Some(existing_attributes) = vertices_map
+                    .entry(vertex_type.to_string())
+                    .or_insert_with(HashMap::new)
+                    .get_mut(vertex_id)
+                {
+                    for (key, new_attr) in new_attributes {
+                        match key.as_str() {
+                            "reverse" => {
+                                if let Some(existing_attr) = existing_attributes.get_mut("reverse")
+                                {
+                                    if let (Value::Bool(existing_val), Value::Bool(new_val)) =
+                                        (&existing_attr.value, new_attr.value)
+                                    {
+                                        existing_attr.value = json!(*existing_val || new_val);
+                                    }
+                                } else {
+                                    existing_attributes.insert(key, new_attr);
+                                }
+                            }
+                            "display_name" => {
+                                if let Some(existing_attr) =
+                                    existing_attributes.get_mut("display_name")
+                                {
+                                    if existing_attr.value == json!("")
+                                        && new_attr.value != json!("")
+                                    {
+                                        existing_attr.value = new_attr.value;
+                                    }
+                                } else {
+                                    existing_attributes.insert(key, new_attr);
+                                }
+                            }
+                            _ => {
+                                existing_attributes.insert(key, new_attr);
+                            }
+                        }
+                    }
+                } else {
+                    vertices_map
+                        .get_mut(vertex_type)
+                        .unwrap()
+                        .insert(vertex_id.to_string(), new_attributes);
+                }
+            }
+
             // downcast_ref is a method from the Any trait in Rust,
             // which allows you to safely attempt to
             // convert a reference to a trait object (&dyn Any)
@@ -793,29 +847,33 @@ impl From<BatchEdges> for UpsertGraph {
             if let Some(source) = edge_wrapper_enum
                 .source()
                 .as_any()
-                .downcast_ref::<IdentitiesGraph>()
+                .downcast_ref::<Identity>()
             {
-                vertices_map
-                    .entry(source_vertex_type.clone())
-                    .or_insert_with(HashMap::new)
-                    .insert(source_vertex_id.clone(), source.to_attributes_map());
+                merge_vertex_attributes(
+                    &mut vertices_map,
+                    &source_vertex_type,
+                    &source_vertex_id,
+                    source.to_attributes_map(),
+                );
             }
 
             if let Some(target) = edge_wrapper_enum
                 .target()
                 .as_any()
-                .downcast_ref::<IdentitiesGraph>()
+                .downcast_ref::<Identity>()
             {
-                vertices_map
-                    .entry(target_vertex_type.clone())
-                    .or_insert_with(HashMap::new)
-                    .insert(target_vertex_id.clone(), target.to_attributes_map());
+                merge_vertex_attributes(
+                    &mut vertices_map,
+                    &target_vertex_type,
+                    &target_vertex_id,
+                    target.to_attributes_map(),
+                );
             }
 
             if let Some(source) = edge_wrapper_enum
                 .source()
                 .as_any()
-                .downcast_ref::<Identity>()
+                .downcast_ref::<IdentitiesGraph>()
             {
                 vertices_map
                     .entry(source_vertex_type.clone())
@@ -826,7 +884,7 @@ impl From<BatchEdges> for UpsertGraph {
             if let Some(target) = edge_wrapper_enum
                 .target()
                 .as_any()
-                .downcast_ref::<Identity>()
+                .downcast_ref::<IdentitiesGraph>()
             {
                 vertices_map
                     .entry(target_vertex_type.clone())
