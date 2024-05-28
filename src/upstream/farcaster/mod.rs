@@ -5,6 +5,7 @@ use crate::error::Error;
 use crate::tigergraph::edge::Hold;
 use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::Identity;
+use crate::tigergraph::EdgeList;
 use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
 use crate::util::{make_http_client, naive_now};
 use async_trait::async_trait;
@@ -30,6 +31,19 @@ impl Fetcher for Farcaster {
             Target::NFT(_, _, _, _) => todo!(),
         }
     }
+
+    async fn batch_fetch(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+        if !Self::can_fetch(target) {
+            return Ok((vec![], vec![]));
+        }
+        match target {
+            Target::Identity(platform, identity) => {
+                warpcast::batch_fetch_connections(platform, identity).await
+            }
+            Target::NFT(_, _, _, _) => todo!(),
+        }
+    }
+
     fn can_fetch(target: &Target) -> bool {
         target.in_platform_supported(vec![Platform::Farcaster, Platform::Ethereum])
     }

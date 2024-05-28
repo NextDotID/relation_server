@@ -191,7 +191,7 @@ impl Transfer for ProofRecord {
         attributes_map
     }
 
-    fn to_json_value(&self) -> Value {
+    fn to_json_value(&self) -> Map<String, Value> {
         let mut map = Map::new();
         map.insert("uuid".to_string(), json!(self.uuid));
         map.insert("source".to_string(), json!(self.source));
@@ -207,7 +207,7 @@ impl Transfer for ProofRecord {
         );
         map.insert("updated_at".to_string(), json!(self.updated_at));
         map.insert("fetcher".to_string(), json!(self.fetcher));
-        Value::Object(map)
+        map
     }
 }
 

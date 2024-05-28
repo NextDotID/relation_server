@@ -3,10 +3,13 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::edge::Proof;
+use crate::tigergraph::edge::{
+    HyperEdge, Proof, Wrapper, HYPER_EDGE, PROOF_EDGE, PROOF_REVERSE_EDGE,
+};
 use crate::tigergraph::upsert::create_identity_to_identity_proof_two_way_binding;
-use crate::tigergraph::vertex::{Identity, IdentityRecord};
+use crate::tigergraph::vertex::{IdentitiesGraph, Identity, IdentityRecord};
 use crate::tigergraph::{BaseResponse, Graph};
+use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{DataSource, Fetcher, Platform, ProofLevel, TargetProcessedList};
 use crate::util::{
     make_client, make_http_client, naive_now, option_naive_datetime_from_string,
@@ -132,6 +135,18 @@ impl Fetcher for Keybase {
         }
     }
 
+    async fn batch_fetch(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+        if !Self::can_fetch(target) {
+            return Ok((vec![], vec![]));
+        }
+        match target {
+            Target::Identity(platform, identity) => {
+                stable_batch_fetch_connections(platform, identity).await
+            }
+            Target::NFT(_, _, _, _) => Ok((vec![], vec![])),
+        }
+    }
+
     fn can_fetch(target: &Target) -> bool {
         target.in_platform_supported(vec![
             Platform::Twitter,
@@ -223,6 +238,147 @@ async fn fake_fetch_connections_by_platform_identity(
     });
 
     Ok(next_targets)
+}
+
+async fn stable_batch_fetch_connections(
+    platform: &Platform,
+    identity: &str,
+) -> Result<(TargetProcessedList, EdgeList), Error> {
+    // BTC Character case sensitive
+    let mut format_identity = identity.to_string();
+    if platform.to_owned() != Platform::Bitcoin {
+        format_identity = format_identity.to_lowercase();
+    }
+
+    let mut next_targets: TargetProcessedList = Vec::new();
+    let mut edges: Vec<EdgeWrapperEnum> = Vec::new();
+    let hv = IdentitiesGraph::default();
+
+    let uri: http::Uri = format!(
+        "{}/proofs_summary?platform={}&username={}",
+        C.upstream.keybase_service.stable_url, platform, format_identity
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| {
+        Error::ParamError(format!(
+            "{}={} Uri format Error | {}",
+            platform, format_identity, _err
+        ))
+    })?;
+    let req = hyper::Request::builder()
+        .method(Method::GET)
+        .uri(uri)
+        .body(Body::empty())
+        .map_err(|_err| Error::ParamError(format!("ParamError Error | {}", _err)))?;
+
+    let client = make_http_client();
+    let mut resp = client.request(req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!(
+            "Keybase proofs_summary?platform={}&identity={} error | Fail to request: {:?}",
+            platform,
+            format_identity,
+            err.to_string()
+        ))
+    })?;
+
+    let proofs = match parse_body::<StableKeybaseResponse>(&mut resp).await {
+        Ok(r) => {
+            if r.code != 0 {
+                let err_message = format!(
+                    "Keybase proofs_summary error | Code: {:?}, Message: {:?}",
+                    r.code, r.msg
+                );
+                error!(err_message);
+                return Err(Error::General(
+                    err_message,
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                ));
+            }
+            let result = r.data.map_or(vec![], |res| res);
+            // tracing::debug!("proofs_summary result {:?}", result);
+            debug!("Keybase proofs_summary = {} Records found.", result.len(),);
+            result
+        }
+        Err(err) => {
+            let err_message = format!("Keybase proofs_summary error parse_body error: {:?}", err);
+            error!(err_message);
+            return Err(Error::General(err_message, resp.status()));
+        }
+    };
+
+    for p in proofs.into_iter() {
+        let to_platform = Platform::from_str(&p.platform.as_str()).unwrap_or(Platform::Unknown);
+        if to_platform == Platform::Unknown {
+            continue;
+        }
+        if to_platform != platform.to_owned() && to_platform == Platform::Twitter {
+            next_targets.push(Target::Identity(to_platform, p.username.clone()));
+        }
+
+        let from: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Keybase,
+            identity: p.keybase_username.clone(),
+            uid: None,
+            created_at: None,
+            display_name: Some(p.keybase_username.clone()),
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
+        };
+
+        let to: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: to_platform.clone(),
+            identity: p.username.clone(),
+            uid: None,
+            created_at: None,
+            display_name: p.display_name,
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
+        };
+
+        let proof_forward: Proof = Proof {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Keybase,
+            level: ProofLevel::VeryConfident,
+            record_id: p.record_id.clone(),
+            created_at: p.created_time.clone(),
+            updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
+        };
+
+        let proof_backward: Proof = Proof {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Keybase,
+            level: ProofLevel::VeryConfident,
+            record_id: p.record_id.clone(),
+            created_at: p.created_time.clone(),
+            updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
+        };
+
+        // add identity connected to hyper vertex
+        edges.push(EdgeWrapperEnum::new_hyper_edge(
+            HyperEdge {}.wrapper(&hv, &from, HYPER_EDGE),
+        ));
+        edges.push(EdgeWrapperEnum::new_hyper_edge(
+            HyperEdge {}.wrapper(&hv, &to, HYPER_EDGE),
+        ));
+        let pf = proof_forward.wrapper(&from, &to, PROOF_EDGE);
+        let pb = proof_backward.wrapper(&to, &from, PROOF_REVERSE_EDGE);
+        edges.push(EdgeWrapperEnum::new_proof_forward(pf));
+        edges.push(EdgeWrapperEnum::new_proof_backward(pb));
+    }
+
+    Ok((next_targets, edges))
 }
 
 async fn stable_fetch_connections_by_platform_identity(

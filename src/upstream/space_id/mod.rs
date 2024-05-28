@@ -2,11 +2,14 @@ mod tests;
 
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::edge::{Hold, Resolve};
+use crate::tigergraph::edge::{
+    Hold, HyperEdge, Resolve, Wrapper, HOLD_IDENTITY, HYPER_EDGE, RESOLVE, REVERSE_RESOLVE,
+};
 use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
-use crate::tigergraph::vertex::Identity;
+use crate::tigergraph::vertex::{IdentitiesGraph, Identity};
+use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
     DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
 };
@@ -53,9 +56,205 @@ impl Fetcher for SpaceId {
         }
     }
 
+    async fn batch_fetch(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+        if !Self::can_fetch(target) {
+            return Ok((vec![], vec![]));
+        }
+
+        match target.platform()? {
+            Platform::Ethereum => batch_fetch_by_wallet(target).await,
+            Platform::SpaceId => batch_fetch_by_handle(target).await,
+            _ => Ok((vec![], vec![])),
+        }
+    }
+
     fn can_fetch(target: &Target) -> bool {
         target.in_platform_supported(vec![Platform::SpaceId, Platform::Ethereum])
     }
+}
+
+async fn batch_fetch_by_wallet(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+    let identity = target.identity()?;
+    let name = get_name(&identity).await?;
+    if name.is_none() {
+        // name=null, address does not have a valid primary name
+        return Ok((vec![], vec![]));
+    }
+
+    let mut edges = EdgeList::new();
+    let hv = IdentitiesGraph::default();
+
+    let addr: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Ethereum,
+        identity: identity.to_lowercase(),
+        uid: None,
+        created_at: None,
+        display_name: None,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(true),
+    };
+
+    let sid: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::SpaceId,
+        identity: name.clone().unwrap(),
+        uid: None,
+        created_at: None,
+        display_name: None,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(true),
+    };
+
+    let hold: Hold = Hold {
+        uuid: Uuid::new_v4(),
+        source: DataSource::SpaceId,
+        transaction: None,
+        id: "".to_string(),
+        created_at: None,
+        updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
+        expired_at: None,
+    };
+
+    let resolve: Resolve = Resolve {
+        uuid: Uuid::new_v4(),
+        source: DataSource::SpaceId,
+        system: DomainNameSystem::SpaceId,
+        name: name.clone().unwrap(),
+        fetcher: DataFetcher::RelationService,
+        updated_at: naive_now(),
+    };
+    let reverse: Resolve = Resolve {
+        uuid: Uuid::new_v4(),
+        source: DataSource::SpaceId,
+        system: DomainNameSystem::SpaceId,
+        name: name.clone().unwrap(),
+        fetcher: DataFetcher::RelationService,
+        updated_at: naive_now(),
+    };
+
+    edges.push(EdgeWrapperEnum::new_hyper_edge(
+        HyperEdge {}.wrapper(&hv, &addr, HYPER_EDGE),
+    ));
+    edges.push(EdgeWrapperEnum::new_hyper_edge(
+        HyperEdge {}.wrapper(&hv, &sid, HYPER_EDGE),
+    ));
+
+    let rrs = reverse.wrapper(&addr, &sid, REVERSE_RESOLVE);
+    let hd = hold.wrapper(&addr, &sid, HOLD_IDENTITY);
+    let rs = resolve.wrapper(&sid, &addr, RESOLVE);
+
+    // hold record
+    edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+    // 'regular' resolution involves mapping from a name to an address.
+    edges.push(EdgeWrapperEnum::new_resolve(rs));
+    // 'reverse' resolution maps from an address back to a name.
+    edges.push(EdgeWrapperEnum::new_reverse_resolve(rrs));
+
+    Ok((vec![], edges))
+}
+
+async fn batch_fetch_by_handle(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
+    let name = target.identity()?;
+    let address = get_address(&name).await?;
+
+    let mut next_targets = TargetProcessedList::new();
+    let mut edges = EdgeList::new();
+    let hv = IdentitiesGraph::default();
+
+    let mut addr: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::Ethereum,
+        identity: address.clone().to_lowercase(),
+        uid: None,
+        created_at: None,
+        display_name: None,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
+    };
+
+    let mut sid: Identity = Identity {
+        uuid: Some(Uuid::new_v4()),
+        platform: Platform::SpaceId,
+        identity: name.clone(),
+        uid: None,
+        created_at: None,
+        display_name: None,
+        added_at: naive_now(),
+        avatar_url: None,
+        profile_url: None,
+        updated_at: naive_now(),
+        expired_at: None,
+        reverse: Some(false),
+    };
+
+    let hold: Hold = Hold {
+        uuid: Uuid::new_v4(),
+        source: DataSource::SpaceId,
+        transaction: Some("".to_string()),
+        id: "".to_string(),
+        created_at: None,
+        updated_at: naive_now(),
+        fetcher: DataFetcher::RelationService,
+        expired_at: None,
+    };
+    let resolve: Resolve = Resolve {
+        uuid: Uuid::new_v4(),
+        source: DataSource::SpaceId,
+        system: DomainNameSystem::SpaceId,
+        name: name.clone(),
+        fetcher: DataFetcher::RelationService,
+        updated_at: naive_now(),
+    };
+    // lookup reverse resolve name
+    if let Some(domain) = get_name(&address).await? {
+        // 'reverse' resolution maps from an address back to a name.
+        let reverse: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::SpaceId,
+            system: DomainNameSystem::SpaceId,
+            name: domain,
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+        addr.reverse = Some(true);
+        sid.reverse = Some(true);
+        let rrs = reverse.wrapper(&addr, &sid, REVERSE_RESOLVE);
+        edges.push(EdgeWrapperEnum::new_reverse_resolve(rrs));
+    }
+
+    edges.push(EdgeWrapperEnum::new_hyper_edge(
+        HyperEdge {}.wrapper(&hv, &addr, HYPER_EDGE),
+    ));
+    edges.push(EdgeWrapperEnum::new_hyper_edge(
+        HyperEdge {}.wrapper(&hv, &sid, HYPER_EDGE),
+    ));
+
+    // hold record
+    let hd = hold.wrapper(&addr, &sid, HOLD_IDENTITY);
+    // 'regular' resolution involves mapping from a name to an address.
+    let rs = resolve.wrapper(&sid, &addr, RESOLVE);
+    edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+    edges.push(EdgeWrapperEnum::new_resolve(rs));
+
+    next_targets.push(Target::Identity(
+        Platform::Ethereum,
+        address.clone().to_lowercase(),
+    ));
+    Ok((next_targets, edges))
 }
 
 async fn fetch_connections_by_platform_identity(

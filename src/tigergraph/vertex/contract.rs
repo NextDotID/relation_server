@@ -18,6 +18,7 @@ use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_json::value::{Map, Value};
+use std::any::Any;
 use std::collections::HashMap;
 use tracing::{error, trace};
 use uuid::Uuid;
@@ -71,6 +72,10 @@ impl Vertex for Contract {
 
     fn vertex_type(&self) -> String {
         VERTEX_NAME.to_string()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -183,7 +188,7 @@ impl Transfer for Contract {
         attributes_map
     }
 
-    fn to_json_value(&self) -> Value {
+    fn to_json_value(&self) -> Map<String, Value> {
         let mut map = Map::new();
         map.insert("id".to_string(), json!(self.primary_key()));
         map.insert("uuid".to_string(), json!(self.uuid));
@@ -195,7 +200,7 @@ impl Transfer for Contract {
             json!(self.symbol.clone().unwrap_or("".to_string())),
         );
         map.insert("updated_at".to_string(), json!(self.updated_at));
-        Value::Object(map)
+        map
     }
 }
 

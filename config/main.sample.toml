@@ -14,14 +14,14 @@ url = "https://proof-service.next.id"
 api_key = "x-api-key"
 
 [upstream.aggregation_service]
-url = "https://7x16bogxfb.execute-api.us-east-1.amazonaws.com/v1/identity/search"
+url = "http://data-server-hostname/data_server"
 
 [upstream.sybil_service]
 url = "https://raw.githubusercontent.com/Uniswap/sybil-list/master/verified.json"
 
 [upstream.keybase_service]
 url = "https://keybase.io/_/api/1.0/user/lookup.json"
-stable_url = "http://ec2-18-167-90-166.ap-east-1.compute.amazonaws.com/data_server/keybase"
+stable_url = "http://data-server-hostname/data_server/keybase"
 
 [upstream.knn3_service]
 url = "https://mw.graphql.knn3.xyz/"
@@ -62,4 +62,4 @@ url = "https://indexer.crossbell.io/v1/graphql"
 rpc_url = "https://api.mainnet-beta.solana.com"
 
 [upstream.genome_api]
-rpc_url = "http://ec2-18-167-90-166.ap-east-1.compute.amazonaws.com/data_server/genome"
+rpc_url = "http://data-server-hostname/data_server/genome"

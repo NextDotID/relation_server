@@ -28,6 +28,7 @@ use serde::de::{self, Deserializer, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_json::value::{Map, Value};
+use std::any::Any;
 use std::collections::HashMap;
 use std::fmt;
 use tracing::{error, trace};
@@ -90,6 +91,10 @@ impl Vertex for Identity {
 
     fn vertex_type(&self) -> String {
         VERTEX_NAME.to_string()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -275,7 +280,7 @@ impl Transfer for Identity {
         attributes_map
     }
 
-    fn to_json_value(&self) -> Value {
+    fn to_json_value(&self) -> Map<String, Value> {
         let mut map = Map::new();
         map.insert("id".to_string(), json!(self.primary_key()));
         map.insert(
@@ -316,7 +321,7 @@ impl Transfer for Identity {
             "reverse".to_string(),
             self.reverse.map_or(json!(false), |reverse| json!(reverse)),
         );
-        Value::Object(map)
+        map
     }
 }
 
