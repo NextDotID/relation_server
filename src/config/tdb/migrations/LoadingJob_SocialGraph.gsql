@@ -471,6 +471,22 @@ CREATE OR REPLACE QUERY delete_graph_inner_connection(VERTEX<Identities> p, INT 
   seed (Identities) = {p};
   identities_graph = SELECT tgt FROM seed-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt;
   vertex2delete = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-identities_graph;
+  
+  DELETE e FROM vertex2delete:s-((Hold_Contract>):e)-Contracts:c;
+  DELETE e FROM vertex2delete:s-((Reverse_Resolve_Contract>):e)-Contracts:c;
+  DELETE e FROM vertex2delete:s-((<Resolve_Contract):e)-Contracts:c;
+  DELETE e FROM vertex2delete:s-((<Hold_Identity):e)-Identities:t;
+  DELETE e FROM vertex2delete:s-((<Resolve):e)-Identities:t;
+  DELETE e FROM vertex2delete:s-((<Reverse_Resolve):e)-Identities:t;
+  DELETE e FROM vertex2delete:s-((<Proof_Forward):e)-Identities:t;
+  DELETE e FROM vertex2delete:s-((<Proof_Backward):e)-Identities:t;
+}
+
+
+CREATE OR REPLACE QUERY delete_graph_inner_connection_test(VERTEX<Identities> p, INT depth=10) FOR GRAPH SocialGraph SYNTAX v2 {
+  seed (Identities) = {p};
+  identities_graph = SELECT tgt FROM seed-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt;
+  vertex2delete = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-identities_graph;
 
   // only delete connection
   v2c = SELECT v FROM vertex2delete-(:e)-Contracts:v ACCUM DELETE(e);
