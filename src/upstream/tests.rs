@@ -25,6 +25,24 @@ async fn test_fetch_all() -> Result<(), Error> {
     // fetch_all(
     //     vec![Target::Identity(
     //         Platform::Ethereum,
+    //         "0xbe577c9e94d6a2598edde9089b78aef5a549cdb8".into(),
+    //     )],
+    //     Some(5),
+    // )
+    // .await?;
+
+    // fetch_all(
+    //     vec![Target::Identity(
+    //         Platform::Ethereum,
+    //         "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85".into(),
+    //     )],
+    //     Some(5),
+    // )
+    // .await?;
+
+    // fetch_all(
+    //     vec![Target::Identity(
+    //         Platform::Ethereum,
     //         "0x0da0ee86269797618032e56a69b1aad095c581fc".into(),
     //     )],
     //     Some(5),
@@ -40,25 +58,25 @@ async fn test_fetch_all() -> Result<(), Error> {
     // )
     // .await?;
 
-    fetch_all(
-        vec![Target::Identity(
-            Platform::Ethereum,
-            "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".into(),
-        )],
-        Some(5),
-    )
-    .await?;
-
     // fetch_all(
-    //     vec![Target::NFT(
-    //         Chain::Ethereum,
-    //         ContractCategory::ENS,
-    //         ContractCategory::ENS.default_contract_address().unwrap(),
-    //         "niconico.eth".to_string(),
+    //     vec![Target::Identity(
+    //         Platform::Ethereum,
+    //         "0xd8da6bf26964af9d7eed9e03e53415d37aa96045".into(),
     //     )],
     //     Some(5),
     // )
     // .await?;
+
+    fetch_all(
+        vec![Target::NFT(
+            Chain::Ethereum,
+            ContractCategory::ENS,
+            ContractCategory::ENS.default_contract_address().unwrap(),
+            "23665.eth".to_string(),
+        )],
+        Some(5),
+    )
+    .await?;
 
     // fetch_all(
     //     vec![Target::NFT(

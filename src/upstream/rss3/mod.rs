@@ -114,7 +114,6 @@ async fn batch_fetch_nfts(target: &Target) -> Result<(TargetProcessedList, EdgeL
     let address = target.identity()?.to_lowercase();
     let mut cursor = String::from("");
 
-    let mut next_targets = TargetProcessedList::new();
     let mut edges = EdgeList::new();
     let hv = IdentitiesGraph::default();
 
@@ -265,13 +264,6 @@ async fn batch_fetch_nfts(target: &Target) -> Result<(TargetProcessedList, EdgeL
             ));
             let hdc = hold.wrapper(&from, &to, HOLD_CONTRACT);
             edges.push(EdgeWrapperEnum::new_hold_contract(hdc));
-
-            next_targets.push(Target::NFT(
-                chain,
-                nft_category,
-                contract_addr.clone(),
-                nft_id.clone(),
-            ));
         }
         if body.cursor.is_none() || body.total < PAGE_LIMIT {
             break;
@@ -279,7 +271,7 @@ async fn batch_fetch_nfts(target: &Target) -> Result<(TargetProcessedList, EdgeL
             cursor = body.cursor.unwrap();
         }
     }
-    Ok((next_targets, edges))
+    Ok((vec![], edges))
 }
 
 async fn fetch_nfts_by_account(
