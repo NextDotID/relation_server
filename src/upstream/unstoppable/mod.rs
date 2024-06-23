@@ -47,6 +47,18 @@ pub struct RecordsForOwnerResponse {
 }
 
 #[derive(Deserialize, Debug, Clone)]
+pub struct GetDomainByOwnerResp {
+    pub data: Vec<DataItem>,
+    pub next: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct DataItem {
+    pub meta: Meta,
+    pub records: Records,
+}
+
+#[derive(Deserialize, Debug, Clone)]
 pub struct MetaList {
     #[serde(rename = "perPage")]
     pub per_page: i64,
@@ -84,7 +96,7 @@ pub struct Meta {
     pub owner: Option<String>,
     pub resolver: Option<String>,
     pub registry: Option<String>,
-    pub reverse: bool,
+    pub reverse: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -133,13 +145,21 @@ impl Fetcher for UnstoppableDomains {
 async fn batch_fetch_by_wallet(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
     let address = target.identity()?.to_lowercase();
 
+    let reverse_record = fetch_reverse(&address).await?;
+    let mut reverse = false;
+    let mut primary_domain = String::from("");
+    if reverse_record.meta.domain != "" {
+        reverse = true;
+        primary_domain = reverse_record.meta.domain;
+    }
+
     let mut cnt: u32 = 0;
-    let mut next = String::from("");
+    let mut next: Option<String> = None;
     let mut edges = EdgeList::new();
     let hv = IdentitiesGraph::default();
 
     while cnt < u32::MAX {
-        let result = fetch_domain(&address, &next).await?;
+        let result = fetch_domain_by_owner(&address, next).await?;
         cnt += result.data.len() as u32;
 
         for item in result.data.iter() {
@@ -161,10 +181,10 @@ async fn batch_fetch_by_wallet(target: &Target) -> Result<(TargetProcessedList, 
             let mut ud: Identity = Identity {
                 uuid: Some(Uuid::new_v4()),
                 platform: Platform::UnstoppableDomains,
-                identity: item.id.clone(),
+                identity: item.meta.domain.clone(),
                 uid: None,
                 created_at: None,
-                display_name: Some(item.attributes.meta.domain.clone()),
+                display_name: Some(item.meta.domain.clone()),
                 added_at: naive_now(),
                 avatar_url: None,
                 profile_url: None,
@@ -176,12 +196,7 @@ async fn batch_fetch_by_wallet(target: &Target) -> Result<(TargetProcessedList, 
                 uuid: Uuid::new_v4(),
                 source: DataSource::UnstoppableDomains,
                 transaction: Some("".to_string()),
-                id: item
-                    .attributes
-                    .meta
-                    .token_id
-                    .clone()
-                    .unwrap_or("".to_string()),
+                id: item.meta.token_id.clone().unwrap_or("".to_string()),
                 created_at: None,
                 updated_at: naive_now(),
                 fetcher: DataFetcher::RelationService,
@@ -192,24 +207,24 @@ async fn batch_fetch_by_wallet(target: &Target) -> Result<(TargetProcessedList, 
                 uuid: Uuid::new_v4(),
                 source: DataSource::UnstoppableDomains,
                 system: DomainNameSystem::UnstoppableDomains,
-                name: item.id.clone(),
+                name: item.meta.domain.clone(),
                 fetcher: DataFetcher::RelationService,
                 updated_at: naive_now(),
             };
 
-            if item.attributes.meta.reverse {
+            if reverse && item.meta.domain == primary_domain {
                 // reverse = true
                 // 'reverse' resolution maps from an address back to a name.
                 let reverse: Resolve = Resolve {
                     uuid: Uuid::new_v4(),
                     source: DataSource::UnstoppableDomains,
                     system: DomainNameSystem::UnstoppableDomains,
-                    name: item.id.clone(),
+                    name: item.meta.domain.clone(),
                     fetcher: DataFetcher::RelationService,
                     updated_at: naive_now(),
                 };
                 addr.reverse = Some(true);
-                ud.reverse = Some(false);
+                ud.reverse = Some(true);
                 let rrs = reverse.wrapper(&addr, &ud, REVERSE_RESOLVE);
                 edges.push(EdgeWrapperEnum::new_reverse_resolve(rrs));
             }
@@ -226,8 +241,8 @@ async fn batch_fetch_by_wallet(target: &Target) -> Result<(TargetProcessedList, 
             edges.push(EdgeWrapperEnum::new_resolve(rs));
         }
 
-        if result.meta.has_more {
-            next = result.meta.next;
+        if result.next.is_some() {
+            next = result.next;
         } else {
             break;
         }
@@ -237,7 +252,7 @@ async fn batch_fetch_by_wallet(target: &Target) -> Result<(TargetProcessedList, 
 
 async fn batch_fetch_by_handle(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
     let name = target.identity()?;
-    let result = fetch_owner(&name).await?;
+    let result = fetch_owner_by_domain(&name).await?;
     if result.meta.owner.is_none() {
         warn!("UnstoppableDomains target {} | No Result", target);
         return Ok((vec![], vec![]));
@@ -302,21 +317,23 @@ async fn batch_fetch_by_handle(target: &Target) -> Result<(TargetProcessedList, 
         updated_at: naive_now(),
     };
 
-    if result.meta.reverse {
-        // reverse = true
-        // 'reverse' resolution maps from an address back to a name.
-        let reverse: Resolve = Resolve {
-            uuid: Uuid::new_v4(),
-            source: DataSource::UnstoppableDomains,
-            system: DomainNameSystem::UnstoppableDomains,
-            name: result.meta.domain.clone(),
-            fetcher: DataFetcher::RelationService,
-            updated_at: naive_now(),
-        };
-        addr.reverse = Some(true);
-        ud.reverse = Some(true);
-        let rrs = reverse.wrapper(&addr, &ud, REVERSE_RESOLVE);
-        edges.push(EdgeWrapperEnum::new_reverse_resolve(rrs));
+    if let Some(reverse) = result.meta.reverse {
+        if reverse {
+            // reverse = true
+            // 'reverse' resolution maps from an address back to a name.
+            let reverse: Resolve = Resolve {
+                uuid: Uuid::new_v4(),
+                source: DataSource::UnstoppableDomains,
+                system: DomainNameSystem::UnstoppableDomains,
+                name: result.meta.domain.clone(),
+                fetcher: DataFetcher::RelationService,
+                updated_at: naive_now(),
+            };
+            addr.reverse = Some(true);
+            ud.reverse = Some(true);
+            let rrs = reverse.wrapper(&addr, &ud, REVERSE_RESOLVE);
+            edges.push(EdgeWrapperEnum::new_reverse_resolve(rrs));
+        }
     }
 
     edges.push(EdgeWrapperEnum::new_hyper_edge(
@@ -350,6 +367,119 @@ async fn fetch_connections_by_platform_identity(
     }
 }
 
+async fn fetch_domain_by_owner(
+    owners: &str,
+    next: Option<String>,
+) -> Result<GetDomainByOwnerResp, Error> {
+    let client = make_client();
+    // curl --request GET "https://api.unstoppabledomains.com/resolve/owners/0x50b6a9ba0b1ca77ce67c22b30afc0a5bbbdb5a18/domains"
+    let uri: http::Uri = if next.is_none() {
+        format!(
+            "{}/resolve/owners/{}/domains",
+            C.upstream.unstoppable_api.url, owners
+        )
+        .parse()
+        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?
+    } else {
+        // "next": "/owners/0x8aad44321a86b170879d7a244c1e8d360c99dda8/domains?cursor=123"
+        format!(
+            "{}/resolve/{}",
+            C.upstream.unstoppable_api.url,
+            next.unwrap()
+        )
+        .parse()
+        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?
+    };
+
+    let req = hyper::Request::builder()
+        .method(Method::GET)
+        .uri(uri)
+        .header(
+            "Authorization",
+            format!("Bearer {}", C.upstream.unstoppable_api.token),
+        )
+        .body(Body::empty())
+        .map_err(|_err| Error::ParamError(format!("Invalid Head Error {}", _err)))?;
+
+    let mut body = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "UnstoppableDomains fetch | Fail to fetch_domain record: {:?}",
+                err.to_string()
+            ))
+        })?;
+
+    // Parse response body
+    let result = match parse_body::<GetDomainByOwnerResp>(&mut body).await {
+        Ok(result) => result,
+        Err(_) => {
+            match parse_body::<BadResponse>(&mut body).await {
+                Ok(bad) => {
+                    let err_message = format!(
+                        "UnstoppableDomains fetch error, Code: {}, Message: {}",
+                        bad.code, bad.message
+                    );
+                    error!(err_message);
+                    return Err(Error::General(
+                        err_message,
+                        lambda_http::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    ));
+                }
+                Err(err) => return Err(err),
+            };
+        }
+    };
+    Ok(result)
+}
+
+async fn fetch_owner_by_domain(domains: &str) -> Result<DomainResponse, Error> {
+    let client = make_client();
+    let uri: http::Uri = format!(
+        "{}/resolve/domains/{}",
+        C.upstream.unstoppable_api.url, domains
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+    let req = hyper::Request::builder()
+        .method(Method::GET)
+        .uri(uri)
+        .header(
+            "Authorization",
+            format!("Bearer {}", C.upstream.unstoppable_api.token),
+        )
+        .body(Body::empty())
+        .map_err(|_err| Error::ParamError(format!("Invalid Head Error {}", _err)))?;
+
+    let mut resp = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "UnstoppableDomains fetch | Fail to fetch_domain record: {:?}",
+                err.to_string()
+            ))
+        })?;
+
+    let result = match parse_body::<DomainResponse>(&mut resp).await {
+        Ok(result) => result,
+        Err(_) => match parse_body::<BadResponse>(&mut resp).await {
+            Ok(bad) => {
+                let err_message = format!(
+                    "UnstoppableDomains fetch | errCode: {}, errMessage: {}",
+                    bad.code, bad.message
+                );
+                error!(err_message);
+                return Err(Error::General(err_message, resp.status()));
+            }
+            Err(err) => return Err(err),
+        },
+    };
+
+    Ok(result)
+}
+
+/// Do not use `fetch_domain` query
+#[allow(dead_code)]
 async fn fetch_domain(owners: &str, page: &str) -> Result<RecordsForOwnerResponse, Error> {
     let client = make_client();
     let uri: http::Uri = if page.is_empty() {
@@ -410,13 +540,15 @@ async fn fetch_domain(owners: &str, page: &str) -> Result<RecordsForOwnerRespons
     Ok(result)
 }
 
-/// Temporarily do not use `reverse` query
-#[allow(dead_code)]
 async fn fetch_reverse(owner: &str) -> Result<ReverseResponse, Error> {
     let client = make_client();
-    let reverse_uri: http::Uri = format!("{}/reverse/{}", C.upstream.unstoppable_api.url, owner)
-        .parse()
-        .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+    // https://api.unstoppabledomains.com/resolve/reverse/{owner}
+    let reverse_uri: http::Uri = format!(
+        "{}/resolve/reverse/{}",
+        C.upstream.unstoppable_api.url, owner
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
     let reverse_req = hyper::Request::builder()
         .method(Method::GET)
         .uri(reverse_uri)
@@ -507,24 +639,27 @@ async fn save_domain(
         updated_at: naive_now(),
     };
 
-    if item.attributes.meta.reverse {
-        // reverse = true
-        // 'reverse' resolution maps from an address back to a name.
-        let reverse: Resolve = Resolve {
-            uuid: Uuid::new_v4(),
-            source: DataSource::UnstoppableDomains,
-            system: DomainNameSystem::UnstoppableDomains,
-            name: item.id.clone(),
-            fetcher: DataFetcher::RelationService,
-            updated_at: naive_now(),
-        };
-        eth_identity.reverse = Some(true);
-        ud.reverse = Some(false);
-        create_identity_domain_reverse_resolve_record(client, &eth_identity, &ud, &reverse).await?;
-        return Ok(vec![Target::Identity(
-            Platform::UnstoppableDomains,
-            item.attributes.meta.domain.clone(),
-        )]);
+    if let Some(reverse) = item.attributes.meta.reverse {
+        if reverse {
+            // reverse = true
+            // 'reverse' resolution maps from an address back to a name.
+            let reverse: Resolve = Resolve {
+                uuid: Uuid::new_v4(),
+                source: DataSource::UnstoppableDomains,
+                system: DomainNameSystem::UnstoppableDomains,
+                name: item.id.clone(),
+                fetcher: DataFetcher::RelationService,
+                updated_at: naive_now(),
+            };
+            eth_identity.reverse = Some(true);
+            ud.reverse = Some(false);
+            create_identity_domain_reverse_resolve_record(client, &eth_identity, &ud, &reverse)
+                .await?;
+            return Ok(vec![Target::Identity(
+                Platform::UnstoppableDomains,
+                item.attributes.meta.domain.clone(),
+            )]);
+        }
     }
 
     // hold record
@@ -676,20 +811,22 @@ async fn fetch_account_by_domain(
         updated_at: naive_now(),
     };
 
-    if result.meta.reverse {
-        // reverse = true
-        // 'reverse' resolution maps from an address back to a name.
-        let resolve: Resolve = Resolve {
-            uuid: Uuid::new_v4(),
-            source: DataSource::UnstoppableDomains,
-            system: DomainNameSystem::UnstoppableDomains,
-            name: result.meta.domain.clone(),
-            fetcher: DataFetcher::RelationService,
-            updated_at: naive_now(),
-        };
-        eth.reverse = Some(true);
-        ud.reverse = Some(true);
-        create_identity_domain_reverse_resolve_record(&cli, &eth, &ud, &resolve).await?;
+    if let Some(reverse) = result.meta.reverse {
+        if reverse {
+            // reverse = true
+            // 'reverse' resolution maps from an address back to a name.
+            let resolve: Resolve = Resolve {
+                uuid: Uuid::new_v4(),
+                source: DataSource::UnstoppableDomains,
+                system: DomainNameSystem::UnstoppableDomains,
+                name: result.meta.domain.clone(),
+                fetcher: DataFetcher::RelationService,
+                updated_at: naive_now(),
+            };
+            eth.reverse = Some(true);
+            ud.reverse = Some(true);
+            create_identity_domain_reverse_resolve_record(&cli, &eth, &ud, &resolve).await?;
+        }
     }
 
     // hold record

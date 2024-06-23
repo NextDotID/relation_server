@@ -30,7 +30,7 @@ url = "https://mw.graphql.knn3.xyz/"
 url = "https://pregod.rss3.dev/v1/notes"
 
 [upstream.the_graph]
-ens = "https://api.thegraph.com/subgraphs/name/ensdomains/ens"
+ens = "https://gateway-arbitrum.network.thegraph.com/api/[your_api_key]/subgraphs/id/{your_subgraph_id}"
 
 [upstream.ens_reverse]
 url = "https://ens.fafrd.workers.dev/ens/"
@@ -42,7 +42,7 @@ url = "https://indexer-v1.did.id"
 url = "https://api-v2.lens.dev/playground"
 
 [upstream.unstoppable_api]
-url = "https://resolve.unstoppabledomains.com"
+url = "https://api.unstoppabledomains.com"
 token = "4cb4358d-ce8b-4bf5-fill-yourstokenid"
 
 [upstream.datamgr_api]
