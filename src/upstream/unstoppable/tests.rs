@@ -3,9 +3,10 @@ mod tests {
     use crate::{
         error::Error,
         tigergraph::vertex::Identity,
-        upstream::unstoppable::UnstoppableDomains,
-        upstream::{unstoppable::fetch_domain, Platform},
-        upstream::{Fetcher, Target},
+        upstream::{
+            unstoppable::{fetch_domain_by_owner, UnstoppableDomains},
+            Fetcher, Platform, Target,
+        },
         util::make_http_client,
     };
 
@@ -30,9 +31,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_domain() -> Result<(), Error> {
-        let owners = "0xCbCca6e22d90b8d2B829852a8D551e8410f40956";
-        let page = "";
-        let data = fetch_domain(&owners, &page).await?;
+        let owners = "0x50b6a9ba0b1ca77ce67c22b30afc0a5bbbdb5a18";
+        let data = fetch_domain_by_owner(&owners, None).await?;
         print!("data: {:?}", data);
         Ok(())
     }
