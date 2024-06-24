@@ -31,6 +31,11 @@ url = "https://pregod.rss3.dev/v1/notes"
 
 [upstream.the_graph]
 ens = "https://gateway-arbitrum.network.thegraph.com/api/[your_api_key]/subgraphs/id/{your_subgraph_id}"
+subgraph0 = "subgraphs/id/0"
+subgraph1 = "subgraphs/id/1"
+subgraph2 = "subgraphs/id/2"
+subgraph3 = "subgraphs/id/3"
+subgraph4 = "subgraphs/id/4"
 
 [upstream.ens_reverse]
 url = "https://ens.fafrd.workers.dev/ens/"
