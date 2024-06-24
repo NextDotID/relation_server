@@ -100,6 +100,11 @@ pub struct ConfigRss3Service {
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigUpstreamTheGraph {
     pub ens: String,
+    pub subgraph0: Option<String>,
+    pub subgraph1: Option<String>,
+    pub subgraph2: Option<String>,
+    pub subgraph3: Option<String>,
+    pub subgraph4: Option<String>,
 }
 
 #[derive(Clone, Deserialize, Default)]
