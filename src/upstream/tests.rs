@@ -52,7 +52,7 @@ async fn test_fetch_all() -> Result<(), Error> {
     fetch_all(
         vec![Target::Identity(
             Platform::Ethereum,
-            "0x934b510d4c9103e6a87aef13b816fb080286d649".into(),
+            "0x9093a6ede64142a90718a0411ff25ce4daf391b6".into(),
         )],
         Some(5),
     )
