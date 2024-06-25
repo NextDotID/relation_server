@@ -20,8 +20,6 @@ use crate::upstream::{
 use crate::util::{make_http_client, naive_now, parse_timestamp};
 use async_trait::async_trait;
 use gql_client::Client as GQLClient;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, trace, warn};
 use uuid::Uuid;
