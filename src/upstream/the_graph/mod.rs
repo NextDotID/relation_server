@@ -20,11 +20,13 @@ use crate::upstream::{
 use crate::util::{make_http_client, naive_now, parse_timestamp};
 use async_trait::async_trait;
 use gql_client::Client as GQLClient;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, trace, warn};
 use uuid::Uuid;
+
+use rand::distributions::{Distribution, Uniform};
+use rand::SeedableRng;
+use rand_chacha::ChaCha8Rng;
 
 #[derive(Serialize)]
 struct QueryVars {
@@ -105,8 +107,11 @@ fn choose_endpoint() -> String {
     if options.is_empty() {
         C.upstream.the_graph.ens.clone()
     } else {
-        let mut rng = thread_rng();
-        options.choose(&mut rng).cloned().unwrap().clone()
+        let timestamp = naive_now().and_utc().timestamp(); // current timestamp as the seed
+        let mut rng = ChaCha8Rng::seed_from_u64(timestamp as u64);
+        let index_vec = Uniform::from(0..5); // [start, end)
+        let index = index_vec.sample(&mut rng);
+        options[index].clone()
     }
 }
 
