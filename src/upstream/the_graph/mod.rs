@@ -26,6 +26,10 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, info, trace, warn};
 use uuid::Uuid;
 
+use rand::distributions::{Distribution, Uniform};
+use rand::SeedableRng;
+use rand_chacha::ChaCha8Rng;
+
 #[derive(Serialize)]
 struct QueryVars {
     target: String,
@@ -105,8 +109,11 @@ fn choose_endpoint() -> String {
     if options.is_empty() {
         C.upstream.the_graph.ens.clone()
     } else {
-        let mut rng = thread_rng();
-        options.choose(&mut rng).cloned().unwrap().clone()
+        let timestamp = naive_now().and_utc().timestamp(); // current timestamp as the seed
+        let mut rng = ChaCha8Rng::seed_from_u64(timestamp as u64);
+        let index_vec = Uniform::from(0..5); // [start, end)
+        let index = index_vec.sample(&mut rng);
+        options[index].clone()
     }
 }
 
