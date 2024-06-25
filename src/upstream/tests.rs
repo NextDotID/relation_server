@@ -49,14 +49,14 @@ async fn test_fetch_all() -> Result<(), Error> {
     // )
     // .await?;
 
-    // fetch_all(
-    //     vec![Target::Identity(
-    //         Platform::Ethereum,
-    //         "0x934b510d4c9103e6a87aef13b816fb080286d649".into(),
-    //     )],
-    //     Some(5),
-    // )
-    // .await?;
+    fetch_all(
+        vec![Target::Identity(
+            Platform::Ethereum,
+            "0x934b510d4c9103e6a87aef13b816fb080286d649".into(),
+        )],
+        Some(5),
+    )
+    .await?;
 
     // fetch_all(
     //     vec![Target::Identity(
@@ -67,16 +67,16 @@ async fn test_fetch_all() -> Result<(), Error> {
     // )
     // .await?;
 
-    fetch_all(
-        vec![Target::NFT(
-            Chain::Ethereum,
-            ContractCategory::ENS,
-            ContractCategory::ENS.default_contract_address().unwrap(),
-            "23665.eth".to_string(),
-        )],
-        Some(5),
-    )
-    .await?;
+    // fetch_all(
+    //     vec![Target::NFT(
+    //         Chain::Ethereum,
+    //         ContractCategory::ENS,
+    //         ContractCategory::ENS.default_contract_address().unwrap(),
+    //         "sujiyan.eth".to_string(),
+    //     )],
+    //     Some(5),
+    // )
+    // .await?;
 
     // fetch_all(
     //     vec![Target::NFT(

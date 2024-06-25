@@ -20,6 +20,8 @@ use crate::upstream::{
 use crate::util::{make_http_client, naive_now, parse_timestamp};
 use async_trait::async_trait;
 use gql_client::Client as GQLClient;
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, trace, warn};
 use uuid::Uuid;
@@ -79,6 +81,33 @@ struct Account {
 struct DomainEvent {
     #[serde(rename = "transactionID")]
     transaction_id: String,
+}
+
+fn choose_endpoint() -> String {
+    let mut options: Vec<String> = Vec::new();
+
+    if let Some(value) = C.upstream.the_graph.subgraph0.clone() {
+        options.push(value);
+    }
+    if let Some(value) = C.upstream.the_graph.subgraph1.clone() {
+        options.push(value);
+    }
+    if let Some(value) = C.upstream.the_graph.subgraph2.clone() {
+        options.push(value);
+    }
+    if let Some(value) = C.upstream.the_graph.subgraph3.clone() {
+        options.push(value);
+    }
+    if let Some(value) = C.upstream.the_graph.subgraph4.clone() {
+        options.push(value);
+    }
+
+    if options.is_empty() {
+        C.upstream.the_graph.ens.clone()
+    } else {
+        let mut rng = thread_rng();
+        options.choose(&mut rng).cloned().unwrap().clone()
+    }
 }
 
 const QUERY_BY_ENS: &str = r#"
@@ -214,8 +243,8 @@ async fn fetch_domains(target: &Target) -> Result<Vec<Domain>, Error> {
             target_var = ens_name.clone();
         }
     }
-
-    let client = GQLClient::new(&C.upstream.the_graph.ens);
+    let endpoints = choose_endpoint();
+    let client = GQLClient::new(&endpoints);
     let vars = QueryVars { target: target_var };
 
     let resp = client.query_with_vars::<QueryResponse, QueryVars>(&query, vars);
