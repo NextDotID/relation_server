@@ -128,6 +128,12 @@ pub enum DataSource {
     #[graphql(name = "crossbell")]
     Crossbell,
 
+    /// Clusters
+    #[strum(serialize = "clusters")]
+    #[serde(rename = "clusters")]
+    #[graphql(name = "clusters")]
+    Clusters,
+
     /// Solana
     #[strum(serialize = "solana")]
     #[serde(rename = "solana")]
