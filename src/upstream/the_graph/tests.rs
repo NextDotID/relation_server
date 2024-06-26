@@ -10,8 +10,6 @@ use crate::{
     },
     util::{make_http_client, parse_timestamp},
 };
-use rand::seq::SliceRandom;
-use rand::thread_rng;
 use tracing::{span, Instrument, Level};
 
 #[tokio::test]
@@ -24,27 +22,6 @@ async fn test_find_ens_by_wallet() -> Result<(), Error> {
     println!("targets {:?}", targets);
 
     Ok(())
-}
-
-#[tokio::test]
-async fn test_rng() {
-    let mut options: Vec<String> = Vec::new();
-
-    options.push("0".to_string());
-    options.push("1".to_string());
-    options.push("2".to_string());
-    options.push("3".to_string());
-    options.push("4".to_string());
-
-    for i in 0..20 {
-        if options.is_empty() {
-            println!("ens")
-        } else {
-            let mut rng = thread_rng();
-            let choosen = options.choose(&mut rng).cloned().unwrap().clone();
-            println!("{}", choosen)
-        }
-    }
 }
 
 #[tokio::test]
