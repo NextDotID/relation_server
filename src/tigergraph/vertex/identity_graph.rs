@@ -318,7 +318,9 @@ impl IdentityGraph {
                         if result.graph_id == "" {
                             return Ok(None);
                         } else if result.edges.len() == 0 {
-                            return Ok(None);
+                            if result.vertices.len() > 1 {
+                                return Ok(None); // If vertices=1, it's isolated vertex
+                            }
                         } else {
                             // filter out dataSource == "keybase" edges
                             let filter_edges: Vec<IdentityConnection> = result

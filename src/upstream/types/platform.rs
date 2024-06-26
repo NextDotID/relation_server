@@ -194,6 +194,43 @@ pub enum Platform {
     #[graphql(name = "polygon")]
     Polygon,
 
+    /// Clusters
+    /// https://docs.clusters.xyz/
+    #[serde(rename = "clusters")]
+    #[strum(serialize = "clusters")]
+    #[graphql(name = "clusters")]
+    Clusters,
+
+    /// aptos
+    #[serde(rename = "aptos")]
+    #[strum(serialize = "aptos")]
+    #[graphql(name = "aptos")]
+    Aptos,
+
+    /// near
+    #[serde(rename = "near")]
+    #[strum(serialize = "near")]
+    #[graphql(name = "near")]
+    Near,
+
+    /// stacks
+    #[serde(rename = "stacks")]
+    #[strum(serialize = "stacks")]
+    #[graphql(name = "stacks")]
+    Stacks,
+
+    /// xrpc
+    #[serde(rename = "xrpc")]
+    #[strum(serialize = "xrpc")]
+    #[graphql(name = "xrpc")]
+    Xrpc,
+
+    /// cosmos
+    #[serde(rename = "cosmos")]
+    #[strum(serialize = "cosmos")]
+    #[graphql(name = "cosmos")]
+    Cosmos,
+
     /// Unknown
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]

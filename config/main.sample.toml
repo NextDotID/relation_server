@@ -68,3 +68,6 @@ rpc_url = "https://api.mainnet-beta.solana.com"
 
 [upstream.genome_api]
 rpc_url = "http://data-server-hostname/data_server/genome"
+
+[upstream.clusters_api]
+url = "http://data-server-hostname/data_server/clusters"

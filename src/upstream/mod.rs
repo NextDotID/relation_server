@@ -1,5 +1,6 @@
 // Upstreams
 mod aggregation;
+mod clusters;
 mod crossbell;
 mod dotbit;
 mod ens_reverse;
@@ -26,10 +27,10 @@ use crate::{
     error::Error,
     tigergraph::{batch_upsert, EdgeList},
     upstream::{
-        crossbell::Crossbell, dotbit::DotBit, ens_reverse::ENSReverseLookup, farcaster::Farcaster,
-        genome::Genome, keybase::Keybase, knn3::Knn3, lensv2::LensV2, proof_client::ProofClient,
-        rss3::Rss3, solana::Solana, space_id::SpaceId, sybil_list::SybilList, the_graph::TheGraph,
-        unstoppable::UnstoppableDomains,
+        clusters::Clusters, crossbell::Crossbell, dotbit::DotBit, ens_reverse::ENSReverseLookup,
+        farcaster::Farcaster, genome::Genome, keybase::Keybase, knn3::Knn3, lensv2::LensV2,
+        proof_client::ProofClient, rss3::Rss3, solana::Solana, space_id::SpaceId,
+        sybil_list::SybilList, the_graph::TheGraph, unstoppable::UnstoppableDomains,
     },
     util::{hashset_append, make_http_client},
 };
@@ -281,6 +282,7 @@ pub async fn fetch_one(target: &Target) -> Result<Vec<Target>, Error> {
         Genome::fetch(target),
         Crossbell::fetch(target),
         Solana::fetch(target),
+        Clusters::fetch(target),
     ])
     .await
     .into_iter()
@@ -331,6 +333,7 @@ pub async fn batch_fetch_upstream(
         Genome::batch_fetch(target),
         Crossbell::batch_fetch(target),
         Solana::batch_fetch(target),
+        Clusters::batch_fetch(target),
         // SybilList::batch_fetch(target), // move this logic to `data_process` as a scheduled asynchronous fetch
         // Knn3::batch_fetch(target), // Temporarily cancel
         // Firefly::batch_fetch(target), // Temporarily cancel
