@@ -1,12 +1,12 @@
 mod tests;
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::edge::{HyperEdge, Proof, Wrapper};
-use crate::tigergraph::edge::{HYPER_EDGE, PROOF_EDGE};
+use crate::tigergraph::edge::{Hold, HyperEdge, Proof, Resolve, Wrapper};
+use crate::tigergraph::edge::{HOLD_IDENTITY, HYPER_EDGE, PROOF_EDGE, RESOLVE, REVERSE_RESOLVE};
 use crate::tigergraph::vertex::{IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
-    DataFetcher, DataSource, Fetcher, Platform, ProofLevel, TargetProcessedList,
+    DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, ProofLevel, TargetProcessedList,
 };
 use crate::util::{make_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive};
 
@@ -139,6 +139,21 @@ async fn batch_fetch_by_address(target: &Target) -> Result<(TargetProcessedList,
             reverse: Some(false),
         };
 
+        // add identity connected to hyper vertex
+        edges.push(EdgeWrapperEnum::new_hyper_edge(HyperEdge {}.wrapper(
+            &hv,
+            &clusters_parent_node,
+            HYPER_EDGE,
+        )));
+        edges.push(EdgeWrapperEnum::new_hyper_edge(HyperEdge {}.wrapper(
+            &hv,
+            &clusters_name_node,
+            HYPER_EDGE,
+        )));
+        edges.push(EdgeWrapperEnum::new_hyper_edge(
+            HyperEdge {}.wrapper(&hv, &wallet, HYPER_EDGE),
+        ));
+
         let clusters_connect = Proof {
             uuid: Uuid::new_v4(),
             source: DataSource::Clusters,
@@ -159,26 +174,85 @@ async fn batch_fetch_by_address(target: &Target) -> Result<(TargetProcessedList,
             fetcher: DataFetcher::DataMgrService,
         };
 
-        // add identity connected to hyper vertex
-        edges.push(EdgeWrapperEnum::new_hyper_edge(HyperEdge {}.wrapper(
-            &hv,
-            &clusters_parent_node,
-            HYPER_EDGE,
-        )));
-        edges.push(EdgeWrapperEnum::new_hyper_edge(HyperEdge {}.wrapper(
-            &hv,
-            &clusters_name_node,
-            HYPER_EDGE,
-        )));
-        edges.push(EdgeWrapperEnum::new_hyper_edge(
-            HyperEdge {}.wrapper(&hv, &wallet, HYPER_EDGE),
-        ));
+        let parent_node_hold = Hold {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Clusters,
+            transaction: Some("".to_string()),
+            id: d.cluster_name.clone(),
+            created_at: None,
+            updated_at: naive_now(),
+            fetcher: DataFetcher::DataMgrService,
+            expired_at: None,
+        };
+
+        let child_node_hold = Hold {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Clusters,
+            transaction: Some("".to_string()),
+            id: d.name.clone(),
+            created_at: None,
+            updated_at: naive_now(),
+            fetcher: DataFetcher::DataMgrService,
+            expired_at: None,
+        };
+
+        let parent_node_resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Clusters,
+            system: DomainNameSystem::Clusters,
+            name: d.cluster_name.clone(),
+            fetcher: DataFetcher::DataMgrService,
+            updated_at: naive_now(),
+        };
+
+        let child_node_resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Clusters,
+            system: DomainNameSystem::Clusters,
+            name: d.name.clone(),
+            fetcher: DataFetcher::DataMgrService,
+            updated_at: naive_now(),
+        };
+
+        let parent_reverse_resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Clusters,
+            system: DomainNameSystem::Clusters,
+            name: d.cluster_name.clone(),
+            fetcher: DataFetcher::DataMgrService,
+            updated_at: naive_now(),
+        };
+
+        let child_reverse_resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Clusters,
+            system: DomainNameSystem::Clusters,
+            name: d.name.clone(),
+            fetcher: DataFetcher::DataMgrService,
+            updated_at: naive_now(),
+        };
 
         let pf = clusters_connect.wrapper(&clusters_parent_node, &clusters_name_node, PROOF_EDGE);
         let pf2 = proof_forward.wrapper(&clusters_name_node, &wallet, PROOF_EDGE);
+        let parent_hd = parent_node_hold.wrapper(&wallet, &clusters_parent_node, HOLD_IDENTITY);
+        let child_hd = child_node_hold.wrapper(&wallet, &clusters_name_node, HOLD_IDENTITY);
+        let parent_rs = parent_node_resolve.wrapper(&clusters_parent_node, &wallet, RESOLVE);
+        let child_rs = child_node_resolve.wrapper(&clusters_name_node, &wallet, RESOLVE);
+        let parent_rr =
+            parent_reverse_resolve.wrapper(&wallet, &clusters_parent_node, REVERSE_RESOLVE);
+        let child_rr = child_reverse_resolve.wrapper(&wallet, &clusters_name_node, REVERSE_RESOLVE);
 
         edges.push(EdgeWrapperEnum::new_proof_forward(pf));
         edges.push(EdgeWrapperEnum::new_proof_backward(pf2));
+
+        edges.push(EdgeWrapperEnum::new_hold_identity(parent_hd));
+        edges.push(EdgeWrapperEnum::new_hold_identity(child_hd));
+
+        edges.push(EdgeWrapperEnum::new_resolve(parent_rs));
+        edges.push(EdgeWrapperEnum::new_resolve(child_rs));
+
+        edges.push(EdgeWrapperEnum::new_reverse_resolve(parent_rr));
+        edges.push(EdgeWrapperEnum::new_reverse_resolve(child_rr));
     }
 
     Ok((vec![], edges))
@@ -252,6 +326,21 @@ async fn batch_fetch_by_clusters(
             reverse: Some(false),
         };
 
+        // add identity connected to hyper vertex
+        edges.push(EdgeWrapperEnum::new_hyper_edge(HyperEdge {}.wrapper(
+            &hv,
+            &clusters_parent_node,
+            HYPER_EDGE,
+        )));
+        edges.push(EdgeWrapperEnum::new_hyper_edge(HyperEdge {}.wrapper(
+            &hv,
+            &clusters_name_node,
+            HYPER_EDGE,
+        )));
+        edges.push(EdgeWrapperEnum::new_hyper_edge(
+            HyperEdge {}.wrapper(&hv, &wallet, HYPER_EDGE),
+        ));
+
         let clusters_connect = Proof {
             uuid: Uuid::new_v4(),
             source: DataSource::Clusters,
@@ -272,26 +361,85 @@ async fn batch_fetch_by_clusters(
             fetcher: DataFetcher::DataMgrService,
         };
 
-        // add identity connected to hyper vertex
-        edges.push(EdgeWrapperEnum::new_hyper_edge(HyperEdge {}.wrapper(
-            &hv,
-            &clusters_parent_node,
-            HYPER_EDGE,
-        )));
-        edges.push(EdgeWrapperEnum::new_hyper_edge(HyperEdge {}.wrapper(
-            &hv,
-            &clusters_name_node,
-            HYPER_EDGE,
-        )));
-        edges.push(EdgeWrapperEnum::new_hyper_edge(
-            HyperEdge {}.wrapper(&hv, &wallet, HYPER_EDGE),
-        ));
+        let parent_node_hold = Hold {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Clusters,
+            transaction: Some("".to_string()),
+            id: d.cluster_name.clone(),
+            created_at: None,
+            updated_at: naive_now(),
+            fetcher: DataFetcher::DataMgrService,
+            expired_at: None,
+        };
+
+        let child_node_hold = Hold {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Clusters,
+            transaction: Some("".to_string()),
+            id: d.name.clone(),
+            created_at: None,
+            updated_at: naive_now(),
+            fetcher: DataFetcher::DataMgrService,
+            expired_at: None,
+        };
+
+        let parent_node_resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Clusters,
+            system: DomainNameSystem::Clusters,
+            name: d.cluster_name.clone(),
+            fetcher: DataFetcher::DataMgrService,
+            updated_at: naive_now(),
+        };
+
+        let child_node_resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Clusters,
+            system: DomainNameSystem::Clusters,
+            name: d.name.clone(),
+            fetcher: DataFetcher::DataMgrService,
+            updated_at: naive_now(),
+        };
+
+        let parent_reverse_resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Clusters,
+            system: DomainNameSystem::Clusters,
+            name: d.cluster_name.clone(),
+            fetcher: DataFetcher::DataMgrService,
+            updated_at: naive_now(),
+        };
+
+        let child_reverse_resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Clusters,
+            system: DomainNameSystem::Clusters,
+            name: d.name.clone(),
+            fetcher: DataFetcher::DataMgrService,
+            updated_at: naive_now(),
+        };
 
         let pf = clusters_connect.wrapper(&clusters_parent_node, &clusters_name_node, PROOF_EDGE);
         let pf2 = proof_forward.wrapper(&clusters_name_node, &wallet, PROOF_EDGE);
+        let parent_hd = parent_node_hold.wrapper(&wallet, &clusters_parent_node, HOLD_IDENTITY);
+        let child_hd = child_node_hold.wrapper(&wallet, &clusters_name_node, HOLD_IDENTITY);
+        let parent_rs = parent_node_resolve.wrapper(&clusters_parent_node, &wallet, RESOLVE);
+        let child_rs = child_node_resolve.wrapper(&clusters_name_node, &wallet, RESOLVE);
+        let parent_rr =
+            parent_reverse_resolve.wrapper(&wallet, &clusters_parent_node, REVERSE_RESOLVE);
+        let child_rr = child_reverse_resolve.wrapper(&wallet, &clusters_name_node, REVERSE_RESOLVE);
 
         edges.push(EdgeWrapperEnum::new_proof_forward(pf));
         edges.push(EdgeWrapperEnum::new_proof_backward(pf2));
+
+        edges.push(EdgeWrapperEnum::new_hold_identity(parent_hd));
+        edges.push(EdgeWrapperEnum::new_hold_identity(child_hd));
+
+        edges.push(EdgeWrapperEnum::new_resolve(parent_rs));
+        edges.push(EdgeWrapperEnum::new_resolve(child_rs));
+
+        edges.push(EdgeWrapperEnum::new_reverse_resolve(parent_rr));
+        edges.push(EdgeWrapperEnum::new_reverse_resolve(child_rr));
 
         next_targets.push(Target::Identity(wallet_platform, d.address.clone()));
     }

@@ -250,6 +250,7 @@ impl From<Platform> for DomainNameSystem {
             Platform::ENS => DomainNameSystem::ENS,
             Platform::SNS => DomainNameSystem::SNS,
             Platform::Genome => DomainNameSystem::Genome,
+            Platform::Clusters => DomainNameSystem::Clusters,
             _ => DomainNameSystem::Unknown,
         }
     }
