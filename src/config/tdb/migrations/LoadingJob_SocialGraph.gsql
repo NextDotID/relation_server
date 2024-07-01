@@ -519,7 +519,7 @@ CREATE OR REPLACE QUERY find_identity_graph_resolve(STRING platform, STRING iden
   PRINT seed;
   graph_id = @@minUpdateTime.id;
 
-  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS", "ens", "sns", "genome"];
+  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS", "ens", "sns", "genome", "clusters"];
   ListAccum<STRING> @@edge_type = ["Proof_Forward", "Proof_Backward", "Hold_Identity", "Resolve", "Reverse_Resolve"];
 
   vset = SELECT v FROM Identities:v-((PartOfIdentitiesGraph>):e)-identities_graph LIMIT 500;
@@ -565,7 +565,7 @@ CREATE OR REPLACE QUERY find_expand_identity(STRING platform, STRING identity) F
   SetAccum<Address> @owner_address;
   SetAccum<Address> @resolve_address;
   
-  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS", "ens", "sns", "genome"];
+  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS", "ens", "sns", "genome", "clusters"];
   IF @@domainSystems.contains(platform) == TRUE THEN
     tmp = SELECT domain FROM seed:domain-((<Hold_Identity):e)-Identities:owner
             ACCUM domain.@owner_address += Address(owner.platform, owner.identity);
@@ -603,7 +603,7 @@ CREATE OR REPLACE QUERY find_identity_graph(STRING p, INT reverse_flag=0) FOR GR
                      POST-ACCUM s.@degree += 1;
   graph_id = @@minUpdateTime.id;
 
-  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS", "ens", "sns", "genome"];
+  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS", "ens", "sns", "genome", "clusters"];
   ListAccum<STRING> @@edge_type = ["Proof_Forward", "Proof_Backward", "Hold_Identity", "Resolve", "Reverse_Resolve"];
 
   IF reverse_flag == 1 THEN
@@ -731,7 +731,7 @@ CREATE OR REPLACE QUERY neighbors_with_source_reverse(VERTEX<Identities> p, INT 
   SetAccum<STRING> @source_list;
   SetAccum<EDGE> @@edge_set;
   SetAccum<VERTEX<Identities>> @@vertices;
-  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS", "ens", "sns", "genome"];
+  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ENS", "ens", "sns", "genome", "clusters"];
 
   ##### Initialization  #####
   seed (Identities) = {p};
