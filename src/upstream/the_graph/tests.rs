@@ -1,5 +1,3 @@
-use tracing::{span, Instrument, Level};
-
 use crate::{
     error::Error,
     tigergraph::{
@@ -12,6 +10,7 @@ use crate::{
     },
     util::{make_http_client, parse_timestamp},
 };
+use tracing::{span, Instrument, Level};
 
 #[tokio::test]
 async fn test_find_ens_by_wallet() -> Result<(), Error> {

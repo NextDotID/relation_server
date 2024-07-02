@@ -67,6 +67,12 @@ pub enum DomainNameSystem {
     #[graphql(name = "crossbell")]
     Crossbell,
 
+    /// Clusters
+    #[strum(serialize = "clusters")]
+    #[serde(rename = "clusters")]
+    #[graphql(name = "clusters")]
+    Clusters,
+
     #[default]
     #[strum(serialize = "unknown")]
     #[serde(rename = "unknown")]
@@ -85,6 +91,7 @@ impl From<DomainNameSystem> for Platform {
             DomainNameSystem::SpaceId => Platform::SpaceId,
             DomainNameSystem::Genome => Platform::Genome,
             DomainNameSystem::Crossbell => Platform::Crossbell,
+            DomainNameSystem::Clusters => Platform::Clusters,
             _ => Platform::Unknown,
         }
     }
