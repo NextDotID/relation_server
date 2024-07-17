@@ -5,6 +5,7 @@ on:
     branches:
     - main
     - develop
+    - arangodb
 
 jobs:
   build-image:
