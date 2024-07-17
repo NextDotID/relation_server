@@ -3,13 +3,11 @@ name: Build container
 on:
   push:
     branches:
-    - main
-    - develop
     - arangodb
 
 jobs:
   build-image:
-    if: (github.ref_name == 'main' || github.ref_name == 'develop') && github.repository == 'nextdotid/relation_server'
+    if: github.ref_name == 'arangodb' && github.repository == 'nextdotid/relation_server'
     runs-on: ubuntu-latest
     env:
       REGISTRY: ghcr.io
