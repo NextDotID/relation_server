@@ -45,6 +45,7 @@ impl Fetcher for Clusters {
             | Platform::Near
             | Platform::Stacks
             | Platform::Tron
+            | Platform::Ton
             | Platform::Xrpc
             | Platform::Cosmos => batch_fetch_by_address(target).await,
             Platform::Clusters => batch_fetch_by_clusters(target).await,
@@ -62,6 +63,7 @@ impl Fetcher for Clusters {
             Platform::Near,
             Platform::Stacks,
             Platform::Tron,
+            Platform::Ton,
             Platform::Xrpc,
             Platform::Cosmos,
             Platform::Clusters,
@@ -93,7 +95,7 @@ async fn batch_fetch_by_address(target: &Target) -> Result<(TargetProcessedList,
             );
             continue;
         }
-        let created_at_naive = timestamp_to_naive(d.updated_at, 0);
+        let updated_at_naive = timestamp_to_naive(d.updated_at, 0);
         let wallet: Identity = Identity {
             uuid: Some(Uuid::new_v4()),
             platform: wallet_platform,
@@ -114,11 +116,11 @@ async fn batch_fetch_by_address(target: &Target) -> Result<(TargetProcessedList,
             platform: Platform::Clusters,
             identity: d.cluster_name.clone(),
             uid: None,
-            created_at: created_at_naive,
+            created_at: updated_at_naive,
             display_name: Some(d.cluster_name.clone()),
             added_at: naive_now(),
-            avatar_url: None,
-            profile_url: None,
+            avatar_url: d.imageurl.clone(),
+            profile_url: d.profileurl.clone(),
             updated_at: naive_now(),
             expired_at: None,
             reverse: Some(false),
@@ -129,11 +131,11 @@ async fn batch_fetch_by_address(target: &Target) -> Result<(TargetProcessedList,
             platform: Platform::Clusters,
             identity: d.name.clone(),
             uid: None,
-            created_at: created_at_naive,
+            created_at: updated_at_naive,
             display_name: Some(d.name.clone()),
             added_at: naive_now(),
-            avatar_url: None,
-            profile_url: None,
+            avatar_url: d.imageurl.clone(),
+            profile_url: d.profileurl.clone(),
             updated_at: naive_now(),
             expired_at: None,
             reverse: Some(false),
@@ -159,7 +161,7 @@ async fn batch_fetch_by_address(target: &Target) -> Result<(TargetProcessedList,
             source: DataSource::Clusters,
             level: ProofLevel::VeryConfident,
             record_id: None,
-            created_at: created_at_naive,
+            created_at: updated_at_naive,
             updated_at: naive_now(),
             fetcher: DataFetcher::DataMgrService,
         };
@@ -169,7 +171,7 @@ async fn batch_fetch_by_address(target: &Target) -> Result<(TargetProcessedList,
             source: DataSource::Clusters,
             level: ProofLevel::VeryConfident,
             record_id: None,
-            created_at: created_at_naive,
+            created_at: updated_at_naive,
             updated_at: naive_now(),
             fetcher: DataFetcher::DataMgrService,
         };
@@ -304,8 +306,8 @@ async fn batch_fetch_by_clusters(
             created_at: created_at_naive,
             display_name: Some(d.cluster_name.clone()),
             added_at: naive_now(),
-            avatar_url: None,
-            profile_url: None,
+            avatar_url: d.imageurl.clone(),
+            profile_url: d.profileurl.clone(),
             updated_at: naive_now(),
             expired_at: None,
             reverse: Some(false),
@@ -319,8 +321,8 @@ async fn batch_fetch_by_clusters(
             created_at: created_at_naive,
             display_name: Some(d.name.clone()),
             added_at: naive_now(),
-            avatar_url: None,
-            profile_url: None,
+            avatar_url: d.imageurl.clone(),
+            profile_url: d.profileurl.clone(),
             updated_at: naive_now(),
             expired_at: None,
             reverse: Some(false),
@@ -465,6 +467,9 @@ pub struct Metadata {
     pub is_verified: bool,
     #[serde(rename = "updatedat")]
     pub updated_at: i64,
+    #[serde(rename = "updatedat")]
+    pub profileurl: Option<String>,
+    pub imageurl: Option<String>,
 }
 
 async fn get_clusters_by_address(address: &str) -> Result<Vec<Metadata>, Error> {

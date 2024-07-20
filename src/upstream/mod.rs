@@ -1,6 +1,5 @@
 // Upstreams
 mod aggregation;
-mod chainbase;
 mod clusters;
 mod crossbell;
 mod dotbit;
@@ -28,11 +27,10 @@ use crate::{
     error::Error,
     tigergraph::{batch_upsert, EdgeList},
     upstream::{
-        chainbase::Chainbase, clusters::Clusters, crossbell::Crossbell, dotbit::DotBit,
-        ens_reverse::ENSReverseLookup, farcaster::Farcaster, genome::Genome, keybase::Keybase,
-        knn3::Knn3, lensv2::LensV2, proof_client::ProofClient, rss3::Rss3, solana::Solana,
-        space_id::SpaceId, sybil_list::SybilList, the_graph::TheGraph,
-        unstoppable::UnstoppableDomains,
+        clusters::Clusters, crossbell::Crossbell, dotbit::DotBit, ens_reverse::ENSReverseLookup,
+        farcaster::Farcaster, genome::Genome, keybase::Keybase, knn3::Knn3, lensv2::LensV2,
+        proof_client::ProofClient, rss3::Rss3, solana::Solana, space_id::SpaceId,
+        sybil_list::SybilList, the_graph::TheGraph, unstoppable::UnstoppableDomains,
     },
     util::{hashset_append, make_http_client},
 };

@@ -176,6 +176,12 @@ pub enum Platform {
     #[graphql(name = "tron")]
     Tron,
 
+    /// Tron
+    #[strum(serialize = "ton")]
+    #[serde(rename = "ton")]
+    #[graphql(name = "ton")]
+    Ton,
+
     /// doge
     #[strum(serialize = "doge")]
     #[serde(rename = "doge")]
