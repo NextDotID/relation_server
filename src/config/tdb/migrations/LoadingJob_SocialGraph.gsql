@@ -467,7 +467,7 @@ CREATE OR REPLACE QUERY upsert_hyper_vertex(STRING from_str, STRING to_str, INT 
   PRINT @@created_vertices as created_vertices, @@created_hyper_vertices as created_hyper_vertices, final_identity_graph;
 }
 
-CREATE OR REPLACE QUERY delete_graph_inner_connection(VERTEX<Identities> p, INT depth=10) FOR GRAPH SocialGraph SYNTAX v2 {
+CREATE OR REPLACE QUERY delete_graph_all(VERTEX<Identities> p, INT depth=10) FOR GRAPH SocialGraph SYNTAX v2 {
   seed (Identities) = {p};
   identities_graph = SELECT tgt FROM seed-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt;
   vertex2delete = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-identities_graph;
@@ -478,6 +478,24 @@ CREATE OR REPLACE QUERY delete_graph_inner_connection(VERTEX<Identities> p, INT 
   DELETE e FROM vertex2delete:s-((<Hold_Identity):e)-Identities:t;
   DELETE e FROM vertex2delete:s-((<Resolve):e)-Identities:t;
   DELETE e FROM vertex2delete:s-((<Reverse_Resolve):e)-Identities:t;
+  DELETE e FROM vertex2delete:s-((<Proof_Forward):e)-Identities:t;
+  DELETE e FROM vertex2delete:s-((<Proof_Backward):e)-Identities:t;
+  DELETE e FROM vertex2delete:s-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:t;
+  DELETE s FROM vertex2delete:s;
+  DELETE t FROM identities_graph:t;
+}
+
+CREATE OR REPLACE QUERY delete_graph_inner_connection(VERTEX<Identities> p, INT depth=10) FOR GRAPH SocialGraph SYNTAX v2 {
+  seed (Identities) = {p};
+  identities_graph = SELECT tgt FROM seed-((PartOfIdentitiesGraph>):e)-IdentitiesGraph:tgt;
+  vertex2delete = SELECT s FROM Identities:s-((PartOfIdentitiesGraph>):e)-identities_graph;
+  
+  // DELETE e FROM vertex2delete:s-((Hold_Contract>):e)-Contracts:c;
+  // DELETE e FROM vertex2delete:s-((Reverse_Resolve_Contract>):e)-Contracts:c;
+  // DELETE e FROM vertex2delete:s-((<Resolve_Contract):e)-Contracts:c;
+  DELETE e FROM vertex2delete:s-((<Hold_Identity):e)-Identities:t WHERE s.platform != "ens" AND s.platform != "unstoppabledomains";
+  DELETE e FROM vertex2delete:s-((<Resolve):e)-Identities:t WHERE t.platform != "ens" AND t.platform != "unstoppabledomains";
+  DELETE e FROM vertex2delete:s-((<Reverse_Resolve):e)-Identities:t WHERE s.platform != "ens" AND s.platform != "unstoppabledomains";
   DELETE e FROM vertex2delete:s-((<Proof_Forward):e)-Identities:t;
   DELETE e FROM vertex2delete:s-((<Proof_Backward):e)-Identities:t;
 }

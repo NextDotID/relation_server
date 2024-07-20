@@ -98,25 +98,30 @@ pub enum Platform {
     #[graphql(name = "hackernews")]
     HackerNews,
 
-    /// ENS
+    /// ENS: ENS domains provide a way for users to map human readable names to blockchain and non-blockchain resources.
+    /// https://ens.domains/
     #[strum(serialize = "ens")]
     #[serde(rename = "ens")]
     #[graphql(name = "ens")]
     ENS,
 
-    /// https://www.sns.id: Solana Name Service
+    /// Solana Name Service: Create a human-readable identity by replacing decentralized addresses with a domain name.
+    /// https://www.sns.id
     #[strum(serialize = "sns")]
     #[serde(rename = "sns")]
     #[graphql(name = "sns")]
     SNS,
 
-    /// Lens
+    /// Lens: Lens is an open social network where users own their content and connections.
+    /// https://www.lens.xyz/
     #[strum(serialize = "Lens", serialize = "lens")]
     #[serde(rename = "lens")]
     #[graphql(name = "lens")]
     Lens,
 
-    /// .bit
+    /// .bit: A protocols for proof of humanity and achievement network,
+    /// connecting every human. Own your ID and achievement through our blockchain-powered protocol network
+    /// https://d.id/
     #[strum(serialize = "dotbit")]
     #[serde(rename = "dotbit")]
     #[graphql(name = "dotbit")]
@@ -128,104 +133,135 @@ pub enum Platform {
     #[graphql(name = "dns")]
     DNS,
 
-    /// Minds
+    /// Minds: Interoperable with web2 and web3 protocols like ActivityPub, RSS, DNS, Bitcoin, Ethereum, Stripe and more.
+    /// https://www.minds.com/
     #[strum(serialize = "minds")]
     #[serde(rename = "minds")]
     #[graphql(name = "minds")]
     Minds,
 
-    /// UnstoppableDomains
+    /// UnstoppableDomains: One Stop Shop for Onchain Domains
+    /// https://unstoppabledomains.com/
     #[strum(serialize = "unstoppabledomains")]
     #[serde(rename = "unstoppabledomains")]
     #[graphql(name = "unstoppabledomains")]
     UnstoppableDomains,
 
-    /// Farcaster
+    /// Farcaster: Farcaster is a fully decentralized social network.
+    /// https://www.farcaster.xyz/
     #[strum(serialize = "farcaster")]
     #[serde(rename = "farcaster")]
     #[graphql(name = "farcaster")]
     Farcaster,
 
-    /// SpaceId
+    /// SpaceId: A Web3 Identity Protocol with Multi-chain Name Service.
+    /// equip communities with powerful tools to launch their desired Top-Level-Domain
+    /// https://space.id/
     #[strum(serialize = "space_id")]
     #[serde(rename = "space_id")]
     #[graphql(name = "space_id")]
     SpaceId,
 
-    /// Genome
+    /// Genome: .GNO domains for your web3 identity.
+    /// community-owned network that prioritizes credible neutrality and resiliency.
+    /// https://genomedomains.com/
     #[strum(serialize = "genome")]
     #[serde(rename = "genome")]
     #[graphql(name = "genome")]
     Genome,
 
-    /// Crossbell
+    /// Crossbell: Crossbell is a social ownership platform to build cutting-edge social dApps.
+    /// https://crossbell.io/
     #[strum(serialize = "crossbell")]
     #[serde(rename = "crossbell")]
     #[graphql(name = "crossbell")]
     Crossbell,
 
-    /// CKB
+    /// CKB: Common Knowledge Base
+    /// https://www.nervos.org/
     #[strum(serialize = "ckb")]
     #[serde(rename = "ckb")]
     #[graphql(name = "ckb")]
     CKB,
 
-    /// Tron
+    /// TRON Network: An ambitious project dedicated to building the infrastructure
+    /// for a truly decentralized Internet.
+    /// https://tron.network/
     #[strum(serialize = "tron")]
     #[serde(rename = "tron")]
     #[graphql(name = "tron")]
     Tron,
 
-    /// doge
+    /// TON Network: A decentralized and open internet,
+    /// created by the community using a technology designed by Telegram.
+    /// https://ton.org/
+    #[strum(serialize = "ton")]
+    #[serde(rename = "ton")]
+    #[graphql(name = "ton")]
+    Ton,
+
+    /// Doge: https://dogechain.dog/
     #[strum(serialize = "doge")]
     #[serde(rename = "doge")]
     #[graphql(name = "doge")]
     Doge,
 
     /// BNB Smart Chain (BSC)
+    /// https://docs.bnbchain.org/bnb-smart-chain/overview/
     #[strum(serialize = "bsc")]
     #[serde(rename = "bsc")]
     #[graphql(name = "bsc")]
     BNBSmartChain,
 
     /// Polygon
+    /// https://www.polygon.com/
     #[serde(rename = "polygon")]
     #[strum(serialize = "polygon")]
     #[graphql(name = "polygon")]
     Polygon,
 
-    /// Clusters
+    /// Clusters: Clusters is the leading universal name service. Every blockchain, all your wallets, one name.
+    /// The dominant LayerZero name service.
     /// https://docs.clusters.xyz/
     #[serde(rename = "clusters")]
     #[strum(serialize = "clusters")]
     #[graphql(name = "clusters")]
     Clusters,
 
-    /// aptos
+    /// Aptos: Aptos is an independent Layer 1 blockchain platform focused on safety and
+    /// scalability driving growth within a decentralized network and developer ecosystem.
+    /// https://aptosfoundation.org/
     #[serde(rename = "aptos")]
     #[strum(serialize = "aptos")]
     #[graphql(name = "aptos")]
     Aptos,
 
-    /// near
+    /// Near: NEAR is the chain abstraction stack, empowering builders to create apps
+    /// that scale to billions of users and across all blockchains.
+    /// https://near.org/
     #[serde(rename = "near")]
     #[strum(serialize = "near")]
     #[graphql(name = "near")]
     Near,
 
-    /// stacks
+    /// Stacks: The Leading Bitcoin L2 for Smart Contracts, Apps, DeFi.
+    /// https://www.stacks.co/
     #[serde(rename = "stacks")]
     #[strum(serialize = "stacks")]
     #[graphql(name = "stacks")]
     Stacks,
 
-    /// xrpc
+    /// Xrpc: Xrp Classic's purpose is to develop eco-friendly solutions
+    /// that will make the cryptocurrency space safer and easier to understand for everyone.
+    /// https://www.xrpclassic.com/
     #[serde(rename = "xrpc")]
     #[strum(serialize = "xrpc")]
     #[graphql(name = "xrpc")]
     Xrpc,
 
-    /// cosmos
+    /// Cosmos: Cosmos is an ever-expanding ecosystem of interoperable and sovereign blockchain appsand services,
+    /// built for a decentralized future.
+    /// https://cosmos.network/
     #[serde(rename = "cosmos")]
     #[strum(serialize = "cosmos")]
     #[graphql(name = "cosmos")]
