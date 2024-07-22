@@ -190,6 +190,59 @@ pub enum Chain {
     #[graphql(name = "base")]
     Base,
 
+    /// TON Network: A decentralized and open internet,
+    /// created by the community using a technology designed by Telegram.
+    /// https://ton.org/
+    #[strum(serialize = "ton")]
+    #[serde(rename = "ton")]
+    #[graphql(name = "ton")]
+    Ton,
+
+    /// TRON Network: An ambitious project dedicated to building the infrastructure
+    /// for a truly decentralized Internet.
+    /// https://tron.network/
+    #[strum(serialize = "tron")]
+    #[serde(rename = "tron")]
+    #[graphql(name = "tron")]
+    Tron,
+
+    /// Doge: https://dogechain.dog/
+    #[strum(serialize = "doge")]
+    #[serde(rename = "doge")]
+    #[graphql(name = "doge")]
+    Doge,
+
+    /// Aptos: Aptos is an independent Layer 1 blockchain platform focused on safety and
+    /// scalability driving growth within a decentralized network and developer ecosystem.
+    /// https://aptosfoundation.org/
+    #[serde(rename = "aptos")]
+    #[strum(serialize = "aptos")]
+    #[graphql(name = "aptos")]
+    Aptos,
+
+    /// Near: NEAR is the chain abstraction stack, empowering builders to create apps
+    /// that scale to billions of users and across all blockchains.
+    /// https://near.org/
+    #[serde(rename = "near")]
+    #[strum(serialize = "near")]
+    #[graphql(name = "near")]
+    Near,
+
+    /// Stacks: The Leading Bitcoin L2 for Smart Contracts, Apps, DeFi.
+    /// https://www.stacks.co/
+    #[serde(rename = "stacks")]
+    #[strum(serialize = "stacks")]
+    #[graphql(name = "stacks")]
+    Stacks,
+
+    /// Cosmos: Cosmos is an ever-expanding ecosystem of interoperable and sovereign blockchain appsand services,
+    /// built for a decentralized future.
+    /// https://cosmos.network/
+    #[serde(rename = "cosmos")]
+    #[strum(serialize = "cosmos")]
+    #[graphql(name = "cosmos")]
+    Cosmos,
+
     #[default]
     #[serde(rename = "unknown")]
     #[strum(serialize = "unknown")]
@@ -211,6 +264,8 @@ pub enum ChainType {
     Conflux,
     /// Bitcoin
     BTC,
+    /// Cosmos
+    Cosmos,
 }
 
 impl Default for ChainType {
@@ -235,7 +290,7 @@ impl Chain {
             BNBSmartChain => ChainType::EVM(56),
             Polygon => ChainType::EVM(137),
             Mumbai => ChainType::EVM(80001),
-            Solana => ChainType::Solana,
+            Solana => ChainType::EVM(900),
             Conflux => ChainType::Conflux,
             ConfluxESpace => ChainType::EVM(71),
             EthereumClassic => ChainType::EVM(61),
@@ -251,6 +306,13 @@ impl Chain {
             Celo => ChainType::EVM(42220),
             CKB => ChainType::EVM(71402),
             Base => ChainType::EVM(8453),
+            Ton => ChainType::EVM(1100),
+            Tron => ChainType::EVM(1000),
+            Doge => ChainType::EVM(2000),
+            Aptos => ChainType::EVM(1400),
+            Near => ChainType::EVM(1200),
+            Stacks => ChainType::BTC,
+            Cosmos => ChainType::Cosmos,
             Unknown => todo!(),
         }
     }
