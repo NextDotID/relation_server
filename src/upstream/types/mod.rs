@@ -16,6 +16,7 @@ pub use data_fetcher::DataFetcher;
 pub use data_source::vec_string_to_vec_datasource;
 pub use data_source::DataSource;
 pub use domain_name::DomainNameSystem;
+pub use domain_name::{EXT, EXTENSION};
 pub use level::ProofLevel;
 pub use platform::Platform;
 pub use target::{Target, TargetProcessedList};
