@@ -51,6 +51,7 @@ pub struct ProofsSummary {
     pub all: Vec<ProofItem>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct Basics {
     pub username: String,
@@ -65,6 +66,7 @@ pub struct Basics {
     pub eldest_seqno: i32,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct ProofItem {
     pub proof_type: String,
