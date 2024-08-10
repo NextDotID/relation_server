@@ -5,8 +5,8 @@ use crate::{
         vertex::{Contract, Identity},
     },
     upstream::{
-        the_graph::TheGraph, Chain, ContractCategory, DataFetcher, DataSource, Fetcher, Platform,
-        Target,
+        the_graph::TheGraph, Chain, ContractCategory, DataFetcher, DataSource, DomainSearch,
+        Fetcher, Platform, Target,
     },
     util::{make_http_client, parse_timestamp},
 };
@@ -21,6 +21,14 @@ async fn test_find_ens_by_wallet() -> Result<(), Error> {
     let targets = TheGraph::batch_fetch(&target).await?;
     println!("targets {:?}", targets);
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_domain_search() -> Result<(), Error> {
+    let name = "zzfzz";
+    let edges = TheGraph::domain_search(name).await?;
+    println!("data: {:?}", edges);
     Ok(())
 }
 
