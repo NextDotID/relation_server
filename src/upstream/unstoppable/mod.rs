@@ -12,8 +12,8 @@ use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::{DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
-    DataFetcher, DataSource, DomainFetcher, DomainNameSystem, Fetcher, Platform, Target,
-    TargetProcessedList,
+    DataFetcher, DataSource, DomainNameSystem, DomainSearch, Fetcher, Platform, Target,
+    TargetProcessedList, EXT,
 };
 use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};
 use async_trait::async_trait;
@@ -851,8 +851,8 @@ async fn fetch_account_by_domain(
 }
 
 #[async_trait]
-impl DomainFetcher for UnstoppableDomains {
-    async fn domain_fetch(name: &str) -> Result<EdgeList, Error> {
+impl DomainSearch for UnstoppableDomains {
+    async fn domain_search(name: &str) -> Result<EdgeList, Error> {
         let mut process_name = name.to_string();
         if name.contains(".") {
             process_name = name.split(".").next().unwrap_or("").to_string();
@@ -863,17 +863,21 @@ impl DomainFetcher for UnstoppableDomains {
         }
         debug!("UnstoppableDomains domain_search(name={})", process_name);
 
+        let result = domain_search(&process_name).await?;
+
         let mut edges = EdgeList::new();
         let domain_collection = DomainCollection {
             label: process_name.clone(),
             updated_at: naive_now(),
         };
-        let result = domain_search(&process_name).await?;
 
         for r in result.iter() {
             let ud_name = r.domain.name.clone();
-            let ud_tld = r.domain.extension.clone();
-
+            let tld_name = r.domain.extension.clone();
+            let tld: EXT = tld_name.parse()?;
+            if tld == EXT::Unknown {
+                continue;
+            }
             if r.availability == false {
                 if r.status == "registered".to_string() {
                     let mut ud: Identity = Identity {
@@ -891,9 +895,9 @@ impl DomainFetcher for UnstoppableDomains {
                         reverse: Some(false),
                     };
                     let collection_edge = PartOfCollection {
-                        system: DomainNameSystem::UnstoppableDomains,
+                        system: DomainNameSystem::UnstoppableDomains.to_string(),
                         name: ud_name.clone(),
-                        tld: ud_tld,
+                        tld: tld.to_string(),
                         status: "taken".to_string(),
                     };
 
@@ -998,9 +1002,9 @@ impl DomainFetcher for UnstoppableDomains {
                         reverse: Some(false),
                     };
                     let collection_edge = PartOfCollection {
-                        system: DomainNameSystem::UnstoppableDomains,
+                        system: DomainNameSystem::UnstoppableDomains.to_string(),
                         name: ud_name.clone(),
-                        tld: ud_tld,
+                        tld: tld.to_string(),
                         status: "protected".to_string(),
                     };
 

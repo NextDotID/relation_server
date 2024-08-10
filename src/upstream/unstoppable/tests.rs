@@ -5,7 +5,7 @@ mod tests {
         tigergraph::vertex::Identity,
         upstream::{
             unstoppable::{fetch_domain_by_owner, UnstoppableDomains},
-            DomainFetcher, Fetcher, Platform, Target,
+            DomainSearch, Fetcher, Platform, Target,
         },
         util::make_http_client,
     };
@@ -38,9 +38,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_domain_fetch() -> Result<(), Error> {
-        let name = "sujiyan";
-        let edges = UnstoppableDomains::domain_fetch(name).await?;
+    async fn test_domain_search() -> Result<(), Error> {
+        let name = "vitalik";
+        let edges = UnstoppableDomains::domain_search(name).await?;
         println!("data: {:?}", edges);
         Ok(())
     }
