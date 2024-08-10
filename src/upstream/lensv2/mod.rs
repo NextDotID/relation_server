@@ -4,21 +4,23 @@ mod tests;
 use crate::config::C;
 use crate::error::Error;
 use crate::tigergraph::edge::{
-    Hold, HyperEdge, Resolve, Wrapper, HOLD_IDENTITY, HYPER_EDGE, RESOLVE, REVERSE_RESOLVE,
+    Hold, HyperEdge, PartOfCollection, Resolve, Wrapper, HOLD_IDENTITY, HYPER_EDGE,
+    PART_OF_COLLECTION, RESOLVE, REVERSE_RESOLVE,
 };
 use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
-use crate::tigergraph::vertex::{IdentitiesGraph, Identity};
+use crate::tigergraph::vertex::{DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
-    DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
+    DataFetcher, DataSource, DomainNameSystem, DomainSearch, Fetcher, Platform, Target,
+    TargetProcessedList, EXT,
 };
 use crate::util::{make_http_client, naive_now, utc_to_naive};
 use async_trait::async_trait;
 use cynic::{http::SurfExt, QueryBuilder};
 use hyper::{client::HttpConnector, Client};
-use tracing::{trace, warn};
+use tracing::{debug, trace, warn};
 use uuid::Uuid;
 
 mod schema {
@@ -85,6 +87,7 @@ pub struct ProfileMetadata {
     pub display_name: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(cynic::QueryFragment, Debug, Clone)]
 #[cynic(schema_path = "src/upstream/lensv2/schema.graphql")]
 pub struct NetworkAddress {
@@ -92,6 +95,7 @@ pub struct NetworkAddress {
     pub chain_id: ChainId,
 }
 
+#[allow(dead_code)]
 #[derive(cynic::QueryFragment, Debug, Clone)]
 #[cynic(schema_path = "src/upstream/lensv2/schema.graphql")]
 pub struct HandleInfo {
@@ -657,4 +661,116 @@ async fn save_profile(
         create_identity_domain_reverse_resolve_record(client, &addr, &lens, &reverse).await?;
     }
     Ok(Some(Target::Identity(Platform::Ethereum, owner.clone())))
+}
+
+#[async_trait]
+impl DomainSearch for LensV2 {
+    async fn domain_search(name: &str) -> Result<EdgeList, Error> {
+        let mut process_name = name.to_string();
+        if name.contains(".") {
+            process_name = name.split(".").next().unwrap_or("").to_string();
+        }
+        if process_name == "".to_string() {
+            warn!("LensV2 handle_search(name='') is not a valid handle name");
+            return Ok(vec![]);
+        }
+        debug!("LensV2 handle_search(name={})", process_name);
+
+        let full_handle = format!("lens/{}", process_name);
+        let profiles = query_by_handle(&full_handle).await?;
+        if profiles.is_empty() {
+            warn!("LensV2 handle_search(name={}) | No Result", process_name,);
+            return Ok(vec![]);
+        }
+        let lens_profile = profiles.first().unwrap().clone();
+        if lens_profile.handle.clone().is_none() {
+            warn!(
+                "LensV2 handle_search(name={}) | lens handle is null",
+                process_name,
+            );
+            return Ok(vec![]);
+        }
+
+        let mut edges = EdgeList::new();
+        let domain_collection = DomainCollection {
+            label: process_name.clone(),
+            updated_at: naive_now(),
+        };
+
+        let evm_owner = lens_profile.owned_by.address.0.to_ascii_lowercase();
+        let handle_info = lens_profile.handle.clone().unwrap();
+        let lens_handle = format!("{}.{}", handle_info.local_name, handle_info.namespace);
+        let lens_display_name = lens_profile
+            .metadata
+            .clone()
+            .map_or(None, |metadata| metadata.display_name);
+        let created_at = utc_to_naive(lens_profile.created_at.clone().0)?;
+
+        let addr: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Ethereum,
+            identity: evm_owner.clone(),
+            uid: None,
+            created_at: None,
+            display_name: None,
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
+        };
+
+        let lens: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Lens,
+            identity: lens_handle.clone(),
+            uid: Some(lens_profile.id.clone().0.to_string()),
+            created_at: Some(created_at),
+            display_name: lens_display_name,
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: Some("https://hey.xyz/u/".to_owned() + &handle_info.local_name),
+            updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
+        };
+
+        let hold: Hold = Hold {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Lens,
+            transaction: Some(lens_profile.tx_hash.clone().0),
+            id: lens_profile.id.clone().0.to_string(),
+            created_at: Some(created_at),
+            updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
+            expired_at: None,
+        };
+
+        let resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Lens,
+            system: DomainNameSystem::Lens,
+            name: lens_handle.clone(),
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+
+        let collection_edge = PartOfCollection {
+            system: DomainNameSystem::Lens.to_string(),
+            name: lens_handle.clone(),
+            tld: EXT::Lens.to_string(),
+            status: "taken".to_string(),
+        };
+
+        let hd = hold.wrapper(&addr, &lens, HOLD_IDENTITY);
+        let rs = resolve.wrapper(&lens, &addr, RESOLVE);
+        let c = collection_edge.wrapper(&domain_collection, &lens, PART_OF_COLLECTION);
+
+        edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+        edges.push(EdgeWrapperEnum::new_resolve(rs));
+        edges.push(EdgeWrapperEnum::new_domain_collection_edge(c));
+
+        Ok(edges)
+    }
 }
