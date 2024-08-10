@@ -5,7 +5,7 @@ mod tests {
         tigergraph::vertex::Identity,
         upstream::crossbell::Crossbell,
         upstream::Platform,
-        upstream::{Fetcher, Target},
+        upstream::{DomainSearch, Fetcher, Target},
         util::make_http_client,
     };
 
@@ -38,6 +38,14 @@ mod tests {
         .await?
         .expect("Record not found");
         print!("found: {:?}", found);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_domain_search() -> Result<(), Error> {
+        let name = "zzzzzzzzella";
+        let edges = Crossbell::domain_search(name).await?;
+        println!("data: {:?}", edges);
         Ok(())
     }
 }
