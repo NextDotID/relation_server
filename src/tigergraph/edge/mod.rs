@@ -1,17 +1,21 @@
 pub mod hold;
+pub mod part_of_collection;
 pub mod part_of_identities_graph;
 pub mod proof;
 pub mod relation;
 pub mod resolve;
 pub use hold::{Hold, HoldRecord, HOLD_CONTRACT, HOLD_IDENTITY};
+pub use part_of_collection::{
+    PartOfCollection, PartOfCollectionAttribute, PartOfCollectionRecord, PART_OF_COLLECTION,
+};
 pub use part_of_identities_graph::{HyperEdge, HyperEdgeRecord, HYPER_EDGE, HYPER_EDGE_REVERSE};
 pub use proof::{
     Proof, ProofRecord, EDGE_NAME as PROOF_EDGE, REVERSE_EDGE_NAME as PROOF_REVERSE_EDGE,
 };
 pub use relation::{RelationUniqueTX, RelationUniqueTXRecord, EDGE_NAME as RELATION_UNIQUE_TX};
 pub use resolve::{
-    Resolve, ResolveEdge, ResolveRecord, RESOLVE, RESOLVE_CONTRACT, REVERSE_RESOLVE,
-    REVERSE_RESOLVE_CONTRACT,
+    AvailableDomain, Resolve, ResolveEdge, ResolveRecord, RESOLVE, RESOLVE_CONTRACT,
+    REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT,
 };
 
 use crate::{

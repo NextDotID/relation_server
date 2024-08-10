@@ -1,8 +1,10 @@
 pub mod contract;
+pub mod domain_collection;
 pub mod identity;
 pub mod identity_graph;
 use async_trait::async_trait;
 pub use contract::{Contract, ContractLoadFn, ContractRecord};
+pub use domain_collection::{DomainCollection, DomainCollectionAttribute, DomainCollectionRecord};
 pub use identity::{
     ExpireTimeLoadFn, Identity, IdentityLoadFn, IdentityRecord, IdentityWithSource,
     NeighborReverseLoadFn, NeighborsResponse, OwnerLoadFn,
