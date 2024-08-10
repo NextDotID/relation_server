@@ -6,7 +6,9 @@ use crate::tigergraph::edge::Hold;
 use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::Identity;
 use crate::tigergraph::EdgeList;
-use crate::upstream::{DataFetcher, DataSource, Fetcher, Platform, Target, TargetProcessedList};
+use crate::upstream::{
+    DataFetcher, DataSource, DomainSearch, Fetcher, Platform, Target, TargetProcessedList,
+};
 use crate::util::{make_http_client, naive_now};
 use async_trait::async_trait;
 use futures::future::join_all;
@@ -46,6 +48,13 @@ impl Fetcher for Farcaster {
 
     fn can_fetch(target: &Target) -> bool {
         target.in_platform_supported(vec![Platform::Farcaster, Platform::Ethereum])
+    }
+}
+
+#[async_trait]
+impl DomainSearch for Farcaster {
+    async fn domain_search(name: &str) -> Result<EdgeList, Error> {
+        warpcast::domain_search(name).await
     }
 }
 
