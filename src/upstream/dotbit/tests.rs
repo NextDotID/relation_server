@@ -1,9 +1,21 @@
 use crate::upstream::dotbit::{get_req_params, CoinType, ReverseRecordRequest};
 use crate::upstream::Target;
-use crate::{error::Error, upstream::dotbit::DotBit, upstream::Fetcher};
+use crate::{
+    error::Error,
+    upstream::dotbit::DotBit,
+    upstream::{DomainSearch, Fetcher},
+};
 use crate::{
     tigergraph::vertex::Identity, upstream::Platform, util::make_http_client, util::naive_now,
 };
+
+#[tokio::test]
+async fn test_domain_search() -> Result<(), Error> {
+    let name = "sujiyan";
+    let edges = DotBit::domain_search(name).await?;
+    println!("data: {:?}", edges);
+    Ok(())
+}
 
 #[tokio::test]
 async fn test_smoke_dotbit_by_dotbit_identity() -> Result<(), Error> {

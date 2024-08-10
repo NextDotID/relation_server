@@ -2,15 +2,18 @@
 mod tests;
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::edge::{Hold, HyperEdge, Resolve, Wrapper};
-use crate::tigergraph::edge::{HOLD_IDENTITY, HYPER_EDGE, RESOLVE, REVERSE_RESOLVE};
+use crate::tigergraph::edge::{Hold, HyperEdge, PartOfCollection, Resolve, Wrapper};
+use crate::tigergraph::edge::{
+    HOLD_IDENTITY, HYPER_EDGE, PART_OF_COLLECTION, RESOLVE, REVERSE_RESOLVE,
+};
 use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
-use crate::tigergraph::vertex::{IdentitiesGraph, Identity};
+use crate::tigergraph::vertex::{DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
-    DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
+    DataFetcher, DataSource, DomainNameSystem, DomainSearch, Fetcher, Platform, Target,
+    TargetProcessedList, EXT,
 };
 use crate::util::{
     make_client, make_http_client, naive_now, option_timestamp_to_naive, parse_body,
@@ -20,7 +23,7 @@ use async_trait::async_trait;
 use hyper::{Body, Method, Request};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
-use tracing::warn;
+use tracing::{debug, warn};
 use uuid::Uuid;
 
 pub struct DotBit {}
@@ -185,7 +188,10 @@ pub struct AccountListResponse {
 
 const UNKNOWN_OWNER: &str = "0x0000000000000000000000000000000000000000";
 
-async fn query_by_handle(_platform: &Platform, name: &str) -> Result<AccountInfoData, Error> {
+async fn query_by_handle(
+    _platform: &Platform,
+    name: &str,
+) -> Result<Option<AccountInfoData>, Error> {
     let request_acc = AccInfoRequestParams {
         account: name.to_string(),
     };
@@ -219,6 +225,10 @@ async fn query_by_handle(_platform: &Platform, name: &str) -> Result<AccountInfo
         return Err(Error::NoResult);
     }
 
+    // AccountInfoResponse { id: Some(1), jsonrpc: "2.0", result: AccountInfoResult { errno: None, errmsg: None, data: None } }
+    if resp.result.data.is_none() {
+        return Ok(None);
+    }
     let info = resp.result.data.unwrap();
     let account_info = info.clone().account_info.unwrap();
     // tricky way to remove the unexpected case...
@@ -239,7 +249,7 @@ async fn query_by_handle(_platform: &Platform, name: &str) -> Result<AccountInfo
         return Err(Error::ParamError(warn_message));
     }
 
-    Ok(info)
+    Ok(Some(info))
 }
 
 async fn query_by_wallet(platform: &Platform, address: &str) -> Result<Vec<AccountItem>, Error> {
@@ -442,8 +452,11 @@ async fn batch_fetch_by_handle(target: &Target) -> Result<(TargetProcessedList, 
     let identity = target.identity()?;
 
     let info = query_by_handle(&platform, &identity).await?;
-    let account_info = info.account_info.unwrap();
-    let out_point = info.out_point.unwrap();
+    if info.is_none() {
+        return Ok((vec![], vec![]));
+    }
+    let account_info = info.clone().unwrap().account_info.unwrap();
+    let out_point = info.clone().unwrap().out_point.unwrap();
 
     let account_addr = account_info.owner_key.to_lowercase();
     let account_platform: Platform = account_info.owner_algorithm_id.into();
@@ -984,5 +997,109 @@ impl From<i64> for Platform {
             8 => Platform::CKB,      // CKB = 8
             _ => Platform::Unknown,
         }
+    }
+}
+
+#[async_trait]
+impl DomainSearch for DotBit {
+    async fn domain_search(name: &str) -> Result<EdgeList, Error> {
+        let mut process_name = name.to_string();
+        if name.contains(".") {
+            process_name = name.split(".").next().unwrap_or("").to_string();
+        }
+        if process_name == "".to_string() {
+            warn!("Dotbit domain_search(name='') is not a valid domain name");
+            return Ok(vec![]);
+        }
+        debug!("Dotbit domain_search(name={})", process_name);
+
+        let dotbit_fullname = format!("{}.{}", process_name, EXT::Bit);
+        let info = query_by_handle(&Platform::Dotbit, &dotbit_fullname).await?;
+        if info.is_none() {
+            return Ok(vec![]);
+        }
+        let account_info = info.clone().unwrap().account_info.unwrap();
+        let out_point = info.clone().unwrap().out_point.unwrap();
+
+        let account_addr = account_info.owner_key.to_lowercase();
+        let account_platform: Platform = account_info.owner_algorithm_id.into();
+
+        let created_at_naive = timestamp_to_naive(account_info.create_at_unix, 0);
+        let expired_at_naive = timestamp_to_naive(account_info.expired_at_unix, 0);
+
+        let mut edges = EdgeList::new();
+        let domain_collection = DomainCollection {
+            label: process_name.clone(),
+            updated_at: naive_now(),
+        };
+
+        let wallet: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: account_platform,
+            identity: account_addr.clone(),
+            uid: None,
+            created_at: created_at_naive,
+            display_name: None,
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: None,
+            reverse: Some(false),
+        };
+
+        let dotbit: Identity = Identity {
+            uuid: Some(Uuid::new_v4()),
+            platform: Platform::Dotbit,
+            identity: dotbit_fullname.clone(),
+            uid: None,
+            created_at: created_at_naive,
+            display_name: Some(dotbit_fullname.clone()),
+            added_at: naive_now(),
+            avatar_url: None,
+            profile_url: None,
+            updated_at: naive_now(),
+            expired_at: expired_at_naive,
+            reverse: Some(false),
+        };
+
+        let hold: Hold = Hold {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Dotbit,
+            transaction: Some(out_point.tx_hash),
+            id: out_point.index.to_string(),
+            created_at: created_at_naive,
+            updated_at: naive_now(),
+            fetcher: DataFetcher::RelationService,
+            expired_at: expired_at_naive,
+        };
+
+        let resolve: Resolve = Resolve {
+            uuid: Uuid::new_v4(),
+            source: DataSource::Dotbit,
+            system: DomainNameSystem::DotBit,
+            name: dotbit_fullname.clone(),
+            fetcher: DataFetcher::RelationService,
+            updated_at: naive_now(),
+        };
+
+        let collection_edge = PartOfCollection {
+            system: DomainNameSystem::DotBit.to_string(),
+            name: dotbit_fullname.clone(),
+            tld: EXT::Bit.to_string(),
+            status: "taken".to_string(),
+        };
+
+        // hold record
+        let hd = hold.wrapper(&wallet, &dotbit, HOLD_IDENTITY);
+        // 'regular' resolution involves mapping from a name to an address.
+        let rs = resolve.wrapper(&dotbit, &wallet, RESOLVE);
+        // create collection edge
+        let c = collection_edge.wrapper(&domain_collection, &dotbit, PART_OF_COLLECTION);
+
+        edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+        edges.push(EdgeWrapperEnum::new_resolve(rs));
+        edges.push(EdgeWrapperEnum::new_domain_collection_edge(c));
+        Ok(edges)
     }
 }
