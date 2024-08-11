@@ -58,6 +58,36 @@ impl ResolveReverse {
 }
 
 #[Object]
+impl AvailableDomain {
+    /// Platform.  See `avaliablePlatforms` or schema definition for a
+    /// list of platforms supported by RelationService.
+    async fn platform(&self) -> Platform {
+        self.platform
+    }
+
+    /// Name of domain (e.g., `vitalik.eth`, `dotbit.bit`)
+    async fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    /// `expiredAt` Expiration time of this domain name
+    async fn expired_at(&self) -> Option<i64> {
+        self.expired_at.map(|dt| dt.and_utc().timestamp())
+    }
+
+    /// availability is `true` means that the domain is available for registration
+    /// availability is `false` means that the domain has taken by some wallet
+    async fn availability(&self) -> bool {
+        self.availability.clone()
+    }
+
+    /// Status: taken/protected/available
+    async fn status(&self) -> String {
+        self.status.clone()
+    }
+}
+
+#[Object]
 impl ResolveEdge {
     /// UUID of this record.
     async fn uuid(&self) -> Uuid {
@@ -132,6 +162,54 @@ impl ResolveQuery {
     }
 
     #[tracing::instrument(level = "trace", skip(self, _ctx))]
+    async fn domain_available(
+        &self,
+        _ctx: &Context<'_>,
+        #[graphql(
+            desc = "name, providing name to query the registration of each domain system. See `availableNameSystem` for all domain name system supported by RelationService."
+        )]
+        name: String,
+    ) -> Result<Option<Vec<AvailableDomain>>> {
+        let process_name = trim_name(&name);
+        let client = make_http_client();
+        // Check name if exists in storage
+        match DomainCollection::domain_available_search(&client, &process_name).await? {
+            None => {
+                let fetch_result = fetch_all_domains(&process_name).await;
+                if fetch_result.is_err() {
+                    event!(
+                        Level::WARN,
+                        process_name,
+                        err = fetch_result.unwrap_err().to_string(),
+                        "Failed to fetch_all_domains"
+                    );
+                }
+                match DomainCollection::domain_available_search(&client, &process_name).await? {
+                    None => Ok(None),
+                    Some(result) => Ok(Some(result.domains)),
+                }
+            }
+            Some(found) => {
+                if found.collection.is_outdated() {
+                    event!(
+                        Level::DEBUG,
+                        process_name,
+                        "Outdated. Delete and Refetching all available domains."
+                    );
+                    tokio::spawn(async move {
+                        // Delete and Refetch in the background
+                        sleep(Duration::from_secs(10)).await;
+                        delete_domain_collection(&client, &process_name).await?;
+                        fetch_all_domains(&name).await?;
+                        Ok::<_, Error>(())
+                    });
+                }
+                Ok(Some(found.domains))
+            }
+        }
+    }
+
+    #[tracing::instrument(level = "trace", skip(self, _ctx))]
     async fn domain(
         &self,
         _ctx: &Context<'_>,
@@ -198,7 +276,7 @@ impl ResolveQuery {
                             tokio::spawn(async move {
                                 // Delete and Refetch in the background
                                 sleep(Duration::from_secs(10)).await;
-                                delete_vertex_and_edge(&client, v_id).await?;
+                                delete_graph_inner_connection(&client, v_id).await?;
                                 fetch_all(vec![target], Some(3)).await?;
                                 Ok::<_, Error>(())
                             });
