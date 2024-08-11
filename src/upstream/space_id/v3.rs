@@ -56,7 +56,7 @@ struct TldInfo {
 const QUERY_EXACT_MATCH: &str = r#"
   query domainsByName($name: String!) {
     domains(
-      input: {query: $name, first: 200, tldID: 1, domainStatuses: [REGISTERED, UNREGISTERED], buyNow: 0, isVerified: true}
+      input: {query: $name, first: 200, domainStatuses: [REGISTERED, UNREGISTERED], buyNow: 0, isVerified: true}
     ) {
       exactMatch {
         name
