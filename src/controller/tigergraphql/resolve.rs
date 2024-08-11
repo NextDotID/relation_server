@@ -1,18 +1,20 @@
 use crate::{
     error::{Error, Result},
     tigergraph::{
-        delete_vertex_and_edge,
-        edge::{resolve::ResolveReverse, Resolve, ResolveEdge},
-        vertex::IdentityRecord,
+        delete_domain_collection, delete_graph_inner_connection,
+        edge::{resolve::ResolveReverse, AvailableDomain, Resolve, ResolveEdge},
+        vertex::{DomainCollection, IdentityRecord},
     },
     upstream::{
-        fetch_all, Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Target,
+        fetch_all, fetch_all_domains, trim_name, Chain, ContractCategory, DataFetcher, DataSource,
+        DomainNameSystem, Platform, Target,
     },
     util::make_http_client,
 };
 use async_graphql::{Context, Object};
 use strum::IntoEnumIterator;
 use tokio::time::{sleep, Duration};
+use tracing::{event, Level};
 use uuid::Uuid;
 
 #[Object]
@@ -166,7 +168,7 @@ impl ResolveQuery {
                             tokio::spawn(async move {
                                 // Delete and Refetch in the background
                                 sleep(Duration::from_secs(10)).await;
-                                delete_vertex_and_edge(&client, v_id).await?;
+                                delete_graph_inner_connection(&client, v_id).await?;
                                 fetch_all(vec![target], Some(3)).await?;
                                 Ok::<_, Error>(())
                             });

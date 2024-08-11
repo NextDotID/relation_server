@@ -1,8 +1,8 @@
 use crate::{
     error::{Error, Result},
     tigergraph::{
+        delete_graph_inner_connection,
         edge::{resolve::ResolveReverse, EdgeUnion, HoldRecord},
-        upsert::delete_graph_inner_connection,
         vertex::{
             ExpandIdentityRecord, IdentityGraph, IdentityRecord, IdentityWithSource, OwnerLoadFn,
         },
