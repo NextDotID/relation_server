@@ -666,34 +666,27 @@ async fn save_profile(
 #[async_trait]
 impl DomainSearch for LensV2 {
     async fn domain_search(name: &str) -> Result<EdgeList, Error> {
-        let mut process_name = name.to_string();
-        if name.contains(".") {
-            process_name = name.split(".").next().unwrap_or("").to_string();
-        }
-        if process_name == "".to_string() {
+        if name == "" {
             warn!("LensV2 handle_search(name='') is not a valid handle name");
             return Ok(vec![]);
         }
-        debug!("LensV2 handle_search(name={})", process_name);
+        debug!("LensV2 handle_search(name={})", name);
 
-        let full_handle = format!("lens/{}", process_name);
+        let full_handle = format!("lens/{}", name);
         let profiles = query_by_handle(&full_handle).await?;
         if profiles.is_empty() {
-            warn!("LensV2 handle_search(name={}) | No Result", process_name,);
+            warn!("LensV2 handle_search(name={}) | No Result", name,);
             return Ok(vec![]);
         }
         let lens_profile = profiles.first().unwrap().clone();
         if lens_profile.handle.clone().is_none() {
-            warn!(
-                "LensV2 handle_search(name={}) | lens handle is null",
-                process_name,
-            );
+            warn!("LensV2 handle_search(name={}) | lens handle is null", name,);
             return Ok(vec![]);
         }
 
         let mut edges = EdgeList::new();
         let domain_collection = DomainCollection {
-            label: process_name.clone(),
+            id: name.to_string(),
             updated_at: naive_now(),
         };
 
@@ -757,7 +750,7 @@ impl DomainSearch for LensV2 {
         };
 
         let collection_edge = PartOfCollection {
-            system: DomainNameSystem::Lens.to_string(),
+            platform: Platform::Lens,
             name: lens_handle.clone(),
             tld: EXT::Lens.to_string(),
             status: "taken".to_string(),

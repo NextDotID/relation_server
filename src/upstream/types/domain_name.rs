@@ -2,6 +2,7 @@ use crate::upstream::Platform;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::str::FromStr;
 use strum_macros::{Display, EnumIter, EnumString};
 
 /// All domain system name.
@@ -232,10 +233,14 @@ pub enum EXT {
     Csb,
 
     /// Clusters
+    #[strum(serialize = "/")]
+    #[serde(rename = "/")]
+    #[graphql(name = "/")]
+    ClustersRoot,
     #[strum(serialize = "main")]
     #[serde(rename = "main")]
     #[graphql(name = "main")]
-    Clusters,
+    ClustersMain,
 
     /// UnstoppableDomains
     #[strum(serialize = "x")]
@@ -399,20 +404,50 @@ pub enum EXT {
     Unknown,
 }
 
+pub fn trim_name(name: &str) -> String {
+    // Handle Clusters special case: clusters/main
+    if let Some(pos) = name.find('/') {
+        return name[..pos].to_string();
+    }
+
+    // Split by '.' to identify subdomains, names, and suffixes
+    let parts: Vec<&str> = name.split('.').collect();
+
+    if parts.len() == 1 {
+        // No '.' in name, return it as is
+        return parts[0].to_string();
+    } else if parts.len() == 2 {
+        // Handle case where there's just a name.ext
+        let (process_name, suffix) = (parts[0], parts[1]);
+        // Check if suffix is in the EXT enum
+        if EXT::from_str(suffix).is_ok() {
+            return process_name.to_string();
+        }
+    } else if parts.len() > 2 {
+        // Handle case with subdomain, e.g., subdomain.name.ext
+        let process_name = parts[1]; // Middle part is the process_name
+        let suffix = parts.last().unwrap();
+        if EXT::from_str(suffix).is_ok() {
+            return process_name.to_string();
+        }
+    }
+
+    name.to_string()
+}
+
 // Extension hashmap initialization
 lazy_static! {
-    pub static ref EXTENSION: HashMap<DomainNameSystem, Vec<EXT>> = {
+    pub static ref EXTENSION: HashMap<Platform, Vec<EXT>> = {
         let mut extension = HashMap::new();
-        extension.insert(DomainNameSystem::ENS, vec![EXT::Eth]); // name.eth
-        extension.insert(DomainNameSystem::SNS, vec![EXT::Sol]);  // name.sol
-        extension.insert(DomainNameSystem::DotBit, vec![EXT::Bit]); // name.bit
-        extension.insert(DomainNameSystem::Lens, vec![EXT::Lens]); // lens/handle
-        extension.insert(DomainNameSystem::Genome, vec![EXT::Gno]); // name.gno
-        extension.insert(DomainNameSystem::Crossbell, vec![EXT::Csb]); // name.csb or address.csb
-        extension.insert(DomainNameSystem::Clusters, vec![EXT::Clusters]); // clusters or clusters/main
-        extension.insert(DomainNameSystem::Unknown, vec![]);
+        extension.insert(Platform::ENS, vec![EXT::Eth]); // name.eth
+        extension.insert(Platform::SNS, vec![EXT::Sol]);  // name.sol
+        extension.insert(Platform::Dotbit, vec![EXT::Bit]); // name.bit
+        extension.insert(Platform::Lens, vec![EXT::Lens]); // lens/handle
+        extension.insert(Platform::Crossbell, vec![EXT::Csb]); // name.csb or address.csb
+        extension.insert(Platform::Clusters, vec![EXT::ClustersRoot, EXT::ClustersMain]); // clusters/ or clusters/main
+        extension.insert(Platform::Unknown, vec![]);
 
-        extension.insert(DomainNameSystem::UnstoppableDomains, vec![
+        extension.insert(Platform::UnstoppableDomains, vec![
             EXT::Crypto,
             EXT::Wallet,
             EXT::Blockchain,
@@ -429,6 +464,28 @@ lazy_static! {
             EXT::Austin,
             EXT::Raiin,
             EXT::Tball]);
+
+        extension.insert(Platform::SpaceId, vec![
+            EXT::Bnb,
+            EXT::Cake,
+            EXT::Floki,
+            EXT::Burger,
+            ]);
+
+        extension.insert(Platform::Zeta, vec![EXT::Zeta]);
+        extension.insert(Platform::Mode, vec![EXT::Mode]);
+        extension.insert(Platform::Arbitrum, vec![EXT::Arb]);
+        extension.insert(Platform::Taiko, vec![EXT::Taiko]);
+        extension.insert(Platform::Mint, vec![EXT::Mint]);
+        extension.insert(Platform::Zkfair, vec![EXT::Zkf]);
+        extension.insert(Platform::Manta, vec![EXT::Manta]);
+        extension.insert(Platform::Lightlink, vec![EXT::Ll]);
+        extension.insert(Platform::Genome, vec![EXT::Gno]);
+        extension.insert(Platform::Merlin, vec![EXT::Merlin]);
+        extension.insert(Platform::AlienX, vec![EXT::Alien]);
+        extension.insert(Platform::Tomo, vec![EXT::Tomo]);
+        extension.insert(Platform::Ailayer, vec![EXT::Ail]);
+
         extension
     };
 }

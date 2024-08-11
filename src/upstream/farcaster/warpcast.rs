@@ -651,22 +651,15 @@ async fn get_verifications(fid: i64) -> Result<Option<Vec<Verification>>, Error>
 }
 
 pub async fn domain_search(name: &str) -> Result<EdgeList, Error> {
-    let mut process_name = name.to_string();
-    if name.contains(".") {
-        process_name = name.split(".").next().unwrap_or("").to_string();
-    }
-    if process_name == "".to_string() {
+    if name == "".to_string() {
         warn!("Warpcast user_by_username(name='') is not a valid domain name");
         return Ok(vec![]);
     }
 
-    let check_names = vec![
-        process_name.clone(),
-        format!("{}.{}", process_name.clone(), EXT::Eth),
-    ];
+    let check_names = vec![name.to_string(), format!("{}.{}", name, EXT::Eth)];
     let mut edges = EdgeList::new();
     let domain_collection = DomainCollection {
-        label: process_name.clone(),
+        id: name.to_string(),
         updated_at: naive_now(),
     };
 
@@ -706,7 +699,7 @@ pub async fn domain_search(name: &str) -> Result<EdgeList, Error> {
                 reverse: Some(false),
             };
             let collection_edge = PartOfCollection {
-                system: Platform::Farcaster.to_string(),
+                platform: Platform::Farcaster,
                 name: fname.clone(),
                 tld: fname_tld.clone(),
                 status: "taken".to_string(),
@@ -767,7 +760,7 @@ pub async fn domain_search(name: &str) -> Result<EdgeList, Error> {
             };
 
             let collection_edge = PartOfCollection {
-                system: Platform::Farcaster.to_string(),
+                platform: Platform::Farcaster,
                 name: fname.clone(),
                 tld: fname_tld.clone(),
                 status: "taken".to_string(),

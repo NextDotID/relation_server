@@ -1,7 +1,10 @@
 use crate::error::Error;
 use crate::upstream::{
-    batch_fetch_upstream, fetch_all, fetch_one, Chain, ContractCategory, Platform, Target,
+    batch_fetch_upstream, fetch_all, fetch_all_domains, fetch_one, Chain, ContractCategory,
+    Platform, Target,
 };
+
+use super::{DomainNameSystem, EXTENSION};
 
 #[tokio::test]
 async fn test_fetch_one_result() -> Result<(), Error> {
@@ -121,5 +124,19 @@ async fn test_fetch_all_ens() -> Result<(), Error> {
     )
     .await?;
 
+    Ok(())
+}
+
+// #[tokio::test]
+// async fn test_fetch_domains() -> Result<(), Error> {
+//     let name = "vitalik";
+//     fetch_domains(name).await?;
+//     Ok(())
+// }
+
+#[tokio::test]
+async fn test_fetch_all_domains() -> Result<(), Error> {
+    let name = "vitalik";
+    fetch_all_domains(name).await?;
     Ok(())
 }

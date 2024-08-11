@@ -1,15 +1,15 @@
 CREATE GLOBAL SCHEMA_CHANGE job add_domain_collection {
   ADD VERTEX DomainCollection TO GRAPH SocialGraph;
   ADD EDGE PartOfCollection TO GRAPH SocialGraph;
-  ALTER VERTEX DomainCollection ADD INDEX domain_label ON (label);
+  ALTER VERTEX DomainCollection ADD INDEX domain_label ON (id);
 }
 
 RUN GLOBAL SCHEMA_CHANGE JOB add_domain_collection 
 
 
 CREATE GLOBAL SCHEMA_CHANGE job drop_domain_collection {
-  // ALTER VERTEX DomainCollection DROP INDEX domain_label ON (label);
+  ALTER VERTEX DomainCollection DROP INDEX domain_label;
   DROP VERTEX DomainCollection TO GRAPH SocialGraph;
   DROP EDGE PartOfCollection TO GRAPH SocialGraph;
 }
-RUN GLOBAL SCHEMA_CHANGE JOB drop_domain_collection 
+RUN GLOBAL SCHEMA_CHANGE JOB drop_domain_collection

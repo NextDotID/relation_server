@@ -1003,17 +1003,13 @@ impl From<i64> for Platform {
 #[async_trait]
 impl DomainSearch for DotBit {
     async fn domain_search(name: &str) -> Result<EdgeList, Error> {
-        let mut process_name = name.to_string();
-        if name.contains(".") {
-            process_name = name.split(".").next().unwrap_or("").to_string();
-        }
-        if process_name == "".to_string() {
+        if name == "" {
             warn!("Dotbit domain_search(name='') is not a valid domain name");
             return Ok(vec![]);
         }
-        debug!("Dotbit domain_search(name={})", process_name);
+        debug!("Dotbit domain_search(name={})", name);
 
-        let dotbit_fullname = format!("{}.{}", process_name, EXT::Bit);
+        let dotbit_fullname = format!("{}.{}", name, EXT::Bit);
         let info = query_by_handle(&Platform::Dotbit, &dotbit_fullname).await?;
         if info.is_none() {
             return Ok(vec![]);
@@ -1029,7 +1025,7 @@ impl DomainSearch for DotBit {
 
         let mut edges = EdgeList::new();
         let domain_collection = DomainCollection {
-            label: process_name.clone(),
+            id: name.to_string(),
             updated_at: naive_now(),
         };
 
@@ -1084,7 +1080,7 @@ impl DomainSearch for DotBit {
         };
 
         let collection_edge = PartOfCollection {
-            system: DomainNameSystem::DotBit.to_string(),
+            platform: Platform::Dotbit,
             name: dotbit_fullname.clone(),
             tld: EXT::Bit.to_string(),
             status: "taken".to_string(),

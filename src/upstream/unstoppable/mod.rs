@@ -853,21 +853,17 @@ async fn fetch_account_by_domain(
 #[async_trait]
 impl DomainSearch for UnstoppableDomains {
     async fn domain_search(name: &str) -> Result<EdgeList, Error> {
-        let mut process_name = name.to_string();
-        if name.contains(".") {
-            process_name = name.split(".").next().unwrap_or("").to_string();
-        }
-        if process_name == "".to_string() {
+        if name == "" {
             warn!("UnstoppableDomains domain_search(name='') is not a valid domain name");
             return Ok(vec![]);
         }
-        debug!("UnstoppableDomains domain_search(name={})", process_name);
+        debug!("UnstoppableDomains domain_search(name={})", name);
 
-        let result = domain_search(&process_name).await?;
+        let result = domain_search(&name).await?;
 
         let mut edges = EdgeList::new();
         let domain_collection = DomainCollection {
-            label: process_name.clone(),
+            id: name.to_string(),
             updated_at: naive_now(),
         };
 
@@ -895,7 +891,7 @@ impl DomainSearch for UnstoppableDomains {
                         reverse: Some(false),
                     };
                     let collection_edge = PartOfCollection {
-                        system: DomainNameSystem::UnstoppableDomains.to_string(),
+                        platform: Platform::UnstoppableDomains,
                         name: ud_name.clone(),
                         tld: tld.to_string(),
                         status: "taken".to_string(),
@@ -1002,7 +998,7 @@ impl DomainSearch for UnstoppableDomains {
                         reverse: Some(false),
                     };
                     let collection_edge = PartOfCollection {
-                        system: DomainNameSystem::UnstoppableDomains.to_string(),
+                        platform: Platform::UnstoppableDomains,
                         name: ud_name.clone(),
                         tld: tld.to_string(),
                         status: "protected".to_string(),

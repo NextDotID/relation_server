@@ -5,9 +5,11 @@ use crate::{
         vertex::{DomainCollection, Identity, Vertex, VertexRecord},
         Attribute, OpCode, Transfer,
     },
-    upstream::DomainNameSystem,
+    upstream::Platform,
+    util::{option_naive_datetime_from_string, option_naive_datetime_to_string},
 };
 
+use chrono::NaiveDateTime;
 use hyper::{client::HttpConnector, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -23,7 +25,7 @@ pub const IS_DIRECTED: bool = true;
 #[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct PartOfCollection {
     /// Domain Name system
-    pub system: DomainNameSystem,
+    pub platform: Platform,
     /// Name of domain (e.g., `vitalik.eth`)
     pub name: String,
     /// Extension of domain (e.g. eth)
@@ -35,7 +37,7 @@ pub struct PartOfCollection {
 impl Default for PartOfCollection {
     fn default() -> Self {
         Self {
-            system: Default::default(),
+            platform: Default::default(),
             name: Default::default(),
             tld: Default::default(),
             status: Default::default(),
@@ -111,9 +113,9 @@ impl Transfer for PartOfCollectionRecord {
     fn to_attributes_map(&self) -> HashMap<String, Attribute> {
         let mut attributes_map = HashMap::new();
         attributes_map.insert(
-            "system".to_string(),
+            "platform".to_string(),
             Attribute {
-                value: json!(self.attributes.system.to_string()),
+                value: json!(self.attributes.platform.to_string()),
                 op: None,
             },
         );
@@ -144,7 +146,7 @@ impl Transfer for PartOfCollectionRecord {
 
     fn to_json_value(&self) -> Map<String, Value> {
         let mut map = Map::new();
-        map.insert("system".to_string(), json!(self.system));
+        map.insert("platform".to_string(), json!(self.platform));
         map.insert("name".to_string(), json!(self.name));
         map.insert("tld".to_string(), json!(self.tld));
         map.insert("status".to_string(), json!(self.status));
@@ -225,4 +227,23 @@ impl Wrapper<PartOfCollectionRecord, DomainCollection, Identity> for PartOfColle
             target: to.to_owned(),
         }
     }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct AvailableDomain {
+    /// Domain Name system (e.g., `ens`)
+    pub platform: Platform,
+    /// Name of domain (e.g., `vitalik.eth`)
+    pub name: String,
+    /// Extension of domain
+    pub tld: String,
+    /// Expiration time
+    #[serde(deserialize_with = "option_naive_datetime_from_string")]
+    #[serde(serialize_with = "option_naive_datetime_to_string")]
+    pub expired_at: Option<NaiveDateTime>,
+    /// Availability is `true` means that the domain is available for registration
+    /// Availability is `false` means that the domain has taken by some wallet
+    pub availability: bool,
+    /// Status: taken/protected/available
+    pub status: String,
 }

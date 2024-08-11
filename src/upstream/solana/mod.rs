@@ -939,28 +939,24 @@ async fn get_twitter_registry(
 #[async_trait]
 impl DomainSearch for Solana {
     async fn domain_search(name: &str) -> Result<EdgeList, Error> {
-        let mut process_name = name.to_string();
-        if name.contains(".") {
-            process_name = name.split(".").next().unwrap_or("").to_string();
-        }
-        if process_name == "".to_string() {
+        if name == "".to_string() {
             warn!("Solana domain_search(name='') is not a valid domain name");
             return Ok(vec![]);
         }
-        debug!("Solana domain_search(name={})", process_name);
+        debug!("Solana domain_search(name={})", name);
 
         let mut edges = EdgeList::new();
         let domain_collection = DomainCollection {
-            label: process_name.clone(),
+            id: name.to_string(),
             updated_at: naive_now(),
         };
 
         let rpc_client = get_rpc_client(C.upstream.solana_rpc.rpc_url.clone());
-        let owner = fetch_resolve_address(&rpc_client, &process_name).await?;
+        let owner = fetch_resolve_address(&rpc_client, name).await?;
 
         match owner {
             Some(owner) => {
-                let sol_name = format!("{}.{}", process_name, EXT::Sol);
+                let sol_name = format!("{}.{}", name, EXT::Sol);
                 let solana = Identity {
                     uuid: Some(Uuid::new_v4()),
                     platform: Platform::Solana,
@@ -1015,7 +1011,7 @@ impl DomainSearch for Solana {
                 };
 
                 let collection_edge = PartOfCollection {
-                    system: DomainNameSystem::SNS.to_string(),
+                    platform: Platform::SNS,
                     name: sol_name.clone(),
                     tld: EXT::Sol.to_string(),
                     status: "taken".to_string(),
@@ -1032,10 +1028,7 @@ impl DomainSearch for Solana {
                 edges.push(EdgeWrapperEnum::new_resolve(rs));
                 edges.push(EdgeWrapperEnum::new_domain_collection_edge(c));
             }
-            None => trace!(
-                "Solana domain_search(name={}) Owner not found",
-                process_name
-            ),
+            None => trace!("Solana domain_search(name={}) Owner not found", name),
         }
 
         Ok(edges)

@@ -9,7 +9,7 @@ use crate::tigergraph::vertex::{DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
     DataFetcher, DataSource, DomainNameSystem, DomainSearch, Fetcher, Platform, ProofLevel,
-    TargetProcessedList,
+    TargetProcessedList, EXT,
 };
 use crate::util::{make_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive};
 
@@ -596,27 +596,21 @@ async fn get_address_by_clusters(name: &str) -> Result<Vec<Metadata>, Error> {
 #[async_trait]
 impl DomainSearch for Clusters {
     async fn domain_search(name: &str) -> Result<EdgeList, Error> {
-        let mut process_name = name.to_string();
-        if name.contains("/") {
-            process_name = name.split("/").next().unwrap_or("").to_string();
-        }
-        if process_name == "".to_string() {
+        let name = name.trim_end_matches("/");
+        if name == "".to_string() {
             warn!("Clusters domain_search(name='') is not a valid handle name");
             return Ok(vec![]);
         }
-        debug!("Clusters domain_search(name={})", process_name);
+        debug!("Clusters domain_search(name={})", name);
 
-        let metadatas = get_address_by_clusters(&process_name).await?;
+        let metadatas = get_address_by_clusters(name).await?;
         if metadatas.is_empty() {
-            debug!(
-                "Clusters domain_search(name={}) result is empty",
-                process_name
-            );
+            debug!("Clusters domain_search(name={}) result is empty", name);
             return Ok(vec![]);
         }
         let mut edges = EdgeList::new();
         let domain_collection = DomainCollection {
-            label: process_name.clone(),
+            id: name.to_string(),
             updated_at: naive_now(),
         };
         for d in metadatas.into_iter() {
@@ -733,13 +727,13 @@ impl DomainSearch for Clusters {
             };
 
             let parent_collection_edge = PartOfCollection {
-                system: DomainNameSystem::Clusters.to_string(),
+                platform: Platform::Clusters,
                 name: d.cluster_name.clone(),
-                tld: "/".to_string(),
+                tld: EXT::ClustersRoot.to_string(),
                 status: "taken".to_string(),
             };
             let child_collection_edge = PartOfCollection {
-                system: DomainNameSystem::Clusters.to_string(),
+                platform: Platform::Clusters,
                 name: d.name.clone(),
                 tld: d.name.split("/").last().unwrap_or("").to_string(),
                 status: "taken".to_string(),

@@ -487,26 +487,22 @@ async fn save_character(profile: &Character) -> Result<(), Error> {
 #[async_trait]
 impl DomainSearch for Crossbell {
     async fn domain_search(name: &str) -> Result<EdgeList, Error> {
-        let mut process_name = name.to_string();
-        if name.contains(".") {
-            process_name = name.split(".").next().unwrap_or("").to_string();
-        }
-        if process_name == "".to_string() {
+        if name == "" {
             warn!("Crossbell handle_search(name='') is not a valid handle name");
             return Ok(vec![]);
         }
-        debug!("Crossbell handle_search(name={})", process_name);
+        debug!("Crossbell handle_search(name={})", name);
 
-        let data = domain_search(&process_name).await?;
+        let data = domain_search(name).await?;
         if data.is_none() {
-            debug!("Crossbell handle_search(name={}): No result", process_name);
+            debug!("Crossbell handle_search(name={}): No result", name);
             return Ok(vec![]);
         }
         let res = data.unwrap();
 
         let mut edges = EdgeList::new();
         let domain_collection = DomainCollection {
-            label: process_name.clone(),
+            id: name.to_string(),
             updated_at: naive_now(),
         };
         for profile in res.characters.iter() {
@@ -573,7 +569,7 @@ impl DomainSearch for Crossbell {
                 updated_at: naive_now(),
             };
             let collection_edge = PartOfCollection {
-                system: DomainNameSystem::Crossbell.to_string(),
+                platform: Platform::Crossbell,
                 name: crossbell_fullhandle.clone(),
                 tld: EXT::Csb.to_string(),
                 status: "taken".to_string(),

@@ -77,24 +77,20 @@ pub struct SpaceIdV3 {}
 #[async_trait]
 impl DomainSearch for SpaceIdV3 {
     async fn domain_search(name: &str) -> Result<EdgeList, Error> {
-        let mut process_name = name.to_string();
-        if name.contains(".") {
-            process_name = name.split(".").next().unwrap_or("").to_string();
-        }
-        if process_name == "".to_string() {
+        if name == "" {
             warn!("SpaceIdV3 domain_search(name='') is not a valid handle name");
             return Ok(vec![]);
         }
-        debug!("SpaceIdV3 domain_search(name={})", process_name);
+        debug!("SpaceIdV3 domain_search(name={})", name);
 
-        let exact_items = domain_search(&process_name).await?;
+        let exact_items = domain_search(&name).await?;
         if exact_items.is_empty() {
             return Ok(vec![]);
         }
 
         let mut edges = EdgeList::new();
         let domain_collection = DomainCollection {
-            label: process_name.clone(),
+            id: name.to_string(),
             updated_at: naive_now(),
         };
 
@@ -179,7 +175,7 @@ impl DomainSearch for SpaceIdV3 {
             };
 
             let collection_edge = PartOfCollection {
-                system: domain_system.to_string(),
+                platform: domain_platform.clone(),
                 name: domain_name.clone(),
                 tld: tld.to_string(),
                 status: "taken".to_string(),

@@ -654,23 +654,19 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
 #[async_trait]
 impl DomainSearch for TheGraph {
     async fn domain_search(name: &str) -> Result<EdgeList, Error> {
-        let mut process_name = name.to_string();
-        if name.contains(".") {
-            process_name = name.split(".").next().unwrap_or("").to_string();
-        }
-        if process_name == "".to_string() {
+        if name == "" {
             warn!("TheGraph domain_search(name='') is not a valid domain name");
             return Ok(vec![]);
         }
-        debug!("TheGraph domain_search(name={})", process_name);
+        debug!("TheGraph domain_search(name={})", name);
 
         let mut edges = EdgeList::new();
         let domain_collection = DomainCollection {
-            label: process_name.clone(),
+            id: name.to_string(),
             updated_at: naive_now(),
         };
 
-        let ens_name = format!("{}.{}", process_name, EXT::Eth);
+        let ens_name = format!("{}.{}", name, EXT::Eth);
         let merged_domains = domain_search(&ens_name).await?;
         for domain in merged_domains.into_iter() {
             let creation_tx = domain
@@ -729,7 +725,7 @@ impl DomainSearch for TheGraph {
             edges.push(EdgeWrapperEnum::new_hold_identity(hd));
 
             let collection_edge = PartOfCollection {
-                system: DomainNameSystem::ENS.to_string(),
+                platform: Platform::ENS,
                 name: domain.name.clone(),
                 tld: EXT::Eth.to_string(),
                 status: "taken".to_string(),

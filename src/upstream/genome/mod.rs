@@ -681,30 +681,26 @@ async fn get_address(domain: &str) -> Result<Vec<Metadata>, Error> {
 #[async_trait]
 impl DomainSearch for Genome {
     async fn domain_search(name: &str) -> Result<EdgeList, Error> {
-        let mut process_name = name.to_string();
-        if name.contains(".") {
-            process_name = name.split(".").next().unwrap_or("").to_string();
-        }
-        if process_name == "".to_string() {
+        if name == "" {
             warn!("Genome domain_search(name='') is not a valid domain name");
             return Ok(vec![]);
         }
-        debug!("Genome domain_search(name={})", process_name);
+        debug!("Genome domain_search(name={})", name);
 
-        let domains: Vec<Metadata> = get_address(&process_name).await?; // get_address(domain)
+        let domains: Vec<Metadata> = get_address(name).await?; // get_address(domain)
         if domains.is_empty() {
-            debug!("Genome get_address(name={}) result is empty", process_name);
+            debug!("Genome get_address(name={}) result is empty", name);
             return Ok(vec![]);
         }
         let mut edges = EdgeList::new();
         let domain_collection = DomainCollection {
-            label: process_name.clone(),
+            id: name.to_string(),
             updated_at: naive_now(),
         };
 
         let address = domains.first().unwrap().owner.clone();
         for d in domains.into_iter() {
-            if d.name == process_name {
+            if d.name == name.to_string() {
                 let genome_domain = format!("{}.{}", d.name, d.tld_name);
                 let mut token_id = String::from("");
                 let expired_at_naive = timestamp_to_naive(d.expired_at, 0);
@@ -764,7 +760,7 @@ impl DomainSearch for Genome {
                 };
 
                 let collection_edge = PartOfCollection {
-                    system: DomainNameSystem::Genome.to_string(),
+                    platform: Platform::Genome,
                     name: genome_domain.clone(),
                     tld: EXT::Gno.to_string(),
                     status: "taken".to_string(),

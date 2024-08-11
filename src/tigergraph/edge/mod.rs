@@ -6,7 +6,8 @@ pub mod relation;
 pub mod resolve;
 pub use hold::{Hold, HoldRecord, HOLD_CONTRACT, HOLD_IDENTITY};
 pub use part_of_collection::{
-    PartOfCollection, PartOfCollectionAttribute, PartOfCollectionRecord, PART_OF_COLLECTION,
+    AvailableDomain, PartOfCollection, PartOfCollectionAttribute, PartOfCollectionRecord,
+    PART_OF_COLLECTION,
 };
 pub use part_of_identities_graph::{HyperEdge, HyperEdgeRecord, HYPER_EDGE, HYPER_EDGE_REVERSE};
 pub use proof::{
@@ -14,8 +15,8 @@ pub use proof::{
 };
 pub use relation::{RelationUniqueTX, RelationUniqueTXRecord, EDGE_NAME as RELATION_UNIQUE_TX};
 pub use resolve::{
-    AvailableDomain, Resolve, ResolveEdge, ResolveRecord, RESOLVE, RESOLVE_CONTRACT,
-    REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT,
+    Resolve, ResolveEdge, ResolveRecord, RESOLVE, RESOLVE_CONTRACT, REVERSE_RESOLVE,
+    REVERSE_RESOLVE_CONTRACT,
 };
 
 use crate::{
