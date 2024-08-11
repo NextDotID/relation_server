@@ -23,7 +23,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_domain_search() -> Result<(), Error> {
-        let name = "vitalik";
+        let name = "0xbillys";
         let edges = Farcaster::domain_search(name).await?;
         println!("data: {:?}", edges);
         Ok(())

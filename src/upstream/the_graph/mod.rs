@@ -14,8 +14,8 @@ use crate::tigergraph::upsert::{create_ens_identity_ownership, create_ens_identi
 use crate::tigergraph::vertex::{Contract, DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
-    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, DomainSearch, Fetcher,
-    Platform, Target, TargetProcessedList, EXT,
+    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, DomainSearch, DomainStatus,
+    Fetcher, Platform, Target, TargetProcessedList, EXT,
 };
 use crate::util::{make_http_client, naive_now, parse_timestamp};
 use async_trait::async_trait;
@@ -728,7 +728,7 @@ impl DomainSearch for TheGraph {
                 platform: Platform::ENS,
                 name: domain.name.clone(),
                 tld: EXT::Eth.to_string(),
-                status: "taken".to_string(),
+                status: DomainStatus::Taken,
             };
             // create collection edge
             let c = collection_edge.wrapper(&domain_collection, &ens_domain, PART_OF_COLLECTION);

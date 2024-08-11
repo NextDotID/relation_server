@@ -7,7 +7,7 @@ use crate::{
     },
     upstream::{
         fetch_all, fetch_all_domains, trim_name, Chain, ContractCategory, DataFetcher, DataSource,
-        DomainNameSystem, Platform, Target,
+        DomainNameSystem, DomainStatus, Platform, Target,
     },
     util::make_http_client,
 };
@@ -81,8 +81,8 @@ impl AvailableDomain {
         self.availability.clone()
     }
 
-    /// Status: taken/protected/available
-    async fn status(&self) -> String {
+    /// status: taken/protected/available
+    async fn status(&self) -> DomainStatus {
         self.status.clone()
     }
 }
@@ -155,14 +155,12 @@ pub struct ResolveQuery {}
 
 #[Object]
 impl ResolveQuery {
-    async fn available_name_system(&self) -> Vec<String> {
-        DomainNameSystem::iter()
-            .map(|system| system.to_string())
-            .collect()
+    async fn available_name_system(&self) -> Result<Vec<DomainNameSystem>> {
+        Ok(DomainNameSystem::iter().collect())
     }
 
     #[tracing::instrument(level = "trace", skip(self, _ctx))]
-    async fn domain_available(
+    async fn domain_available_search(
         &self,
         _ctx: &Context<'_>,
         #[graphql(

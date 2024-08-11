@@ -13,8 +13,8 @@ use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::{DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
-    DataFetcher, DataSource, DomainNameSystem, DomainSearch, Fetcher, Platform, Target,
-    TargetProcessedList, EXT,
+    DataFetcher, DataSource, DomainNameSystem, DomainSearch, DomainStatus, Fetcher, Platform,
+    Target, TargetProcessedList, EXT,
 };
 use crate::util::{make_http_client, naive_now, option_naive_datetime_from_utc_string};
 use async_trait::async_trait;
@@ -572,7 +572,7 @@ impl DomainSearch for Crossbell {
                 platform: Platform::Crossbell,
                 name: crossbell_fullhandle.clone(),
                 tld: EXT::Csb.to_string(),
-                status: "taken".to_string(),
+                status: DomainStatus::Taken,
             };
 
             if profile.primary {

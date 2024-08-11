@@ -445,6 +445,7 @@ lazy_static! {
         extension.insert(Platform::Lens, vec![EXT::Lens]); // lens/handle
         extension.insert(Platform::Crossbell, vec![EXT::Csb]); // name.csb or address.csb
         extension.insert(Platform::Clusters, vec![EXT::ClustersRoot, EXT::ClustersMain]); // clusters/ or clusters/main
+        extension.insert(Platform::Farcaster, vec![]);
         extension.insert(Platform::Unknown, vec![]);
 
         extension.insert(Platform::UnstoppableDomains, vec![

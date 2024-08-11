@@ -8,8 +8,8 @@ use crate::tigergraph::edge::{
 use crate::tigergraph::vertex::{DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
-    DataFetcher, DataSource, DomainNameSystem, DomainSearch, Fetcher, Platform, ProofLevel,
-    TargetProcessedList, EXT,
+    DataFetcher, DataSource, DomainNameSystem, DomainSearch, DomainStatus, Fetcher, Platform,
+    ProofLevel, TargetProcessedList, EXT,
 };
 use crate::util::{make_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive};
 
@@ -730,13 +730,13 @@ impl DomainSearch for Clusters {
                 platform: Platform::Clusters,
                 name: d.cluster_name.clone(),
                 tld: EXT::ClustersRoot.to_string(),
-                status: "taken".to_string(),
+                status: DomainStatus::Taken,
             };
             let child_collection_edge = PartOfCollection {
                 platform: Platform::Clusters,
                 name: d.name.clone(),
                 tld: d.name.split("/").last().unwrap_or("").to_string(),
-                status: "taken".to_string(),
+                status: DomainStatus::Taken,
             };
 
             let parent_hd = parent_node_hold.wrapper(&wallet, &clusters_parent_node, HOLD_IDENTITY);

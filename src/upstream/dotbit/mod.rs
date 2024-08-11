@@ -12,8 +12,8 @@ use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::{DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
-    DataFetcher, DataSource, DomainNameSystem, DomainSearch, Fetcher, Platform, Target,
-    TargetProcessedList, EXT,
+    DataFetcher, DataSource, DomainNameSystem, DomainSearch, DomainStatus, Fetcher, Platform,
+    Target, TargetProcessedList, EXT,
 };
 use crate::util::{
     make_client, make_http_client, naive_now, option_timestamp_to_naive, parse_body,
@@ -1083,7 +1083,7 @@ impl DomainSearch for DotBit {
             platform: Platform::Dotbit,
             name: dotbit_fullname.clone(),
             tld: EXT::Bit.to_string(),
-            status: "taken".to_string(),
+            status: DomainStatus::Taken,
         };
 
         // hold record

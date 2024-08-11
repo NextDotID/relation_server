@@ -12,8 +12,8 @@ use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::{DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
-    DataFetcher, DataSource, DomainNameSystem, DomainSearch, Fetcher, Platform, Target,
-    TargetProcessedList, EXT,
+    DataFetcher, DataSource, DomainNameSystem, DomainSearch, DomainStatus, Fetcher, Platform,
+    Target, TargetProcessedList, EXT,
 };
 use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};
 use async_trait::async_trait;
@@ -894,7 +894,7 @@ impl DomainSearch for UnstoppableDomains {
                         platform: Platform::UnstoppableDomains,
                         name: ud_name.clone(),
                         tld: tld.to_string(),
-                        status: "taken".to_string(),
+                        status: DomainStatus::Taken,
                     };
 
                     let owner_result = fetch_owner_by_domain(&ud_name).await?;
@@ -1001,7 +1001,7 @@ impl DomainSearch for UnstoppableDomains {
                         platform: Platform::UnstoppableDomains,
                         name: ud_name.clone(),
                         tld: tld.to_string(),
-                        status: "protected".to_string(),
+                        status: DomainStatus::Protected,
                     };
 
                     let c = collection_edge.wrapper(&domain_collection, &ud, PART_OF_COLLECTION);

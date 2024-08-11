@@ -14,8 +14,10 @@ use crate::tigergraph::upsert::create_identity_to_identity_proof_two_way_binding
 use crate::tigergraph::upsert::create_isolated_vertex;
 use crate::tigergraph::vertex::{Contract, DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
-use crate::upstream::ProofLevel;
-use crate::upstream::{Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, EXT};
+use crate::upstream::{
+    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, DomainStatus, ProofLevel,
+    EXT,
+};
 use crate::util::{make_http_client, naive_now};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
@@ -1014,7 +1016,7 @@ impl DomainSearch for Solana {
                     platform: Platform::SNS,
                     name: sol_name.clone(),
                     tld: EXT::Sol.to_string(),
-                    status: "taken".to_string(),
+                    status: DomainStatus::Taken,
                 };
 
                 // hold record

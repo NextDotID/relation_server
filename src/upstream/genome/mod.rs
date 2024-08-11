@@ -13,8 +13,8 @@ use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
 use crate::tigergraph::vertex::{Contract, DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
-    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, DomainSearch, Fetcher,
-    Platform, Target, TargetProcessedList, EXT,
+    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, DomainSearch, DomainStatus,
+    Fetcher, Platform, Target, TargetProcessedList, EXT,
 };
 use crate::util::{
     make_client, make_http_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive,
@@ -763,7 +763,7 @@ impl DomainSearch for Genome {
                     platform: Platform::Genome,
                     name: genome_domain.clone(),
                     tld: EXT::Gno.to_string(),
-                    status: "taken".to_string(),
+                    status: DomainStatus::Taken,
                 };
 
                 if d.is_default {

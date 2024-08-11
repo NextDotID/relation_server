@@ -3,6 +3,7 @@ pub(crate) mod contract_category;
 pub(crate) mod data_fetcher;
 pub(crate) mod data_source;
 pub(crate) mod domain_name;
+pub(crate) mod domain_status;
 pub(crate) mod level;
 pub(crate) mod platform;
 
@@ -17,6 +18,7 @@ pub use data_source::vec_string_to_vec_datasource;
 pub use data_source::DataSource;
 pub use domain_name::DomainNameSystem;
 pub use domain_name::{trim_name, EXT, EXTENSION};
+pub use domain_status::DomainStatus;
 pub use level::ProofLevel;
 pub use platform::Platform;
 pub use target::{Target, TargetProcessedList};

@@ -22,7 +22,6 @@ mod unstoppable;
 mod tests;
 mod the_graph;
 mod types;
-pub use types::{trim_name, EXT, EXTENSION};
 
 use crate::{
     error::Error,
@@ -45,8 +44,8 @@ use tracing::{event, info, warn, Level};
 
 pub(crate) use types::vec_string_to_vec_datasource;
 pub(crate) use types::{
-    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Platform, ProofLevel,
-    Target, TargetProcessedList,
+    trim_name, Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, DomainStatus,
+    Platform, ProofLevel, Target, TargetProcessedList, EXT, EXTENSION,
 };
 
 lazy_static! {

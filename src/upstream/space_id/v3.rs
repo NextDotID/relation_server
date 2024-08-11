@@ -5,7 +5,9 @@ use crate::tigergraph::edge::{
 };
 use crate::tigergraph::vertex::{DomainCollection, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
-use crate::upstream::{DataFetcher, DataSource, DomainNameSystem, DomainSearch, Platform, EXT};
+use crate::upstream::{
+    DataFetcher, DataSource, DomainNameSystem, DomainSearch, DomainStatus, Platform, EXT,
+};
 use crate::util::{naive_now, option_timestamp_to_naive};
 use async_trait::async_trait;
 use gql_client::Client as GQLClient;
@@ -178,7 +180,7 @@ impl DomainSearch for SpaceIdV3 {
                 platform: domain_platform.clone(),
                 name: domain_name.clone(),
                 tld: tld.to_string(),
-                status: "taken".to_string(),
+                status: DomainStatus::Taken,
             };
 
             // hold record

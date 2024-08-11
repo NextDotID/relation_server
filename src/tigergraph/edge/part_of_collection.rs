@@ -5,7 +5,7 @@ use crate::{
         vertex::{DomainCollection, Identity, Vertex, VertexRecord},
         Attribute, OpCode, Transfer,
     },
-    upstream::Platform,
+    upstream::{DomainStatus, Platform},
     util::{option_naive_datetime_from_string, option_naive_datetime_to_string},
 };
 
@@ -31,7 +31,7 @@ pub struct PartOfCollection {
     /// Extension of domain (e.g. eth)
     pub tld: String,
     /// Status of domain
-    pub status: String,
+    pub status: DomainStatus,
 }
 
 impl Default for PartOfCollection {
@@ -244,6 +244,6 @@ pub struct AvailableDomain {
     /// Availability is `true` means that the domain is available for registration
     /// Availability is `false` means that the domain has taken by some wallet
     pub availability: bool,
-    /// Status: taken/protected/available
-    pub status: String,
+    /// DomainStatus: taken/protected/available
+    pub status: DomainStatus,
 }

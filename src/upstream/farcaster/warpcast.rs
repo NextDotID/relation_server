@@ -12,7 +12,7 @@ use crate::{
             vertex::{DomainCollection, IdentitiesGraph, Identity},
         },
     },
-    upstream::{DataFetcher, DataSource, Platform, Target, TargetProcessedList, EXT},
+    upstream::{DataFetcher, DataSource, DomainStatus, Platform, Target, TargetProcessedList, EXT},
     util::{
         make_client, make_http_client, naive_datetime_from_milliseconds,
         naive_datetime_to_milliseconds, naive_now, parse_body, request_with_timeout,
@@ -667,13 +667,13 @@ pub async fn domain_search(name: &str) -> Result<EdgeList, Error> {
         debug!("Warpcast user_by_username(name={})", username);
         let user = user_by_username(&username).await?;
         if user.is_none() {
-            return Ok(vec![]);
+            continue;
         }
         let user = user.unwrap();
         let fid = user.fid;
         let verifications = get_verifications(fid).await?;
         if verifications.is_none() {
-            return Ok(vec![]);
+            continue;
         }
         let fname = user.username.clone();
         let fname_tld = match fname.ends_with(&EXT::Eth.to_string()) {
@@ -702,7 +702,7 @@ pub async fn domain_search(name: &str) -> Result<EdgeList, Error> {
                 platform: Platform::Farcaster,
                 name: fname.clone(),
                 tld: fname_tld.clone(),
-                status: "taken".to_string(),
+                status: DomainStatus::Taken,
             };
             // create collection edge
             let c = collection_edge.wrapper(
@@ -763,7 +763,7 @@ pub async fn domain_search(name: &str) -> Result<EdgeList, Error> {
                 platform: Platform::Farcaster,
                 name: fname.clone(),
                 tld: fname_tld.clone(),
-                status: "taken".to_string(),
+                status: DomainStatus::Taken,
             };
 
             // hold record

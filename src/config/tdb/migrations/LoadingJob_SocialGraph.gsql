@@ -1,5 +1,6 @@
-CREATE GRAPH SocialGraph (Identities, Proof_Forward, Proof_Backward, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Resolve_Contract, Reverse_Resolve_Contract, IdentitiesGraph, PartOfIdentitiesGraph, Follow)
+CREATE GRAPH SocialGraph (Identities, Proof_Forward, Proof_Backward, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Resolve_Contract, Reverse_Resolve_Contract, IdentitiesGraph, PartOfIdentitiesGraph, Follow, DomainCollection, PartOfCollection)
 
+// CREATE GRAPH Everything_Graph (*)
 USE GRAPH SocialGraph
 
 CREATE OR REPLACE QUERY insert_contract_connection(STRING edges_str) FOR GRAPH SocialGraph SYNTAX v2 {

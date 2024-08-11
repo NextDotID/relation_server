@@ -6,7 +6,7 @@ use crate::{
         vertex::{FromWithParams, Vertex, VertexRecord},
         Attribute, BaseResponse, Graph, OpCode, Transfer,
     },
-    upstream::{Platform, EXT, EXTENSION},
+    upstream::{DomainStatus, Platform, EXT, EXTENSION},
     util::{naive_datetime_from_string, naive_datetime_to_string, naive_now, parse_body},
 };
 use async_trait::async_trait;
@@ -240,14 +240,14 @@ impl DomainCollection {
                             if existing_tlds.is_empty() {
                                 // If the domain_platform does not exist, add all tlds as available
                                 if *domain_platform == Platform::Clusters {
-                                    let cluster_parent = format!("{}{}", name, EXT::ClustersRoot);
+                                    let cluster_parent = format!("{}", name);
                                     let cluster_child = format!("{}/{}", name, EXT::ClustersMain);
                                     available_domains.push(AvailableDomain {
                                         platform: domain_platform.clone(),
                                         name: cluster_parent,
                                         tld: EXT::ClustersRoot.to_string(),
                                         availability: true,
-                                        status: "available".to_string(),
+                                        status: DomainStatus::Available,
                                         expired_at: None,
                                     });
                                     available_domains.push(AvailableDomain {
@@ -255,7 +255,16 @@ impl DomainCollection {
                                         name: cluster_child,
                                         tld: EXT::ClustersMain.to_string(),
                                         availability: true,
-                                        status: "available".to_string(),
+                                        status: DomainStatus::Available,
+                                        expired_at: None,
+                                    });
+                                } else if *domain_platform == Platform::Farcaster {
+                                    available_domains.push(AvailableDomain {
+                                        platform: domain_platform.clone(),
+                                        name: name.to_string(),
+                                        tld: "".to_string(),
+                                        availability: true,
+                                        status: DomainStatus::Available,
                                         expired_at: None,
                                     });
                                 } else {
@@ -266,24 +275,28 @@ impl DomainCollection {
                                             name: domain_name,
                                             tld: ext.to_string(),
                                             availability: true,
-                                            status: "available".to_string(),
+                                            status: DomainStatus::Available,
                                             expired_at: None,
                                         });
                                     }
                                 }
                             } else {
                                 // If the domain_platform exists, find missing tlds
-                                for ext in exts {
-                                    if !existing_tlds.contains(&ext.to_string()) {
-                                        let domain_name = format!("{}.{}", name, ext);
-                                        available_domains.push(AvailableDomain {
-                                            platform: domain_platform.clone(),
-                                            name: domain_name,
-                                            tld: ext.to_string(),
-                                            availability: true,
-                                            status: "available".to_string(),
-                                            expired_at: None,
-                                        });
+                                if *domain_platform != Platform::Clusters
+                                    && *domain_platform != Platform::Unknown
+                                {
+                                    for ext in exts {
+                                        if !existing_tlds.contains(&ext.to_string()) {
+                                            let domain_name = format!("{}.{}", name, ext);
+                                            available_domains.push(AvailableDomain {
+                                                platform: domain_platform.clone(),
+                                                name: domain_name,
+                                                tld: ext.to_string(),
+                                                availability: true,
+                                                status: DomainStatus::Available,
+                                                expired_at: None,
+                                            });
+                                        }
                                     }
                                 }
                             }

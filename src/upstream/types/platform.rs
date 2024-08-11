@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
 
 /// All identity platform.
-/// TODO: move this definition into `graph/vertex/identity`, since it is not specific to upstream.
 #[derive(
     Serialize,
     Deserialize,

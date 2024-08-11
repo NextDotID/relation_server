@@ -13,8 +13,8 @@ use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
 use crate::tigergraph::vertex::{DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
-    DataFetcher, DataSource, DomainNameSystem, DomainSearch, Fetcher, Platform, Target,
-    TargetProcessedList, EXT,
+    DataFetcher, DataSource, DomainNameSystem, DomainSearch, DomainStatus, Fetcher, Platform,
+    Target, TargetProcessedList, EXT,
 };
 use crate::util::{make_http_client, naive_now, utc_to_naive};
 use async_trait::async_trait;
@@ -753,7 +753,7 @@ impl DomainSearch for LensV2 {
             platform: Platform::Lens,
             name: lens_handle.clone(),
             tld: EXT::Lens.to_string(),
-            status: "taken".to_string(),
+            status: DomainStatus::Taken,
         };
 
         let hd = hold.wrapper(&addr, &lens, HOLD_IDENTITY);
