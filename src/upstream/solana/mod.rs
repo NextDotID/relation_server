@@ -3,8 +3,8 @@ mod tests;
 use crate::config::C;
 use crate::error::Error;
 use crate::tigergraph::edge::{
-    Hold, HyperEdge, Proof, Resolve, Wrapper, HOLD_CONTRACT, HOLD_IDENTITY, HYPER_EDGE, PROOF_EDGE,
-    PROOF_REVERSE_EDGE, RESOLVE, REVERSE_RESOLVE,
+    Hold, HyperEdge, PartOfCollection, Proof, Resolve, Wrapper, HOLD_CONTRACT, HOLD_IDENTITY,
+    HYPER_EDGE, PART_OF_COLLECTION, PROOF_EDGE, PROOF_REVERSE_EDGE, RESOLVE, REVERSE_RESOLVE,
 };
 use crate::tigergraph::upsert::create_ens_identity_ownership;
 use crate::tigergraph::upsert::create_identity_domain_resolve_record;
@@ -12,15 +12,17 @@ use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
 use crate::tigergraph::upsert::create_identity_to_identity_proof_two_way_binding;
 use crate::tigergraph::upsert::create_isolated_vertex;
-use crate::tigergraph::vertex::{Contract, IdentitiesGraph, Identity};
+use crate::tigergraph::vertex::{Contract, DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
-use crate::upstream::ProofLevel;
-use crate::upstream::{Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem};
+use crate::upstream::{
+    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, DomainStatus, ProofLevel,
+    EXT,
+};
 use crate::util::{make_http_client, naive_now};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use std::str::FromStr;
-use tracing::trace;
+use tracing::{debug, trace, warn};
 use uuid::Uuid;
 
 /// Solana Sdk
@@ -38,7 +40,7 @@ use {
     spl_name_service::state::get_seeds_and_key,
 };
 
-use super::{Fetcher, Platform, Target, TargetProcessedList};
+use super::{DomainSearch, Fetcher, Platform, Target, TargetProcessedList};
 
 pub struct Solana {}
 
@@ -933,5 +935,104 @@ async fn get_twitter_registry(
     match resolve_name_registry(rpc_client, &twitter_handle_registry_key).await? {
         Some((header, _)) => Ok(Some(header.owner)),
         None => Ok(None),
+    }
+}
+
+#[async_trait]
+impl DomainSearch for Solana {
+    async fn domain_search(name: &str) -> Result<EdgeList, Error> {
+        if name == "".to_string() {
+            warn!("Solana domain_search(name='') is not a valid domain name");
+            return Ok(vec![]);
+        }
+        debug!("Solana domain_search(name={})", name);
+
+        let mut edges = EdgeList::new();
+        let domain_collection = DomainCollection {
+            id: name.to_string(),
+            updated_at: naive_now(),
+        };
+
+        let rpc_client = get_rpc_client(C.upstream.solana_rpc.rpc_url.clone());
+        let owner = fetch_resolve_address(&rpc_client, name).await?;
+
+        match owner {
+            Some(owner) => {
+                let sol_name = format!("{}.{}", name, EXT::Sol);
+                let solana = Identity {
+                    uuid: Some(Uuid::new_v4()),
+                    platform: Platform::Solana,
+                    identity: owner.to_string(),
+                    uid: None,
+                    created_at: None,
+                    display_name: None,
+                    added_at: naive_now(),
+                    avatar_url: None,
+                    profile_url: Some(format!(
+                        "https://www.sns.id/profile?pubkey={}&subView=Show+All",
+                        owner.to_string()
+                    )),
+                    updated_at: naive_now(),
+                    expired_at: None,
+                    reverse: Some(false),
+                };
+
+                let sns = Identity {
+                    uuid: Some(Uuid::new_v4()),
+                    platform: Platform::SNS,
+                    identity: sol_name.clone(),
+                    uid: None,
+                    created_at: None,
+                    display_name: Some(sol_name.clone()),
+                    added_at: naive_now(),
+                    avatar_url: None,
+                    profile_url: Some(format!("https://www.sns.id/domain?domain={}", sol_name)),
+                    updated_at: naive_now(),
+                    expired_at: None,
+                    reverse: Some(false),
+                };
+
+                let hold: Hold = Hold {
+                    uuid: Uuid::new_v4(),
+                    source: DataSource::Solana,
+                    transaction: Some("".to_string()),
+                    id: sol_name.clone(),
+                    created_at: None,
+                    updated_at: naive_now(),
+                    fetcher: DataFetcher::RelationService,
+                    expired_at: None,
+                };
+
+                let resolve: Resolve = Resolve {
+                    uuid: Uuid::new_v4(),
+                    source: DataSource::Solana,
+                    system: DomainNameSystem::SNS,
+                    name: sol_name.clone(),
+                    fetcher: DataFetcher::RelationService,
+                    updated_at: naive_now(),
+                };
+
+                let collection_edge = PartOfCollection {
+                    platform: Platform::SNS,
+                    name: sol_name.clone(),
+                    tld: EXT::Sol.to_string(),
+                    status: DomainStatus::Taken,
+                };
+
+                // hold record
+                let hd = hold.wrapper(&solana, &sns, HOLD_IDENTITY);
+                // resolve record
+                let rs = resolve.wrapper(&sns, &solana, RESOLVE);
+                // create collection edge
+                let c = collection_edge.wrapper(&domain_collection, &sns, PART_OF_COLLECTION);
+
+                edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+                edges.push(EdgeWrapperEnum::new_resolve(rs));
+                edges.push(EdgeWrapperEnum::new_domain_collection_edge(c));
+            }
+            None => trace!("Solana domain_search(name={}) Owner not found", name),
+        }
+
+        Ok(edges)
     }
 }

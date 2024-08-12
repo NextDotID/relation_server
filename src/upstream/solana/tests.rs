@@ -6,7 +6,7 @@ mod tests {
         fetch_register_favourite, fetch_resolve_address, fetch_resolve_domains,
         get_handle_and_registry_key, get_rpc_client, get_twitter_registry, Solana,
     };
-    use crate::upstream::{Fetcher, Platform, Target};
+    use crate::upstream::{DomainSearch, Fetcher, Platform, Target};
     use crate::util::make_http_client;
     use rand::Rng;
     use sns_sdk::non_blocking::resolve::{get_domains_owner, resolve_owner, resolve_reverse_batch};
@@ -116,6 +116,14 @@ mod tests {
             .await?
             .expect("Record not found");
         print!("found: {:?}", found);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_domain_search() -> Result<(), Error> {
+        let name = "sujiyan";
+        let edges = Solana::domain_search(name).await?;
+        println!("data: {:?}", edges);
         Ok(())
     }
 

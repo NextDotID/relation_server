@@ -1,7 +1,7 @@
 use crate::{
     error::{Error, Result},
     tigergraph::{
-        delete_vertex_and_edge,
+        delete_graph_inner_connection,
         edge::{Hold, HoldRecord},
         vertex::{ContractLoadFn, ContractRecord, IdentityLoadFn, IdentityRecord},
     },
@@ -187,7 +187,7 @@ impl HoldQuery {
                     tokio::spawn(async move {
                         // Delete and Refetch in the background
                         sleep(Duration::from_secs(10)).await;
-                        delete_vertex_and_edge(&client, v_id).await?;
+                        delete_graph_inner_connection(&client, v_id).await?;
                         fetch_all(vec![target], Some(3)).await?;
                         Ok::<_, Error>(())
                     });

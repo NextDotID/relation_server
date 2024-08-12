@@ -1,5 +1,6 @@
-CREATE GRAPH SocialGraph (Identities, Proof_Forward, Proof_Backward, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Resolve_Contract, Reverse_Resolve_Contract, IdentitiesGraph, PartOfIdentitiesGraph, Follow)
+CREATE GRAPH SocialGraph (Identities, Proof_Forward, Proof_Backward, Contracts, Hold_Identity, Hold_Contract, Resolve, Reverse_Resolve, Resolve_Contract, Reverse_Resolve_Contract, IdentitiesGraph, PartOfIdentitiesGraph, Follow, DomainCollection, PartOfCollection)
 
+// CREATE GRAPH Everything_Graph (*)
 USE GRAPH SocialGraph
 
 CREATE OR REPLACE QUERY insert_contract_connection(STRING edges_str) FOR GRAPH SocialGraph SYNTAX v2 {
@@ -511,6 +512,40 @@ CREATE OR REPLACE QUERY delete_graph_inner_connection_test(VERTEX<Identities> p,
   v2v = SELECT v FROM vertex2delete-(:e)-vertex2delete:v ACCUM DELETE(e);
 }
 
+CREATE OR REPLACE QUERY delete_domain_collection(VERTEX<DomainCollection> p) FOR GRAPH SocialGraph {
+  vertex2delete (DomainCollection) = {p};
+  DELETE e FROM vertex2delete:s-((PartOfCollection>):e)-Identities:tgt;
+  DELETE s FROM vertex2delete:s;
+}
+
+CREATE OR REPLACE QUERY domain_available_search(STRING id) FOR GRAPH SocialGraph {
+  TYPEDEF TUPLE< STRING platform, STRING name, STRING tld, STRING status, BOOL availability, DATETIME expired_at > DomainResult;
+  SetAccum<DomainResult> @@domain_result;
+  SetAccum<STRING> @@vlist;
+  SetAccum<VERTEX> @@existing_vlist;
+  @@vlist += id;
+  @@existing_vlist = to_vertex_set(@@vlist, "DomainCollection"); // check existence of a vertex without slowing server
+  seed (ANY) = {@@existing_vlist};
+
+  available_domain = SELECT tgt FROM seed:s-((PartOfCollection>):e)-Identities:tgt
+                     ACCUM @@domain_result += DomainResult(e.platform, e.name, e.tld, e.status, false, tgt.expired_at);
+  PRINT seed as collection, @@domain_result as domains;
+}
+
+CREATE OR REPLACE QUERY domain_available_search_draft(SET<STRING> names, SET<STRING> ens_names) FOR GRAPH SocialGraph {
+  TYPEDEF TUPLE< STRING system, STRING name, DATETIME expired_at > DomainResult;
+  ListAccum<STRING> @@domainSystems = ["dotbit", "lens", "unstoppabledomains", "space_id", "crossbell", "ens", "sns", "genome", "clusters"];
+
+  SetAccum<DomainResult> @@domain_result;
+  owner = SELECT s FROM Identities:s-((Hold_Identity>):e)-Identities:v
+            WHERE @@domainSystems.contains(v.platform) == TRUE AND v.identity IN names
+            POST-ACCUM @@domain_result += DomainResult(v.platform, v.identity, v.expired_at);
+  ens_owner = SELECT s FROM Identities:s-((Hold_Contract>):e)-Contracts:c
+            WHERE c.category == "ens" AND c.address == "0x57f1887a8bf19b14fc0df6fd9b2acc9af147ea85" AND e.id IN ens_names
+            ACCUM @@domain_result += DomainResult(c.category, e.id, e.expired_at);
+  PRINT @@domain_result;
+}
+
 CREATE OR REPLACE QUERY find_identity_graph_resolve(STRING platform, STRING identity, INT reverse_flag=0) FOR GRAPH SocialGraph {
   TYPEDEF TUPLE< VERTEX source_v, VERTEX target_v, STRING data_source, STRING edge_type > IdentityConnection;
   TYPEDEF TUPLE< STRING chain, STRING address > Address;
@@ -997,7 +1032,6 @@ CREATE OR REPLACE QUERY domain2(STRING name, STRING system) FOR GRAPH SocialGrap
     PRINT record, hold, resolved, owner, @@reverse as reverse, reverse_record;
   END;
 }
-
 
 CREATE OR REPLACE QUERY domain(STRING name, STRING system) FOR GRAPH SocialGraph {
   EDGE record;

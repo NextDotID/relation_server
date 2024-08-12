@@ -36,6 +36,7 @@ pub struct ProofPersona {
     pub proofs: Vec<ProofRecord>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct ProofRecord {
     pub platform: String,
@@ -46,6 +47,7 @@ pub struct ProofRecord {
     pub invalid_reason: String,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct ProofQueryResponsePagination {
     pub total: u32,

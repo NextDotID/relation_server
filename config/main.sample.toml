@@ -59,6 +59,7 @@ token = "MK-ABC123..."
 
 [upstream.spaceid_api]
 url = "https://api.prd.space.id"
+graphql = "https://graphigo.prd.space.id/query"
 
 [upstream.crossbell_api]
 url = "https://indexer.crossbell.io/v1/graphql"

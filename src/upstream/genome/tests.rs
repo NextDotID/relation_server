@@ -2,7 +2,7 @@
 mod tests {
     use crate::error::Error;
     use crate::upstream::genome::{get_address, get_name, Genome};
-    use crate::upstream::{Fetcher, Platform, Target};
+    use crate::upstream::{DomainSearch, Fetcher, Platform, Target};
 
     #[tokio::test]
     async fn test_get_address() -> Result<(), Error> {
@@ -30,6 +30,14 @@ mod tests {
         );
         // let target = Target::Identity(Platform::Genome, "shiva.gno".to_string());
         let _ = Genome::fetch(&target).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_domain_search() -> Result<(), Error> {
+        let name = "vitalik";
+        let edges = Genome::domain_search(name).await?;
+        println!("data: {:?}", edges);
         Ok(())
     }
 }

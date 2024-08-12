@@ -143,6 +143,7 @@ pub struct ConfigWarpcastAPI {
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigSpaceIdAPI {
     pub url: String,
+    pub graphql: String,
 }
 
 #[derive(Clone, Deserialize, Default)]

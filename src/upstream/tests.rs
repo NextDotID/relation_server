@@ -1,6 +1,7 @@
 use crate::error::Error;
 use crate::upstream::{
-    batch_fetch_upstream, fetch_all, fetch_one, Chain, ContractCategory, Platform, Target,
+    batch_fetch_upstream, fetch_all, fetch_all_domains, fetch_one, Chain, ContractCategory,
+    Platform, Target,
 };
 
 #[tokio::test]
@@ -52,7 +53,7 @@ async fn test_fetch_all() -> Result<(), Error> {
     fetch_all(
         vec![Target::Identity(
             Platform::Ethereum,
-            "0x0da0ee86269797618032e56a69b1aad095c581fc".into(),
+            "0x934b510d4c9103e6a87aef13b816fb080286d649".into(),
         )],
         Some(5),
     )
@@ -121,5 +122,19 @@ async fn test_fetch_all_ens() -> Result<(), Error> {
     )
     .await?;
 
+    Ok(())
+}
+
+// #[tokio::test]
+// async fn test_fetch_domains() -> Result<(), Error> {
+//     let name = "vitalik";
+//     fetch_domains(name).await?;
+//     Ok(())
+// }
+
+#[tokio::test]
+async fn test_fetch_all_domains() -> Result<(), Error> {
+    let name = "vitalik";
+    fetch_all_domains(name).await?;
     Ok(())
 }
