@@ -39,7 +39,6 @@ use async_trait::async_trait;
 use futures::{future::join_all, StreamExt};
 use std::{collections::HashSet, sync::Arc};
 use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
 use tracing::{event, info, warn, Level};
 
 pub(crate) use types::vec_string_to_vec_datasource;
@@ -395,7 +394,6 @@ pub async fn fetch_domains(name: &str) -> Result<(), Error> {
         SpaceIdV3::domain_search(name),          // space_id
     ])
     .await
-    .into_iter()
     .into_iter()
     .flat_map(|res| {
         match res {
