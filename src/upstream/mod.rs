@@ -39,7 +39,6 @@ use async_trait::async_trait;
 use futures::{future::join_all, StreamExt};
 use std::{collections::HashSet, sync::Arc};
 use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
 use tracing::{event, info, warn, Level};
 
 pub(crate) use types::vec_string_to_vec_datasource;
@@ -381,70 +380,31 @@ pub async fn batch_fetch_upstream(
     Ok((up_next, all_edges))
 }
 
-pub async fn fetch_all_domains(name: &str) -> Result<(), Error> {
-    let mut handles: Vec<JoinHandle<Result<EdgeList, Error>>> = Vec::new();
-
-    handles.push(tokio::spawn({
-        let name = name.to_string();
-        async move { TheGraph::domain_search(&name).await }
-    }));
-
-    handles.push(tokio::spawn({
-        let name = name.to_string();
-        async move { Farcaster::domain_search(&name).await }
-    }));
-
-    handles.push(tokio::spawn({
-        let name = name.to_string();
-        async move { LensV2::domain_search(&name).await }
-    }));
-
-    handles.push(tokio::spawn({
-        let name = name.to_string();
-        async move { DotBit::domain_search(&name).await }
-    }));
-
-    handles.push(tokio::spawn({
-        let name = name.to_string();
-        async move { UnstoppableDomains::domain_search(&name).await }
-    }));
-
-    handles.push(tokio::spawn({
-        let name = name.to_string();
-        async move { Genome::domain_search(&name).await }
-    }));
-
-    handles.push(tokio::spawn({
-        let name = name.to_string();
-        async move { Crossbell::domain_search(&name).await }
-    }));
-
-    handles.push(tokio::spawn({
-        let name = name.to_string();
-        async move { Solana::domain_search(&name).await }
-    }));
-
-    handles.push(tokio::spawn({
-        let name = name.to_string();
-        async move { Clusters::domain_search(&name).await }
-    }));
-
-    handles.push(tokio::spawn({
-        let name = name.to_string();
-        async move { SpaceIdV3::domain_search(&name).await }
-    }));
-
-    event!(Level::INFO, "DomainSearch Pushed all tasks...");
-
-    let mut all_edges: EdgeList = Vec::new();
-
-    for handle in handles {
-        match handle.await {
-            Ok(Ok(edges)) => all_edges.extend(edges),
-            Ok(Err(err)) => warn!("Error happened when fetching name({}): {}", name, err),
-            Err(join_err) => warn!("Task failed to join: {}", join_err),
+pub async fn fetch_domains(name: &str) -> Result<(), Error> {
+    let all_edges: EdgeList = join_all(vec![
+        TheGraph::domain_search(name),           // ens
+        Farcaster::domain_search(name),          // farcaster
+        LensV2::domain_search(name),             // lens
+        DotBit::domain_search(name),             // dotbit
+        UnstoppableDomains::domain_search(name), // unstoppabledomains
+        Genome::domain_search(name),             // gnosis
+        Crossbell::domain_search(name),          // crossbell
+        Solana::domain_search(name),             // sns
+        Clusters::domain_search(name),           // clusters
+        SpaceIdV3::domain_search(name),          // space_id
+    ])
+    .await
+    .into_iter()
+    .flat_map(|res| {
+        match res {
+            Ok(edges) => edges,
+            Err(err) => {
+                warn!("Error happened when fetching name({}): {}", name, err);
+                vec![] // Don't break the procedure
+            }
         }
-    }
+    })
+    .collect();
 
     // Upsert all edges after fetching completes
     let gsql_cli = make_http_client();

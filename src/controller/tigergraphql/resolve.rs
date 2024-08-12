@@ -6,7 +6,7 @@ use crate::{
         vertex::{DomainCollection, IdentityRecord},
     },
     upstream::{
-        fetch_all, fetch_all_domains, trim_name, Chain, ContractCategory, DataFetcher, DataSource,
+        fetch_all, fetch_domains, trim_name, Chain, ContractCategory, DataFetcher, DataSource,
         DomainNameSystem, DomainStatus, Platform, Target,
     },
     util::make_http_client,
@@ -173,13 +173,13 @@ impl ResolveQuery {
         // Check name if exists in storage
         match DomainCollection::domain_available_search(&client, &process_name).await? {
             None => {
-                let fetch_result = fetch_all_domains(&process_name).await;
+                let fetch_result = fetch_domains(&process_name).await;
                 if fetch_result.is_err() {
                     event!(
                         Level::WARN,
                         process_name,
                         err = fetch_result.unwrap_err().to_string(),
-                        "Failed to fetch_all_domains"
+                        "Failed to fetch_domains"
                     );
                 }
                 match DomainCollection::domain_available_search(&client, &process_name).await? {
@@ -198,7 +198,7 @@ impl ResolveQuery {
                         // Delete and Refetch in the background
                         sleep(Duration::from_secs(10)).await;
                         delete_domain_collection(&client, &process_name).await?;
-                        fetch_all_domains(&name).await?;
+                        fetch_domains(&name).await?;
                         Ok::<_, Error>(())
                     });
                 }

@@ -518,6 +518,13 @@ CREATE OR REPLACE QUERY delete_domain_collection(VERTEX<DomainCollection> p) FOR
   DELETE s FROM vertex2delete:s;
 }
 
+CREATE OR REPLACE QUERY clear_domain_search_cache() FOR GRAPH SocialGraph {
+  vertex2delete = SELECT v FROM DomainCollection:v;
+  PRINT vertex2delete.size();
+  DELETE e FROM vertex2delete:s-((PartOfCollection>):e)-Identities:tgt;
+  DELETE s FROM vertex2delete:s;
+}
+
 CREATE OR REPLACE QUERY domain_available_search(STRING id) FOR GRAPH SocialGraph {
   TYPEDEF TUPLE< STRING platform, STRING name, STRING tld, STRING status, BOOL availability, DATETIME expired_at > DomainResult;
   SetAccum<DomainResult> @@domain_result;
