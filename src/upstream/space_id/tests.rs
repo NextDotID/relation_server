@@ -1,8 +1,10 @@
 #[cfg(test)]
 mod tests {
     use crate::error::Error;
+    use crate::tigergraph::batch_upsert_domains;
     use crate::upstream::space_id::{get_address, get_name, v3::SpaceIdV3, SpaceId};
     use crate::upstream::{DomainSearch, Fetcher, Platform, Target};
+    use crate::util::make_http_client;
 
     #[tokio::test]
     async fn test_get_address() -> Result<(), Error> {
@@ -35,8 +37,13 @@ mod tests {
     #[tokio::test]
     async fn test_domain_search() -> Result<(), Error> {
         let name = "sujiyan";
-        let edges = SpaceIdV3::domain_search(name).await?;
-        println!("data: {:?}", edges);
+        let all_edges = SpaceIdV3::domain_search(name).await?;
+        println!("data: {:?}", all_edges);
+
+        let gsql_cli = make_http_client();
+        if !all_edges.is_empty() {
+            batch_upsert_domains(&gsql_cli, all_edges).await?;
+        }
         Ok(())
     }
 }

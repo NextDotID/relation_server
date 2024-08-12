@@ -23,7 +23,7 @@ use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Client};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 use uuid::Uuid;
 
 pub async fn fetch_connections_by_platform_identity(
@@ -491,7 +491,7 @@ async fn user_by_username(username: &str) -> Result<Option<User>, Error> {
                     "Warpcast fetch error| failed to fetch user-by-username?username={}, message: {:?}",
                     username, errors
                 );
-                error!(err_message);
+                warn!(err_message);
                 None
             }
             None => match r.result {
@@ -519,7 +519,7 @@ async fn user_by_verification(address: &str) -> Result<Option<User>, Error> {
         // If the address does not match the pattern, return an error
         // return Err(Error::ParamError("Address must match pattern".into()));
         let err_message = format!("Wrapcaster user-by-verification: address must match pattern");
-        error!(err_message);
+        warn!(err_message);
         return Ok(None);
     }
 
@@ -568,7 +568,7 @@ async fn user_by_verification(address: &str) -> Result<Option<User>, Error> {
                     "Warpcast fetch error| failed to fetch user-by-verification?address={}, message: {:?}",
                     address, errors
                 );
-                error!(err_message);
+                warn!(err_message);
                 None
             }
             None => match r.result {
@@ -632,7 +632,7 @@ async fn get_verifications(fid: i64) -> Result<Option<Vec<Verification>>, Error>
                     "Warpcast fetch error| failed to fetch verifications?fid={}, message: {:?}",
                     fid, errors
                 );
-                error!(err_message);
+                warn!(err_message);
                 None
             }
             None => match r.result {

@@ -105,7 +105,7 @@ impl DomainSearch for SpaceIdV3 {
                 0 => None,          // If the expiration date is 0, return None
                 date => Some(date), // Otherwise, return Some(date)
             };
-            let expired_at_naive = option_timestamp_to_naive(expiration_date, 0);
+
             let tld_name = item.tld.tld_name.clone();
             let tld: EXT = tld_name.parse()?;
             if tld == EXT::Gno || tld == EXT::Eth {
@@ -113,6 +113,11 @@ impl DomainSearch for SpaceIdV3 {
             }
             if tld == EXT::Unknown {
                 continue;
+            }
+
+            let mut expired_at_naive = option_timestamp_to_naive(expiration_date, 0);
+            if tld == EXT::Merlin {
+                expired_at_naive = None; // merlin permanent
             }
 
             let domain_name = format!("{}.{}", item.name, tld);
