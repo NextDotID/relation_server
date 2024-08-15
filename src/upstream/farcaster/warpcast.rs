@@ -91,7 +91,7 @@ pub async fn batch_fetch_by_username(
     }
 
     for verification in verifications.iter() {
-        let protocol: Platform = verification.protocol.parse()?;
+        let protocol: Platform = verification.protocol.parse().unwrap_or(Platform::Unknown);
         let mut address = verification.address.clone();
         if protocol == Platform::Ethereum {
             address = address.to_lowercase();
@@ -179,7 +179,7 @@ pub async fn batch_fetch_by_signer(
     }
 
     for verification in verifications.iter() {
-        let protocol: Platform = verification.protocol.parse()?;
+        let protocol: Platform = verification.protocol.parse().unwrap_or(Platform::Unknown);
         let mut verification_address = verification.address.clone();
         if protocol == Platform::Ethereum {
             verification_address = verification_address.to_lowercase();
@@ -319,7 +319,7 @@ async fn save_verifications(
     user: &User,
     verification: &Verification,
 ) -> Result<Target, Error> {
-    let protocol: Platform = verification.protocol.parse()?;
+    let protocol: Platform = verification.protocol.parse().unwrap_or(Platform::Unknown);
     let mut address = verification.address.clone();
     if protocol == Platform::Ethereum {
         address = address.to_lowercase();
@@ -715,7 +715,7 @@ pub async fn domain_search(name: &str) -> Result<EdgeList, Error> {
         }
 
         for verification in verifications.iter() {
-            let protocol: Platform = verification.protocol.parse()?;
+            let protocol: Platform = verification.protocol.parse().unwrap_or(Platform::Unknown);
             let mut address = verification.address.clone();
             if protocol == Platform::Ethereum {
                 address = address.to_lowercase();

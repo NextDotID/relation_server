@@ -307,6 +307,10 @@ pub enum EXT {
     #[serde(rename = "tball")]
     #[graphql(name = "tball")]
     Tball,
+    #[strum(serialize = "farms")]
+    #[serde(rename = "farms")]
+    #[graphql(name = "farms")]
+    Farms,
 
     // Domains (TLDs) using the SPACE ID 3.0 infrastructure
     /// https://api.prd.space.id/
@@ -464,7 +468,9 @@ lazy_static! {
             EXT::Zil,
             EXT::Austin,
             EXT::Raiin,
-            EXT::Tball]);
+            EXT::Tball,
+            EXT::Farms,
+            ]);
 
         extension.insert(Platform::SpaceId, vec![
             EXT::Bnb,
@@ -517,6 +523,7 @@ impl From<EXT> for Platform {
             EXT::Austin => Platform::UnstoppableDomains,
             EXT::Raiin => Platform::UnstoppableDomains,
             EXT::Tball => Platform::UnstoppableDomains,
+            EXT::Farms => Platform::UnstoppableDomains,
 
             // SpaceID 3.0 extensions
             EXT::Bnb => Platform::SpaceId,
@@ -567,6 +574,7 @@ impl From<EXT> for DomainNameSystem {
             EXT::Austin => DomainNameSystem::UnstoppableDomains,
             EXT::Raiin => DomainNameSystem::UnstoppableDomains,
             EXT::Tball => DomainNameSystem::UnstoppableDomains,
+            EXT::Farms => DomainNameSystem::UnstoppableDomains,
 
             // SpaceID 3.0 extensions
             EXT::Bnb => DomainNameSystem::SpaceId,
