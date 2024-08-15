@@ -90,7 +90,7 @@ async fn batch_fetch_by_address(target: &Target) -> Result<(TargetProcessedList,
     let mut edges = EdgeList::new();
     let hv = IdentitiesGraph::default();
     for d in metadatas.into_iter() {
-        let wallet_platform: Platform = d.platform.parse()?;
+        let wallet_platform: Platform = d.platform.parse().unwrap_or(Platform::Unknown);
         if wallet_platform == Platform::Unknown {
             warn!(
                 ?target,
@@ -277,7 +277,7 @@ async fn batch_fetch_by_clusters(
     let hv = IdentitiesGraph::default();
 
     for d in metadatas.into_iter() {
-        let wallet_platform: Platform = d.platform.parse()?;
+        let wallet_platform: Platform = d.platform.parse().unwrap_or(Platform::Unknown);
         if wallet_platform == Platform::Unknown {
             warn!(
                 ?target,
@@ -614,7 +614,7 @@ impl DomainSearch for Clusters {
             updated_at: naive_now(),
         };
         for d in metadatas.into_iter() {
-            let wallet_platform: Platform = d.platform.parse()?;
+            let wallet_platform: Platform = d.platform.parse().unwrap_or(Platform::Unknown);
             if wallet_platform == Platform::Unknown {
                 warn!(
                     "Clusters domain_search(name={}) platform={} is Unknown in types",

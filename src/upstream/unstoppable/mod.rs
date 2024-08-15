@@ -870,7 +870,7 @@ impl DomainSearch for UnstoppableDomains {
         for r in result.iter() {
             let ud_name = r.domain.name.clone();
             let tld_name = r.domain.extension.clone();
-            let tld: EXT = tld_name.parse()?;
+            let tld: EXT = tld_name.parse().unwrap_or(EXT::Unknown);
             if tld == EXT::Unknown {
                 continue;
             }

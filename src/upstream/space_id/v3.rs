@@ -107,7 +107,7 @@ impl DomainSearch for SpaceIdV3 {
             };
 
             let tld_name = item.tld.tld_name.clone();
-            let tld: EXT = tld_name.parse()?;
+            let tld: EXT = tld_name.parse().unwrap_or(EXT::Unknown);
             if tld == EXT::Gno || tld == EXT::Eth {
                 continue; // EXT(`.eth`, `.gno`) are in special upstreams, do not repeated
             }

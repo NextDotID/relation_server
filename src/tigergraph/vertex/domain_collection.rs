@@ -222,74 +222,96 @@ impl DomainCollection {
                 let result = r.results.and_then(|vec_res| vec_res.first().cloned());
                 match result {
                     None => return Ok(None),
-                    Some(mut result) => {
+                    Some(result) => {
                         if result.collection.is_empty() {
                             return Ok(None);
                         }
                         // Fill the domain available name list
+                        // list must be returned in the specified order
                         let mut available_domains: Vec<AvailableDomain> = Vec::new();
 
-                        for (domain_platform, exts) in EXTENSION.iter() {
-                            let existing_tlds: Vec<String> = result
-                                .domains
-                                .iter()
-                                .filter(|domain| domain.platform == *domain_platform)
-                                .map(|domain| domain.tld.clone())
-                                .collect();
+                        let mut exist_tld_map: HashMap<(Platform, String), AvailableDomain> =
+                            HashMap::new();
+                        for exist in result.domains.iter() {
+                            exist_tld_map.insert(
+                                (exist.platform.clone(), exist.tld.clone()),
+                                exist.to_owned(),
+                            );
+                        }
 
-                            if existing_tlds.is_empty() {
-                                // If the domain_platform does not exist, add all tlds as available
-                                if *domain_platform == Platform::Clusters {
-                                    let cluster_parent = format!("{}", name);
-                                    let cluster_child = format!("{}/{}", name, EXT::ClustersMain);
-                                    available_domains.push(AvailableDomain {
-                                        platform: domain_platform.clone(),
-                                        name: cluster_parent,
-                                        tld: EXT::ClustersRoot.to_string(),
-                                        availability: true,
-                                        status: DomainStatus::Available,
-                                        expired_at: None,
-                                    });
-                                    available_domains.push(AvailableDomain {
-                                        platform: domain_platform.clone(),
-                                        name: cluster_child,
-                                        tld: EXT::ClustersMain.to_string(),
-                                        availability: true,
-                                        status: DomainStatus::Available,
-                                        expired_at: None,
-                                    });
-                                } else if *domain_platform == Platform::Farcaster {
-                                    available_domains.push(AvailableDomain {
-                                        platform: domain_platform.clone(),
-                                        name: name.to_string(),
-                                        tld: "".to_string(),
-                                        availability: true,
-                                        status: DomainStatus::Available,
-                                        expired_at: None,
-                                    });
-                                } else {
-                                    for ext in exts {
-                                        let domain_name = format!("{}.{}", name, ext);
+                        // specified order
+                        let return_order = vec![
+                            Platform::ENS,
+                            Platform::Farcaster,
+                            Platform::Lens,
+                            Platform::SNS,
+                            Platform::Dotbit,
+                            Platform::Crossbell,
+                            Platform::Clusters,
+                            Platform::UnstoppableDomains,
+                            Platform::SpaceId,
+                            Platform::Zeta,
+                            Platform::Mode,
+                            Platform::Arbitrum,
+                            Platform::Taiko,
+                            Platform::Mint,
+                            Platform::Zkfair,
+                            Platform::Manta,
+                            Platform::Lightlink,
+                            Platform::Genome,
+                            Platform::Merlin,
+                            Platform::AlienX,
+                            Platform::Tomo,
+                            Platform::Ailayer,
+                        ];
+
+                        for domain_order in return_order.iter() {
+                            if let Some(required_exts) = EXTENSION.get(domain_order) {
+                                if *domain_order == Platform::Clusters {
+                                    if let Some(exist_domain) = exist_tld_map
+                                        .get(&(Platform::Clusters, EXT::ClustersRoot.to_string()))
+                                    {
+                                        available_domains.push(exist_domain.to_owned());
+                                    } else {
+                                        let cluster_parent = format!("{}", name);
                                         available_domains.push(AvailableDomain {
-                                            platform: domain_platform.clone(),
-                                            name: domain_name,
-                                            tld: ext.to_string(),
+                                            platform: domain_order.clone(),
+                                            name: cluster_parent,
+                                            tld: EXT::ClustersRoot.to_string(),
                                             availability: true,
                                             status: DomainStatus::Available,
                                             expired_at: None,
                                         });
                                     }
-                                }
-                            } else {
-                                // If the domain_platform exists, find missing tlds
-                                if *domain_platform != Platform::Clusters
-                                    && *domain_platform != Platform::Unknown
-                                {
-                                    for ext in exts {
-                                        if !existing_tlds.contains(&ext.to_string()) {
+                                } else if *domain_order == Platform::Farcaster {
+                                    if let Some(exist_domain) = exist_tld_map
+                                        .get(&(Platform::Farcaster, EXT::Eth.to_string()))
+                                    {
+                                        available_domains.push(exist_domain.to_owned());
+                                    } else if let Some(exist_domain) =
+                                        exist_tld_map.get(&(Platform::Farcaster, "".to_string()))
+                                    {
+                                        available_domains.push(exist_domain.to_owned());
+                                    } else {
+                                        available_domains.push(AvailableDomain {
+                                            platform: domain_order.clone(),
+                                            name: name.to_string(),
+                                            tld: "".to_string(),
+                                            availability: true,
+                                            status: DomainStatus::Available,
+                                            expired_at: None,
+                                        });
+                                    }
+                                } else {
+                                    for ext in required_exts {
+                                        if let Some(exist_domain) =
+                                            exist_tld_map.get(&(*domain_order, ext.to_string()))
+                                        {
+                                            available_domains.push(exist_domain.to_owned());
+                                        } else {
                                             let domain_name = format!("{}.{}", name, ext);
                                             available_domains.push(AvailableDomain {
-                                                platform: domain_platform.clone(),
+                                                platform: domain_order.clone(),
                                                 name: domain_name,
                                                 tld: ext.to_string(),
                                                 availability: true,
@@ -302,15 +324,12 @@ impl DomainCollection {
                             }
                         }
 
-                        // Update the result with the newly found available domains
-                        result.domains.extend(available_domains);
-
                         match result.collection.first().cloned() {
                             None => return Ok(None),
                             Some(c) => {
                                 return Ok(Some(DomainAvailableSearch {
                                     collection: c.attributes.clone(),
-                                    domains: result.domains,
+                                    domains: available_domains,
                                 }))
                             }
                         }
