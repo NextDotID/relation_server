@@ -1,7 +1,7 @@
 use crate::{
     error::Error,
     tigergraph::{
-        batch_upsert_domains,
+        batch_upsert, batch_upsert_domains,
         edge::Hold,
         vertex::{Contract, Identity},
     },
@@ -19,12 +19,18 @@ async fn test_find_ens_by_wallet() -> Result<(), Error> {
         Platform::Ethereum,
         "0x934b510d4c9103e6a87aef13b816fb080286d649".into(),
     );
-    let (targets, all_edges) = TheGraph::batch_fetch(&target).await?;
-    println!("targets {:?}", targets);
+    // let target = Target::NFT(
+    //     Chain::Ethereum,
+    //     ContractCategory::ENS,
+    //     ContractCategory::ENS.default_contract_address().unwrap(),
+    //     "sujiyan.eth".into(),
+    // );
+    let (_, all_edges) = TheGraph::batch_fetch(&target).await?;
+    println!("all_edges {:?}", all_edges);
 
     let gsql_cli = make_http_client();
     if !all_edges.is_empty() {
-        batch_upsert_domains(&gsql_cli, all_edges).await?;
+        batch_upsert(&gsql_cli, all_edges).await?;
     }
     Ok(())
 }
