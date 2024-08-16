@@ -1,4 +1,5 @@
 mod tests;
+pub mod v3;
 
 use crate::config::C;
 use crate::error::Error;
@@ -27,12 +28,14 @@ pub struct BadResponse {
     pub msg: String,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 pub struct ResolveResponse {
     pub code: i32,
     pub address: String,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 pub struct ReverseResolveResponse {
     pub code: i32,

@@ -13,3 +13,5 @@ CREATE DIRECTED EDGE Social_Feed(FROM Identities, TO Identities, source STRING, 
 CREATE VERTEX IdentitiesGraph(PRIMARY_ID id STRING, id STRING, updated_nanosecond INT)
 CREATE DIRECTED EDGE PartOfIdentitiesGraph(FROM Identities, TO IdentitiesGraph) WITH REVERSE_EDGE="PartOfIdentitiesGraph_Reverse"
 CREATE DIRECTED EDGE Follow(FROM IdentitiesGraph, TO IdentitiesGraph, DISCRIMINATOR(original_from STRING, original_to STRING, source STRING), updated_at DATETIME)
+CREATE VERTEX DomainCollection(PRIMARY_ID id STRING, id STRING, updated_at DATETIME) WITH STATS="OUTDEGREE_BY_EDGETYPE"
+CREATE DIRECTED EDGE PartOfCollection(FROM DomainCollection, TO Identities, DISCRIMINATOR(platform STRING, name STRING, tld STRING, status STRING))

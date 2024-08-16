@@ -1,12 +1,13 @@
 use crate::{
     error::Error,
     tigergraph::{
+        batch_upsert, batch_upsert_domains,
         edge::Hold,
         vertex::{Contract, Identity},
     },
     upstream::{
-        the_graph::TheGraph, Chain, ContractCategory, DataFetcher, DataSource, Fetcher, Platform,
-        Target,
+        the_graph::TheGraph, Chain, ContractCategory, DataFetcher, DataSource, DomainSearch,
+        Fetcher, Platform, Target,
     },
     util::{make_http_client, parse_timestamp},
 };
@@ -18,9 +19,31 @@ async fn test_find_ens_by_wallet() -> Result<(), Error> {
         Platform::Ethereum,
         "0x934b510d4c9103e6a87aef13b816fb080286d649".into(),
     );
-    let targets = TheGraph::batch_fetch(&target).await?;
-    println!("targets {:?}", targets);
+    // let target = Target::NFT(
+    //     Chain::Ethereum,
+    //     ContractCategory::ENS,
+    //     ContractCategory::ENS.default_contract_address().unwrap(),
+    //     "sujiyan.eth".into(),
+    // );
+    let (_, all_edges) = TheGraph::batch_fetch(&target).await?;
+    println!("all_edges {:?}", all_edges);
 
+    let gsql_cli = make_http_client();
+    if !all_edges.is_empty() {
+        batch_upsert(&gsql_cli, all_edges).await?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_domain_search() -> Result<(), Error> {
+    let name = "sujiyan";
+    let all_edges = TheGraph::domain_search(name).await?;
+    println!("data: {:?}", all_edges);
+    let gsql_cli = make_http_client();
+    if !all_edges.is_empty() {
+        batch_upsert_domains(&gsql_cli, all_edges).await?;
+    }
     Ok(())
 }
 

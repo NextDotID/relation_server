@@ -5,7 +5,7 @@ mod tests {
         tigergraph::vertex::Identity,
         upstream::lensv2::LensV2,
         upstream::Platform,
-        upstream::{Fetcher, Target},
+        upstream::{DomainSearch, Fetcher, Target},
         util::make_http_client,
     };
 
@@ -37,6 +37,14 @@ mod tests {
         .await?
         .expect("Record not found");
         print!("found: {:?}", found);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_domain_search() -> Result<(), Error> {
+        let name = "sujiyan";
+        let edges = LensV2::domain_search(name).await?;
+        println!("data: {:?}", edges);
         Ok(())
     }
 }

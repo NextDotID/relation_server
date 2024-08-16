@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
 
 /// All identity platform.
-/// TODO: move this definition into `graph/vertex/identity`, since it is not specific to upstream.
 #[derive(
     Serialize,
     Deserialize,
@@ -154,22 +153,6 @@ pub enum Platform {
     #[graphql(name = "farcaster")]
     Farcaster,
 
-    /// SpaceId: A Web3 Identity Protocol with Multi-chain Name Service.
-    /// equip communities with powerful tools to launch their desired Top-Level-Domain
-    /// https://space.id/
-    #[strum(serialize = "space_id")]
-    #[serde(rename = "space_id")]
-    #[graphql(name = "space_id")]
-    SpaceId,
-
-    /// Genome: .GNO domains for your web3 identity.
-    /// community-owned network that prioritizes credible neutrality and resiliency.
-    /// https://genomedomains.com/
-    #[strum(serialize = "genome")]
-    #[serde(rename = "genome")]
-    #[graphql(name = "genome")]
-    Genome,
-
     /// Crossbell: Crossbell is a social ownership platform to build cutting-edge social dApps.
     /// https://crossbell.io/
     #[strum(serialize = "crossbell")]
@@ -266,6 +249,131 @@ pub enum Platform {
     #[strum(serialize = "cosmos")]
     #[graphql(name = "cosmos")]
     Cosmos,
+
+    /// SpaceId: A Web3 Identity Protocol with Multi-chain Name Service.
+    /// equip communities with powerful tools to launch their desired Top-Level-Domain
+    /// https://space.id/
+    #[strum(serialize = "space_id")]
+    #[serde(rename = "space_id")]
+    #[graphql(name = "space_id")]
+    SpaceId,
+
+    /// Genome: .GNO domains for your web3 identity.
+    /// community-owned network that prioritizes credible neutrality and resiliency.
+    /// https://genomedomains.com/
+    #[strum(serialize = "genome")]
+    #[serde(rename = "genome")]
+    #[graphql(name = "genome")]
+    Genome,
+
+    /// Zeta: ZetaChain with its Universal EVM, ZetaChain is an L1 blockchain for chain abstraction.
+    /// https://www.zetachain.com/
+    #[strum(serialize = "zeta")]
+    #[serde(rename = "zeta")]
+    #[graphql(name = "zeta")]
+    Zeta,
+
+    /// Mode: Mode is developing the framework for AI agents to optimise onchain trading and yield generation strategies for users.
+    /// https://www.mode.network/
+    #[strum(serialize = "mode")]
+    #[serde(rename = "mode")]
+    #[graphql(name = "mode")]
+    Mode,
+
+    /// Arbitrum is the leading Layer 2 technology that empowers you to explore and build in the largest Layer 1 ecosystem, Ethereum.
+    /// https://arbitrum.io/
+    #[strum(serialize = "arbitrum")]
+    #[serde(rename = "arbitrum")]
+    #[graphql(name = "arbitrum")]
+    Arbitrum,
+
+    /// Scroll seamlessly extends Ethereum's capabilities through zero knowledge tech and EVM compatibility.
+    /// The L2 network built by Ethereum devs for Ethereum devs.
+    /// https://scroll.io/
+    #[strum(serialize = "scroll")]
+    #[serde(rename = "scroll")]
+    #[graphql(name = "scroll")]
+    Scroll,
+
+    /// Taiko is a fully permissionless, Ethereum-equivalent based rollup. Inspired, secured, and sequenced by Ethereum.
+    /// https://taiko.xyz/
+    #[strum(serialize = "taiko")]
+    #[serde(rename = "taiko")]
+    #[graphql(name = "taiko")]
+    Taiko,
+
+    /// Mint: Focus on constructing Mint blockchain network and core components,
+    /// including open source code for blockchain, NIP functions, MRC library, cross chain bridge, sorter, and other core functions.
+    /// https://www.mintchain.io/
+    #[strum(serialize = "mint")]
+    #[serde(rename = "mint")]
+    #[graphql(name = "mint")]
+    Mint,
+
+    /// ZKFair Mainnet
+    /// ZKFair is the first ZK-Rollup on ethereum based on Polygon CDK and Celestia DA.
+    /// https://zkfair.io/
+    #[strum(serialize = "zkfair")]
+    #[serde(rename = "zkfair")]
+    #[graphql(name = "zkfair")]
+    Zkfair,
+
+    /// Manta Pacific Mainnet
+    /// The first EVM-native modular execution layer for wide ZK applications adoption,
+    /// with Manta’s universal circuit and zk interface.
+    /// https://pacific.manta.network/
+    #[strum(serialize = "manta")]
+    #[serde(rename = "manta")]
+    #[graphql(name = "manta")]
+    Manta,
+
+    /// LightLink Mainnet
+    /// LightLink is an Ethereum Layer 2 blockchain that lets dApps and enterprises offer users instant, gasless transactions.
+    /// https://lightlink.io/
+    #[strum(serialize = "lightlink")]
+    #[serde(rename = "lightlink")]
+    #[graphql(name = "lightlink")]
+    Lightlink,
+
+    /// Merlin Chain supports popular Bitcoin protocols such as BRC20, BRC420, Bitmap, Atomicals, Pipe, Stamp, and more,
+    /// enabling a more extensive user base to interact on Bitcoin Layer2.
+    /// https://merlinchain.io/
+    #[strum(serialize = "merlin")]
+    #[serde(rename = "merlin")]
+    #[graphql(name = "merlin")]
+    Merlin,
+
+    /// AlienX: AlienX is the blockchain infrastructure built for the large-scale adoption of AI, NFT, and Gaming.
+    /// https://alienxchain.io
+    #[strum(serialize = "alienx")]
+    #[serde(rename = "alienx")]
+    #[graphql(name = "alienx")]
+    AlienX,
+
+    /// Edgeless: Edgeless is the first ever crypto ecosystem without application layer fees.
+    /// Edgeless is built as an L2 powered by Arbitrum Nitro and is the best place for builders and users to build and interact with decentralized applications.
+    /// https://www.edgeless.network/
+    #[strum(serialize = "edgeless")]
+    #[serde(rename = "edgeless")]
+    #[graphql(name = "edgeless")]
+    Edgeless,
+
+    /// Tomo: Tomo is an all-in-one Web3 social wallet designed to bring the mass adoption of crypto.
+    /// It allows users to log in effortlessly with their social accounts and supports multiple chains,
+    /// with a particular emphasis on bringing Bitcoin into Ethereum L2, Solana and Cosmos ecosystems.
+    /// https://docs.tomo.inc/
+    #[strum(serialize = "tomo")]
+    #[serde(rename = "tomo")]
+    #[graphql(name = "tomo")]
+    Tomo,
+
+    /// AILayer: An innovative Bitcoin Layer2 solution,
+    /// crafted with a focus on AI-driven modular construction.
+    /// https://ailayer.xyz/
+    #[strum(serialize = "ailayer")]
+    #[serde(rename = "ailayer")]
+    #[graphql(name = "ailayer")]
+    Ailayer,
 
     /// Unknown
     #[strum(serialize = "unknown")]

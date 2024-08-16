@@ -24,6 +24,7 @@ use futures::future::join_all;
 
 use super::{DataFetcher, Target};
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct SybilListItem {
     pub twitter_name: String,

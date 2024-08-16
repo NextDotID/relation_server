@@ -25,12 +25,13 @@ mod types;
 
 use crate::{
     error::Error,
-    tigergraph::{batch_upsert, EdgeList},
+    tigergraph::{batch_upsert, batch_upsert_domains, upsert_domain_collection, EdgeList},
     upstream::{
         clusters::Clusters, crossbell::Crossbell, dotbit::DotBit, ens_reverse::ENSReverseLookup,
         farcaster::Farcaster, genome::Genome, keybase::Keybase, knn3::Knn3, lensv2::LensV2,
-        proof_client::ProofClient, rss3::Rss3, solana::Solana, space_id::SpaceId,
-        sybil_list::SybilList, the_graph::TheGraph, unstoppable::UnstoppableDomains,
+        proof_client::ProofClient, rss3::Rss3, solana::Solana, space_id::v3::SpaceIdV3,
+        space_id::SpaceId, sybil_list::SybilList, the_graph::TheGraph,
+        unstoppable::UnstoppableDomains,
     },
     util::{hashset_append, make_http_client},
 };
@@ -42,8 +43,8 @@ use tracing::{event, info, warn, Level};
 
 pub(crate) use types::vec_string_to_vec_datasource;
 pub(crate) use types::{
-    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Platform, ProofLevel,
-    Target, TargetProcessedList,
+    trim_name, Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, DomainStatus,
+    Platform, ProofLevel, Target, TargetProcessedList, EXT, EXTENSION,
 };
 
 lazy_static! {
@@ -62,6 +63,13 @@ pub trait Fetcher {
 
     /// Determine if this upstream can fetch this target.
     fn can_fetch(target: &Target) -> bool;
+}
+
+/// DomainSearch defines how to fetch domain data from upstream.
+#[async_trait]
+pub trait DomainSearch {
+    /// Fetch all domains from given name and return them
+    async fn domain_search(name: &str) -> Result<EdgeList, Error>;
 }
 
 /// Find all available (platform, identity) in all `Upstream`s.
@@ -370,6 +378,47 @@ pub async fn batch_fetch_upstream(
 
     // event!(Level::INFO, "fetch_one_and_save up_next {:?}", up_next);
     Ok((up_next, all_edges))
+}
+
+pub async fn fetch_domains(name: &str) -> Result<(), Error> {
+    let all_edges: EdgeList = join_all(vec![
+        TheGraph::domain_search(name),           // ens
+        Farcaster::domain_search(name),          // farcaster
+        LensV2::domain_search(name),             // lens
+        DotBit::domain_search(name),             // dotbit
+        UnstoppableDomains::domain_search(name), // unstoppabledomains
+        Genome::domain_search(name),             // gnosis
+        Crossbell::domain_search(name),          // crossbell
+        Solana::domain_search(name),             // sns
+        Clusters::domain_search(name),           // clusters
+        SpaceIdV3::domain_search(name),          // space_id
+    ])
+    .await
+    .into_iter()
+    .flat_map(|res| {
+        match res {
+            Ok(edges) => edges,
+            Err(err) => {
+                warn!("Error happened when fetching name({}): {}", name, err);
+                vec![] // Don't break the procedure
+            }
+        }
+    })
+    .collect();
+
+    // Upsert all edges after fetching completes
+    let gsql_cli = make_http_client();
+    if !all_edges.is_empty() {
+        batch_upsert_domains(&gsql_cli, all_edges).await?;
+    } else {
+        // this name is available in all domain system
+        // Record this information as a cache
+        upsert_domain_collection(&gsql_cli, name).await?;
+    }
+
+    event!(Level::INFO, "DomainSearch completed.");
+
+    Ok(())
 }
 
 /// Prefetch all prefetchable upstreams, e.g. SybilList.

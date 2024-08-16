@@ -27,6 +27,7 @@ pub struct Pagination {
     pub next: u32,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 pub struct Record {
     pub id: String,

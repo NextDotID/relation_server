@@ -3,15 +3,17 @@ mod tests;
 use crate::config::C;
 use crate::error::Error;
 use crate::tigergraph::edge::{
-    Hold, HyperEdge, Resolve, Wrapper, HOLD_IDENTITY, HYPER_EDGE, RESOLVE, REVERSE_RESOLVE,
+    Hold, HyperEdge, PartOfCollection, Resolve, Wrapper, HOLD_IDENTITY, HYPER_EDGE,
+    PART_OF_COLLECTION, RESOLVE, REVERSE_RESOLVE,
 };
 use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_domain_reverse_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_identity_hold_record;
-use crate::tigergraph::vertex::{IdentitiesGraph, Identity};
+use crate::tigergraph::vertex::{DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
-    DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target, TargetProcessedList,
+    DataFetcher, DataSource, DomainNameSystem, DomainSearch, DomainStatus, Fetcher, Platform,
+    Target, TargetProcessedList, EXT,
 };
 use crate::util::{make_client, make_http_client, naive_now, parse_body, request_with_timeout};
 use async_trait::async_trait;
@@ -19,7 +21,7 @@ use futures::future::join_all;
 use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::Deserialize;
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 use uuid::Uuid;
 
 #[derive(Deserialize, Debug, Clone)]
@@ -28,12 +30,14 @@ pub struct BadResponse {
     pub message: String,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 pub struct DomainResponse {
     pub meta: Meta,
     pub records: Records,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 pub struct ReverseResponse {
     pub meta: Meta,
@@ -52,12 +56,14 @@ pub struct GetDomainByOwnerResp {
     pub next: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 pub struct DataItem {
     pub meta: Meta,
     pub records: Records,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 pub struct MetaList {
     #[serde(rename = "perPage")]
@@ -78,12 +84,14 @@ pub struct Item {
     pub attributes: Attributes,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 pub struct Attributes {
     pub meta: Meta,
     pub records: Records,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 pub struct Meta {
     pub domain: String,
@@ -99,6 +107,7 @@ pub struct Meta {
     pub reverse: Option<bool>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 pub struct Records {
     #[serde(rename = "crypto.BTC.address")]
@@ -110,6 +119,7 @@ pub struct Records {
 const UNKNOWN_OWNER: &str = "0x0000000000000000000000000000000000000000";
 
 pub struct UnstoppableDomains {}
+
 #[async_trait]
 impl Fetcher for UnstoppableDomains {
     async fn fetch(target: &Target) -> Result<TargetProcessedList, Error> {
@@ -838,4 +848,256 @@ async fn fetch_account_by_domain(
         Platform::Ethereum,
         result.meta.owner.clone().unwrap().to_lowercase(),
     )])
+}
+
+#[async_trait]
+impl DomainSearch for UnstoppableDomains {
+    async fn domain_search(name: &str) -> Result<EdgeList, Error> {
+        if name == "" {
+            warn!("UnstoppableDomains domain_search(name='') is not a valid domain name");
+            return Ok(vec![]);
+        }
+        debug!("UnstoppableDomains domain_search(name={})", name);
+
+        let result = domain_search(&name).await?;
+
+        let mut edges = EdgeList::new();
+        let domain_collection = DomainCollection {
+            id: name.to_string(),
+            updated_at: naive_now(),
+        };
+
+        for r in result.iter() {
+            let ud_name = r.domain.name.clone();
+            let tld_name = r.domain.extension.clone();
+            let tld: EXT = tld_name.parse().unwrap_or(EXT::Unknown);
+            if tld == EXT::Unknown {
+                continue;
+            }
+            if r.availability == false {
+                if r.status == "registered".to_string() {
+                    let mut ud: Identity = Identity {
+                        uuid: Some(Uuid::new_v4()),
+                        platform: Platform::UnstoppableDomains,
+                        identity: ud_name.clone(),
+                        uid: None,
+                        created_at: None,
+                        display_name: Some(ud_name.clone()),
+                        added_at: naive_now(),
+                        avatar_url: None,
+                        profile_url: None,
+                        updated_at: naive_now(),
+                        expired_at: None,
+                        reverse: Some(false),
+                    };
+                    let collection_edge = PartOfCollection {
+                        platform: Platform::UnstoppableDomains,
+                        name: ud_name.clone(),
+                        tld: tld.to_string(),
+                        status: DomainStatus::Taken,
+                    };
+
+                    let owner_result = fetch_owner_by_domain(&ud_name).await?;
+                    if owner_result.meta.owner.is_none() {
+                        warn!(
+                            "UnstoppableDomains fetch_owner_by_domain({}) | No Result",
+                            ud_name
+                        );
+                        let c =
+                            collection_edge.wrapper(&domain_collection, &ud, PART_OF_COLLECTION);
+                        edges.push(EdgeWrapperEnum::new_domain_collection_edge(c));
+                        continue;
+                    }
+
+                    if owner_result.meta.owner.clone().unwrap().to_lowercase() == UNKNOWN_OWNER {
+                        warn!(
+                            "UnstoppableDomains fetch_owner_by_domain({}) owner is zero address",
+                            ud_name
+                        );
+                        let c =
+                            collection_edge.wrapper(&domain_collection, &ud, PART_OF_COLLECTION);
+                        edges.push(EdgeWrapperEnum::new_domain_collection_edge(c));
+                        continue;
+                    }
+
+                    let mut addr: Identity = Identity {
+                        uuid: Some(Uuid::new_v4()),
+                        platform: Platform::Ethereum,
+                        identity: owner_result.meta.owner.clone().unwrap().to_lowercase(),
+                        uid: None,
+                        created_at: None,
+                        display_name: None,
+                        added_at: naive_now(),
+                        avatar_url: None,
+                        profile_url: None,
+                        updated_at: naive_now(),
+                        expired_at: None,
+                        reverse: Some(false),
+                    };
+
+                    let hold: Hold = Hold {
+                        uuid: Uuid::new_v4(),
+                        source: DataSource::UnstoppableDomains,
+                        transaction: None,
+                        id: owner_result.meta.token_id.unwrap_or("".to_string()),
+                        created_at: None,
+                        updated_at: naive_now(),
+                        fetcher: DataFetcher::RelationService,
+                        expired_at: None,
+                    };
+
+                    let resolve: Resolve = Resolve {
+                        uuid: Uuid::new_v4(),
+                        source: DataSource::UnstoppableDomains,
+                        system: DomainNameSystem::UnstoppableDomains,
+                        name: owner_result.meta.domain.clone(),
+                        fetcher: DataFetcher::RelationService,
+                        updated_at: naive_now(),
+                    };
+
+                    if let Some(reverse) = owner_result.meta.reverse {
+                        if reverse {
+                            // reverse = true
+                            // 'reverse' resolution maps from an address back to a name.
+                            let reverse: Resolve = Resolve {
+                                uuid: Uuid::new_v4(),
+                                source: DataSource::UnstoppableDomains,
+                                system: DomainNameSystem::UnstoppableDomains,
+                                name: owner_result.meta.domain.clone(),
+                                fetcher: DataFetcher::RelationService,
+                                updated_at: naive_now(),
+                            };
+                            addr.reverse = Some(true);
+                            ud.reverse = Some(true);
+                            let rrs = reverse.wrapper(&addr, &ud, REVERSE_RESOLVE);
+                            edges.push(EdgeWrapperEnum::new_reverse_resolve(rrs));
+                        }
+                    }
+
+                    let hd = hold.wrapper(&addr, &ud, HOLD_IDENTITY);
+                    let rs = resolve.wrapper(&ud, &addr, RESOLVE);
+                    edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+                    edges.push(EdgeWrapperEnum::new_resolve(rs));
+
+                    // add domain_collection -> ud_identity
+                    let c = collection_edge.wrapper(&domain_collection, &ud, PART_OF_COLLECTION);
+                    edges.push(EdgeWrapperEnum::new_domain_collection_edge(c));
+                } else if r.status == "trademark".to_string() {
+                    let ud: Identity = Identity {
+                        uuid: Some(Uuid::new_v4()),
+                        platform: Platform::UnstoppableDomains,
+                        identity: ud_name.clone(),
+                        uid: None,
+                        created_at: None,
+                        display_name: Some(ud_name.clone()),
+                        added_at: naive_now(),
+                        avatar_url: None,
+                        profile_url: None,
+                        updated_at: naive_now(),
+                        expired_at: None,
+                        reverse: Some(false),
+                    };
+                    let collection_edge = PartOfCollection {
+                        platform: Platform::UnstoppableDomains,
+                        name: ud_name.clone(),
+                        tld: tld.to_string(),
+                        status: DomainStatus::Protected,
+                    };
+
+                    let c = collection_edge.wrapper(&domain_collection, &ud, PART_OF_COLLECTION);
+                    edges.push(EdgeWrapperEnum::new_domain_collection_edge(c));
+                }
+            }
+        }
+        Ok(edges)
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct SearchResult {
+    #[serde(rename = "searchQuery")]
+    search_query: String,
+    // #[serde(rename = "invalidCharacters")]
+    // invalid_characters: Option<Vec<String>>,
+    #[serde(rename = "invalidReason")]
+    invalid_reason: Option<String>,
+    exact: Vec<Exact>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct Exact {
+    status: String,
+    availability: bool,
+    domain: DomainInfo,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct DomainInfo {
+    name: String, // name.ext
+    // label: String,     // only name(without extension)
+    extension: String, // extension
+}
+
+// https://api.unstoppabledomains.com/api/domain/search/internal?q=0xbillys
+async fn domain_search(name: &str) -> Result<Vec<Exact>, Error> {
+    let client = make_client();
+    let encoded_name = urlencoding::encode(name);
+    let uri: http::Uri = format!(
+        "{}/api/domain/search/internal?q={}",
+        C.upstream.unstoppable_api.url, encoded_name,
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+    let req = hyper::Request::builder()
+        .method(Method::GET)
+        .uri(uri)
+        .body(Body::empty())
+        .map_err(|_err| {
+            Error::ParamError(format!(
+                "unstoppabledomains search domain(search_query={}) invalid error {}",
+                name, _err
+            ))
+        })?;
+
+    let mut resp = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "UnstoppableDomains search | Fail to search domain(search_query={}): {:?}",
+                name,
+                err.to_string()
+            ))
+        })?;
+    if !resp.status().is_success() {
+        let err_message = format!(
+            "UnstoppableDomains search domain http error, statusCode: {}",
+            resp.status()
+        );
+        error!(err_message);
+        return Err(Error::General(err_message, resp.status()));
+    }
+
+    let result = match parse_body::<SearchResult>(&mut resp).await {
+        Ok(result) => {
+            if result.invalid_reason.is_some() {
+                let err_message = format!(
+                    "UnstoppableDomains search domain(search_query={}) invalid_reason : {:?}",
+                    result.search_query, result.invalid_reason
+                );
+                error!(err_message);
+                return Err(Error::ManualHttpClientError(err_message));
+            }
+            result.exact
+        }
+        Err(err) => {
+            let err_message = format!(
+                "UnstoppableDomains search domain(search_query={}) error parse_body error: {:?}",
+                name, err
+            );
+            error!(err_message);
+            return Err(Error::ManualHttpClientError(err_message));
+        }
+    };
+
+    Ok(result)
 }

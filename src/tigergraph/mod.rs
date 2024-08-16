@@ -8,18 +8,17 @@ use crate::{
     error::Error,
     tigergraph::{
         edge::{
-            Edge, Hold, HoldRecord, HyperEdgeRecord, Proof, ProofRecord, Resolve, ResolveRecord,
-            Wrapper,
+            Edge, Hold, HoldRecord, HyperEdgeRecord, PartOfCollectionRecord, Proof, ProofRecord,
+            Resolve, ResolveRecord, Wrapper, HOLD_CONTRACT, HOLD_IDENTITY, HYPER_EDGE_REVERSE,
+            PART_OF_COLLECTION, PROOF_EDGE, PROOF_REVERSE_EDGE, RESOLVE, RESOLVE_CONTRACT,
+            REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT,
         },
-        edge::{
-            HOLD_CONTRACT, HOLD_IDENTITY, HYPER_EDGE_REVERSE, PROOF_EDGE, PROOF_REVERSE_EDGE,
-            RESOLVE, RESOLVE_CONTRACT, REVERSE_RESOLVE, REVERSE_RESOLVE_CONTRACT,
-        },
-        vertex::{Contract, IdentitiesGraph, Identity, Vertex},
+        vertex::{Contract, DomainCollection, IdentitiesGraph, Identity, Vertex},
     },
-    util::{make_client, parse_body},
+    util::{make_client, naive_now, parse_body},
 };
 
+use chrono::NaiveDateTime;
 use http::uri::InvalidUri;
 use hyper::Method;
 use hyper::{client::HttpConnector, Body, Client};
@@ -202,6 +201,37 @@ pub async fn id_allocation(payload: &IdAllocation) -> Result<IdAllocationResult,
     }
 }
 
+pub async fn batch_upsert_domains(
+    client: &Client<HttpConnector>,
+    edges: Vec<EdgeWrapperEnum>,
+) -> Result<(), Error> {
+    let graph: UpsertGraph = BatchEdges(edges.clone()).into();
+    // let json_raw_2 = serde_json::to_string(&graph).map_err(|err| Error::JSONParseError(err))?;
+    // trace!("batch_upsert_domains: {}", json_raw_2);
+    upsert_graph(client, &graph, Graph::SocialGraph).await?;
+    Ok(())
+}
+
+pub async fn upsert_domain_collection(
+    client: &Client<HttpConnector>,
+    name: &str,
+) -> Result<(), Error> {
+    let v: DomainCollection = DomainCollection {
+        id: name.to_string(),
+        updated_at: naive_now(),
+    };
+    let vertices: Vertices<DomainCollection> = Vertices(vec![v.to_owned()]);
+    let vertices_map: HashMap<String, HashMap<String, HashMap<String, Attribute>>> =
+        vertices.into();
+    let upsert_vertices = UpsertGraph {
+        vertices: vertices_map,
+        edges: None,
+    };
+    let graph: UpsertGraph = upsert_vertices.into();
+    upsert_graph(client, &graph, Graph::SocialGraph).await?;
+    Ok(())
+}
+
 pub async fn batch_upsert(
     client: &Client<HttpConnector>,
     edges: Vec<EdgeWrapperEnum>,
@@ -300,7 +330,7 @@ pub async fn insert_contract_connection(
     Ok(())
 }
 
-pub async fn delete_vertex_and_edge(
+pub async fn delete_graph_inner_connection(
     client: &Client<HttpConnector>,
     v_id: String,
 ) -> Result<(), Error> {
@@ -308,9 +338,9 @@ pub async fn delete_vertex_and_edge(
         return Err(Error::ParamError("v_id is required".to_string()));
     }
     let uri: http::Uri = format!(
-        "{}/query/{}/delete_vertex_and_edge?p={}&depth={}",
+        "{}/query/{}/delete_graph_inner_connection?p={}&depth={}",
         C.tdb.host,
-        Graph::IdentityGraph.to_string(),
+        Graph::SocialGraph.to_string(),
         v_id.clone(),
         10, // max depth
     )
@@ -319,12 +349,12 @@ pub async fn delete_vertex_and_edge(
     let req = hyper::Request::builder()
         .method(Method::GET)
         .uri(uri)
-        .header("Authorization", Graph::IdentityGraph.token())
+        .header("Authorization", Graph::SocialGraph.token())
         .body(Body::empty())
         .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
     let mut resp = client.request(req).await.map_err(|err| {
         Error::ManualHttpClientError(format!(
-            "delete_vertex_and_edge | Fail to request: {:?}",
+            "delete_graph_inner_connection | Fail to request: {:?}",
             err.to_string()
         ))
     })?;
@@ -333,7 +363,7 @@ pub async fn delete_vertex_and_edge(
         Ok(r) => {
             if r.error {
                 let err_message = format!(
-                    "delete_vertex_and_edge error | Code: {:?}, Message: {:?}",
+                    "delete_graph_inner_connection error | Code: {:?}, Message: {:?}",
                     r.code, r.message
                 );
                 error!(err_message);
@@ -341,14 +371,66 @@ pub async fn delete_vertex_and_edge(
             }
         }
         Err(err) => {
-            let err_message = format!("delete_vertex_and_edge parse_body error: {:?}", err);
+            let err_message = format!("delete_graph_inner_connection parse_body error: {:?}", err);
             error!(err_message);
             return Err(err);
         }
     };
     // let json_raw = serde_json::to_string(&result).map_err(|err| Error::JSONParseError(err))?;
     // println!("{}", json_raw);
-    trace!("TigerGraph  delete_vertex_and_edge...");
+    trace!("TigerGraph delete_graph_inner_connection...");
+
+    Ok(())
+}
+
+pub async fn delete_domain_collection(
+    client: &Client<HttpConnector>,
+    name: &str,
+) -> Result<(), Error> {
+    if name == "" {
+        return Err(Error::ParamError("name is required".to_string()));
+    }
+    let uri: http::Uri = format!(
+        "{}/query/{}/delete_domain_collection?p={}",
+        C.tdb.host,
+        Graph::SocialGraph.to_string(),
+        name,
+    )
+    .parse()
+    .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
+    let req = hyper::Request::builder()
+        .method(Method::GET)
+        .uri(uri)
+        .header("Authorization", Graph::SocialGraph.token())
+        .body(Body::empty())
+        .map_err(|_err| Error::ParamError(format!("ParamError Error {}", _err)))?;
+    let mut resp = client.request(req).await.map_err(|err| {
+        Error::ManualHttpClientError(format!(
+            "delete_domain_collection | Fail to request: {:?}",
+            err.to_string()
+        ))
+    })?;
+
+    let _result = match parse_body::<BaseResponse>(&mut resp).await {
+        Ok(r) => {
+            if r.error {
+                let err_message = format!(
+                    "delete_domain_collection error | Code: {:?}, Message: {:?}",
+                    r.code, r.message
+                );
+                error!(err_message);
+                return Err(Error::General(err_message, resp.status()));
+            }
+        }
+        Err(err) => {
+            let err_message = format!("delete_domain_collection parse_body error: {:?}", err);
+            error!(err_message);
+            return Err(err);
+        }
+    };
+    // let json_raw = serde_json::to_string(&result).map_err(|err| Error::JSONParseError(err))?;
+    // println!("{}", json_raw);
+    trace!("TigerGraph  delete_domain_collection...");
 
     Ok(())
 }
@@ -608,6 +690,7 @@ pub enum EdgeWrapperEnum {
     ResolveContract(EdgeWrapper<ResolveRecord, Contract, Identity>),
     ReverseResolveContract(EdgeWrapper<ResolveRecord, Identity, Contract>),
     PartOfIdentitiesGraph(EdgeWrapper<HyperEdgeRecord, IdentitiesGraph, Identity>),
+    PartOfCollection(EdgeWrapper<PartOfCollectionRecord, DomainCollection, Identity>),
 }
 
 impl Transfer for EdgeWrapperEnum {
@@ -622,6 +705,7 @@ impl Transfer for EdgeWrapperEnum {
             EdgeWrapperEnum::ResolveContract(wrapper) => wrapper.edge.to_attributes_map(),
             EdgeWrapperEnum::ReverseResolveContract(wrapper) => wrapper.edge.to_attributes_map(),
             EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => wrapper.edge.to_attributes_map(),
+            EdgeWrapperEnum::PartOfCollection(wrapper) => wrapper.edge.to_attributes_map(),
         }
     }
 
@@ -636,6 +720,7 @@ impl Transfer for EdgeWrapperEnum {
             EdgeWrapperEnum::ResolveContract(wrapper) => wrapper.edge.to_json_value(),
             EdgeWrapperEnum::ReverseResolveContract(wrapper) => wrapper.edge.to_json_value(),
             EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => wrapper.edge.to_json_value(),
+            EdgeWrapperEnum::PartOfCollection(wrapper) => wrapper.edge.to_json_value(),
         }
     }
 }
@@ -652,6 +737,7 @@ impl EdgeWrapperEnum {
             EdgeWrapperEnum::ResolveContract(wrapper) => &wrapper.source,
             EdgeWrapperEnum::ReverseResolveContract(wrapper) => &wrapper.source,
             EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => &wrapper.source,
+            EdgeWrapperEnum::PartOfCollection(wrapper) => &wrapper.source,
         }
     }
 
@@ -666,6 +752,7 @@ impl EdgeWrapperEnum {
             EdgeWrapperEnum::ResolveContract(wrapper) => &wrapper.target,
             EdgeWrapperEnum::ReverseResolveContract(wrapper) => &wrapper.target,
             EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper) => &wrapper.target,
+            EdgeWrapperEnum::PartOfCollection(wrapper) => &wrapper.target,
         }
     }
 
@@ -680,6 +767,7 @@ impl EdgeWrapperEnum {
             EdgeWrapperEnum::ResolveContract(_) => RESOLVE_CONTRACT,
             EdgeWrapperEnum::ReverseResolveContract(_) => REVERSE_RESOLVE_CONTRACT,
             EdgeWrapperEnum::PartOfIdentitiesGraph(_) => HYPER_EDGE_REVERSE,
+            EdgeWrapperEnum::PartOfCollection(_) => PART_OF_COLLECTION,
         }
     }
 }
@@ -723,6 +811,12 @@ impl EdgeWrapperEnum {
         wrapper: EdgeWrapper<HyperEdgeRecord, IdentitiesGraph, Identity>,
     ) -> Self {
         EdgeWrapperEnum::PartOfIdentitiesGraph(wrapper)
+    }
+
+    pub fn new_domain_collection_edge(
+        wrapper: EdgeWrapper<PartOfCollectionRecord, DomainCollection, Identity>,
+    ) -> Self {
+        EdgeWrapperEnum::PartOfCollection(wrapper)
     }
 }
 
@@ -802,6 +896,29 @@ impl From<BatchEdges> for UpsertGraph {
                 {
                     for (key, new_attr) in new_attributes {
                         match key.as_str() {
+                            "expired_at" => {
+                                if let Some(existing_attr) =
+                                    existing_attributes.get_mut("expired_at")
+                                {
+                                    if let (Some(exist_expired_at), Some(new_expired_at)) = (
+                                        existing_attr.value.as_str().and_then(|s| {
+                                            NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
+                                                .ok()
+                                        }),
+                                        new_attr.value.as_str().and_then(|s| {
+                                            NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
+                                                .ok()
+                                        }),
+                                    ) {
+                                        // Compare and update if the new expiration date is later
+                                        if new_expired_at > exist_expired_at {
+                                            existing_attr.value = new_attr.value;
+                                        }
+                                    }
+                                } else {
+                                    existing_attributes.insert(key, new_attr);
+                                }
+                            }
                             "reverse" => {
                                 if let Some(existing_attr) = existing_attributes.get_mut("reverse")
                                 {
@@ -885,6 +1002,28 @@ impl From<BatchEdges> for UpsertGraph {
                 .target()
                 .as_any()
                 .downcast_ref::<IdentitiesGraph>()
+            {
+                vertices_map
+                    .entry(target_vertex_type.clone())
+                    .or_insert_with(HashMap::new)
+                    .insert(target_vertex_id.clone(), target.to_attributes_map());
+            }
+
+            if let Some(source) = edge_wrapper_enum
+                .source()
+                .as_any()
+                .downcast_ref::<DomainCollection>()
+            {
+                vertices_map
+                    .entry(source_vertex_type.clone())
+                    .or_insert_with(HashMap::new)
+                    .insert(source_vertex_id.clone(), source.to_attributes_map());
+            }
+
+            if let Some(target) = edge_wrapper_enum
+                .target()
+                .as_any()
+                .downcast_ref::<DomainCollection>()
             {
                 vertices_map
                     .entry(target_vertex_type.clone())

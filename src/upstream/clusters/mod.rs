@@ -1,12 +1,15 @@
 mod tests;
 use crate::config::C;
 use crate::error::Error;
-use crate::tigergraph::edge::{Hold, HyperEdge, Proof, Resolve, Wrapper};
-use crate::tigergraph::edge::{HOLD_IDENTITY, HYPER_EDGE, PROOF_EDGE, RESOLVE, REVERSE_RESOLVE};
-use crate::tigergraph::vertex::{IdentitiesGraph, Identity};
+use crate::tigergraph::edge::{Hold, HyperEdge, PartOfCollection, Proof, Resolve, Wrapper};
+use crate::tigergraph::edge::{
+    HOLD_IDENTITY, HYPER_EDGE, PART_OF_COLLECTION, PROOF_EDGE, RESOLVE, REVERSE_RESOLVE,
+};
+use crate::tigergraph::vertex::{DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
-    DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, ProofLevel, TargetProcessedList,
+    DataFetcher, DataSource, DomainNameSystem, DomainSearch, DomainStatus, Fetcher, Platform,
+    ProofLevel, TargetProcessedList, EXT,
 };
 use crate::util::{make_client, naive_now, parse_body, request_with_timeout, timestamp_to_naive};
 
@@ -87,7 +90,7 @@ async fn batch_fetch_by_address(target: &Target) -> Result<(TargetProcessedList,
     let mut edges = EdgeList::new();
     let hv = IdentitiesGraph::default();
     for d in metadatas.into_iter() {
-        let wallet_platform: Platform = d.platform.parse()?;
+        let wallet_platform: Platform = d.platform.parse().unwrap_or(Platform::Unknown);
         if wallet_platform == Platform::Unknown {
             warn!(
                 ?target,
@@ -274,7 +277,7 @@ async fn batch_fetch_by_clusters(
     let hv = IdentitiesGraph::default();
 
     for d in metadatas.into_iter() {
-        let wallet_platform: Platform = d.platform.parse()?;
+        let wallet_platform: Platform = d.platform.parse().unwrap_or(Platform::Unknown);
         if wallet_platform == Platform::Unknown {
             warn!(
                 ?target,
@@ -588,4 +591,186 @@ async fn get_address_by_clusters(name: &str) -> Result<Vec<Metadata>, Error> {
         }
     };
     Ok(result)
+}
+
+#[async_trait]
+impl DomainSearch for Clusters {
+    async fn domain_search(name: &str) -> Result<EdgeList, Error> {
+        let name = name.trim_end_matches("/");
+        if name == "".to_string() {
+            warn!("Clusters domain_search(name='') is not a valid handle name");
+            return Ok(vec![]);
+        }
+        debug!("Clusters domain_search(name={})", name);
+
+        let metadatas = get_address_by_clusters(name).await?;
+        if metadatas.is_empty() {
+            debug!("Clusters domain_search(name={}) result is empty", name);
+            return Ok(vec![]);
+        }
+        let mut edges = EdgeList::new();
+        let domain_collection = DomainCollection {
+            id: name.to_string(),
+            updated_at: naive_now(),
+        };
+        for d in metadatas.into_iter() {
+            let wallet_platform: Platform = d.platform.parse().unwrap_or(Platform::Unknown);
+            if wallet_platform == Platform::Unknown {
+                warn!(
+                    "Clusters domain_search(name={}) platform={} is Unknown in types",
+                    d.cluster_name, d.platform
+                );
+                continue;
+            }
+            let created_at_naive = timestamp_to_naive(d.updated_at, 0);
+            let wallet: Identity = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: wallet_platform.clone(),
+                identity: d.address.clone(),
+                uid: None,
+                created_at: None,
+                display_name: None,
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: None,
+                updated_at: naive_now(),
+                expired_at: None,
+                reverse: Some(false),
+            };
+
+            let clusters_parent_node: Identity = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: Platform::Clusters,
+                identity: d.cluster_name.clone(),
+                uid: None,
+                created_at: created_at_naive,
+                display_name: Some(d.cluster_name.clone()),
+                added_at: naive_now(),
+                avatar_url: d.imageurl.clone(),
+                profile_url: d.profileurl.clone(),
+                updated_at: naive_now(),
+                expired_at: None,
+                reverse: Some(false),
+            };
+
+            let clusters_name_node: Identity = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: Platform::Clusters,
+                identity: d.name.clone(),
+                uid: None,
+                created_at: created_at_naive,
+                display_name: Some(d.name.clone()),
+                added_at: naive_now(),
+                avatar_url: d.imageurl.clone(),
+                profile_url: d.profileurl.clone(),
+                updated_at: naive_now(),
+                expired_at: None,
+                reverse: Some(false),
+            };
+
+            let parent_node_hold = Hold {
+                uuid: Uuid::new_v4(),
+                source: DataSource::Clusters,
+                transaction: Some("".to_string()),
+                id: d.cluster_name.clone(),
+                created_at: None,
+                updated_at: naive_now(),
+                fetcher: DataFetcher::DataMgrService,
+                expired_at: None,
+            };
+
+            let child_node_hold = Hold {
+                uuid: Uuid::new_v4(),
+                source: DataSource::Clusters,
+                transaction: Some("".to_string()),
+                id: d.name.clone(),
+                created_at: None,
+                updated_at: naive_now(),
+                fetcher: DataFetcher::DataMgrService,
+                expired_at: None,
+            };
+
+            let parent_node_resolve: Resolve = Resolve {
+                uuid: Uuid::new_v4(),
+                source: DataSource::Clusters,
+                system: DomainNameSystem::Clusters,
+                name: d.cluster_name.clone(),
+                fetcher: DataFetcher::DataMgrService,
+                updated_at: naive_now(),
+            };
+
+            let child_node_resolve: Resolve = Resolve {
+                uuid: Uuid::new_v4(),
+                source: DataSource::Clusters,
+                system: DomainNameSystem::Clusters,
+                name: d.name.clone(),
+                fetcher: DataFetcher::DataMgrService,
+                updated_at: naive_now(),
+            };
+
+            let parent_reverse_resolve: Resolve = Resolve {
+                uuid: Uuid::new_v4(),
+                source: DataSource::Clusters,
+                system: DomainNameSystem::Clusters,
+                name: d.cluster_name.clone(),
+                fetcher: DataFetcher::DataMgrService,
+                updated_at: naive_now(),
+            };
+
+            let child_reverse_resolve: Resolve = Resolve {
+                uuid: Uuid::new_v4(),
+                source: DataSource::Clusters,
+                system: DomainNameSystem::Clusters,
+                name: d.name.clone(),
+                fetcher: DataFetcher::DataMgrService,
+                updated_at: naive_now(),
+            };
+
+            let parent_collection_edge = PartOfCollection {
+                platform: Platform::Clusters,
+                name: d.cluster_name.clone(),
+                tld: EXT::ClustersRoot.to_string(),
+                status: DomainStatus::Taken,
+            };
+            let child_collection_edge = PartOfCollection {
+                platform: Platform::Clusters,
+                name: d.name.clone(),
+                tld: d.name.split("/").last().unwrap_or("").to_string(),
+                status: DomainStatus::Taken,
+            };
+
+            let parent_hd = parent_node_hold.wrapper(&wallet, &clusters_parent_node, HOLD_IDENTITY);
+            let child_hd = child_node_hold.wrapper(&wallet, &clusters_name_node, HOLD_IDENTITY);
+            let parent_rs = parent_node_resolve.wrapper(&clusters_parent_node, &wallet, RESOLVE);
+            let child_rs = child_node_resolve.wrapper(&clusters_name_node, &wallet, RESOLVE);
+            let parent_rr =
+                parent_reverse_resolve.wrapper(&wallet, &clusters_parent_node, REVERSE_RESOLVE);
+            let child_rr =
+                child_reverse_resolve.wrapper(&wallet, &clusters_name_node, REVERSE_RESOLVE);
+            let parent_c = parent_collection_edge.wrapper(
+                &domain_collection,
+                &clusters_parent_node,
+                PART_OF_COLLECTION,
+            );
+            let child_c = child_collection_edge.wrapper(
+                &domain_collection,
+                &clusters_name_node,
+                PART_OF_COLLECTION,
+            );
+
+            edges.push(EdgeWrapperEnum::new_hold_identity(parent_hd));
+            edges.push(EdgeWrapperEnum::new_hold_identity(child_hd));
+
+            edges.push(EdgeWrapperEnum::new_resolve(parent_rs));
+            edges.push(EdgeWrapperEnum::new_resolve(child_rs));
+
+            edges.push(EdgeWrapperEnum::new_reverse_resolve(parent_rr));
+            edges.push(EdgeWrapperEnum::new_reverse_resolve(child_rr));
+
+            edges.push(EdgeWrapperEnum::new_domain_collection_edge(parent_c));
+            edges.push(EdgeWrapperEnum::new_domain_collection_edge(child_c));
+        }
+
+        Ok(edges)
+    }
 }

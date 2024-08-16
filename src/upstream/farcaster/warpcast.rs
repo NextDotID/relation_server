@@ -5,11 +5,14 @@ use crate::{
     tigergraph::{
         EdgeList, EdgeWrapperEnum,
         {
-            edge::{Hold, HyperEdge, Wrapper, HOLD_IDENTITY, HYPER_EDGE},
-            vertex::{IdentitiesGraph, Identity},
+            edge::{
+                Hold, HyperEdge, PartOfCollection, Wrapper, HOLD_IDENTITY, HYPER_EDGE,
+                PART_OF_COLLECTION,
+            },
+            vertex::{DomainCollection, IdentitiesGraph, Identity},
         },
     },
-    upstream::{DataFetcher, DataSource, Platform, Target, TargetProcessedList},
+    upstream::{DataFetcher, DataSource, DomainStatus, Platform, Target, TargetProcessedList, EXT},
     util::{
         make_client, make_http_client, naive_datetime_from_milliseconds,
         naive_datetime_to_milliseconds, naive_now, parse_body, request_with_timeout,
@@ -20,7 +23,7 @@ use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Client};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use tracing::error;
+use tracing::{debug, warn};
 use uuid::Uuid;
 
 pub async fn fetch_connections_by_platform_identity(
@@ -88,7 +91,7 @@ pub async fn batch_fetch_by_username(
     }
 
     for verification in verifications.iter() {
-        let protocol: Platform = verification.protocol.parse()?;
+        let protocol: Platform = verification.protocol.parse().unwrap_or(Platform::Unknown);
         let mut address = verification.address.clone();
         if protocol == Platform::Ethereum {
             address = address.to_lowercase();
@@ -176,7 +179,7 @@ pub async fn batch_fetch_by_signer(
     }
 
     for verification in verifications.iter() {
-        let protocol: Platform = verification.protocol.parse()?;
+        let protocol: Platform = verification.protocol.parse().unwrap_or(Platform::Unknown);
         let mut verification_address = verification.address.clone();
         if protocol == Platform::Ethereum {
             verification_address = verification_address.to_lowercase();
@@ -316,7 +319,7 @@ async fn save_verifications(
     user: &User,
     verification: &Verification,
 ) -> Result<Target, Error> {
-    let protocol: Platform = verification.protocol.parse()?;
+    let protocol: Platform = verification.protocol.parse().unwrap_or(Platform::Unknown);
     let mut address = verification.address.clone();
     if protocol == Platform::Ethereum {
         address = address.to_lowercase();
@@ -488,7 +491,7 @@ async fn user_by_username(username: &str) -> Result<Option<User>, Error> {
                     "Warpcast fetch error| failed to fetch user-by-username?username={}, message: {:?}",
                     username, errors
                 );
-                error!(err_message);
+                warn!(err_message);
                 None
             }
             None => match r.result {
@@ -516,7 +519,7 @@ async fn user_by_verification(address: &str) -> Result<Option<User>, Error> {
         // If the address does not match the pattern, return an error
         // return Err(Error::ParamError("Address must match pattern".into()));
         let err_message = format!("Wrapcaster user-by-verification: address must match pattern");
-        error!(err_message);
+        warn!(err_message);
         return Ok(None);
     }
 
@@ -565,7 +568,7 @@ async fn user_by_verification(address: &str) -> Result<Option<User>, Error> {
                     "Warpcast fetch error| failed to fetch user-by-verification?address={}, message: {:?}",
                     address, errors
                 );
-                error!(err_message);
+                warn!(err_message);
                 None
             }
             None => match r.result {
@@ -629,7 +632,7 @@ async fn get_verifications(fid: i64) -> Result<Option<Vec<Verification>>, Error>
                     "Warpcast fetch error| failed to fetch verifications?fid={}, message: {:?}",
                     fid, errors
                 );
-                error!(err_message);
+                warn!(err_message);
                 None
             }
             None => match r.result {
@@ -645,4 +648,133 @@ async fn get_verifications(fid: i64) -> Result<Option<Vec<Verification>>, Error>
         }
     };
     Ok(result)
+}
+
+pub async fn domain_search(name: &str) -> Result<EdgeList, Error> {
+    if name == "".to_string() {
+        warn!("Warpcast user_by_username(name='') is not a valid domain name");
+        return Ok(vec![]);
+    }
+
+    let check_names = vec![name.to_string(), format!("{}.{}", name, EXT::Eth)];
+    let mut edges = EdgeList::new();
+    let domain_collection = DomainCollection {
+        id: name.to_string(),
+        updated_at: naive_now(),
+    };
+
+    for username in check_names.into_iter() {
+        debug!("Warpcast user_by_username(name={})", username);
+        let user = user_by_username(&username).await?;
+        if user.is_none() {
+            continue;
+        }
+        let user = user.unwrap();
+        let fid = user.fid;
+        let verifications = get_verifications(fid).await?;
+        if verifications.is_none() {
+            continue;
+        }
+        let fname = user.username.clone();
+        let fname_tld = match fname.ends_with(&EXT::Eth.to_string()) {
+            true => EXT::Eth.to_string(),
+            false => "".to_string(),
+        };
+        let verifications = verifications.unwrap();
+
+        // isolated vertex
+        if verifications.is_empty() {
+            let isolated_farcaster: Identity = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: Platform::Farcaster,
+                identity: fname.clone(),
+                uid: Some(fid.to_string()),
+                created_at: None,
+                display_name: Some(user.display_name.clone()),
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: None,
+                updated_at: naive_now(),
+                expired_at: None,
+                reverse: Some(false),
+            };
+            let collection_edge = PartOfCollection {
+                platform: Platform::Farcaster,
+                name: fname.clone(),
+                tld: fname_tld.clone(),
+                status: DomainStatus::Taken,
+            };
+            // create collection edge
+            let c = collection_edge.wrapper(
+                &domain_collection,
+                &isolated_farcaster,
+                PART_OF_COLLECTION,
+            );
+            edges.push(EdgeWrapperEnum::new_domain_collection_edge(c));
+            continue;
+        }
+
+        for verification in verifications.iter() {
+            let protocol: Platform = verification.protocol.parse().unwrap_or(Platform::Unknown);
+            let mut address = verification.address.clone();
+            if protocol == Platform::Ethereum {
+                address = address.to_lowercase();
+            }
+            let wallet: Identity = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: protocol,
+                identity: address.clone(),
+                uid: None,
+                created_at: None,
+                display_name: None,
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: None,
+                updated_at: naive_now(),
+                expired_at: None,
+                reverse: Some(false),
+            };
+            let farcaster: Identity = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: Platform::Farcaster,
+                identity: fname.clone(),
+                uid: Some(fid.to_string()),
+                created_at: None,
+                display_name: Some(user.display_name.clone()),
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: None,
+                updated_at: naive_now(),
+                expired_at: None,
+                reverse: Some(false),
+            };
+            let hold: Hold = Hold {
+                uuid: Uuid::new_v4(),
+                source: DataSource::Farcaster,
+                transaction: None,
+                id: "".to_string(),
+                created_at: Some(verification.timestamp),
+                updated_at: naive_now(),
+                fetcher: DataFetcher::RelationService,
+                expired_at: None,
+            };
+
+            let collection_edge = PartOfCollection {
+                platform: Platform::Farcaster,
+                name: fname.clone(),
+                tld: fname_tld.clone(),
+                status: DomainStatus::Taken,
+            };
+
+            // hold record
+            let hd = hold.wrapper(&wallet, &farcaster, HOLD_IDENTITY);
+
+            // create collection edge
+            let c = collection_edge.wrapper(&domain_collection, &farcaster, PART_OF_COLLECTION);
+            edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+            edges.push(EdgeWrapperEnum::new_domain_collection_edge(c));
+        }
+    }
+
+    Ok(edges)
 }

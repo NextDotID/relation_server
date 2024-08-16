@@ -4,18 +4,18 @@ mod tests;
 use crate::config::C;
 use crate::error::Error;
 use crate::tigergraph::edge::{
-    Hold, HyperEdge, Resolve, Wrapper, HOLD_CONTRACT, HOLD_IDENTITY, HYPER_EDGE, RESOLVE,
-    RESOLVE_CONTRACT,
+    Hold, HyperEdge, PartOfCollection, Resolve, Wrapper, HOLD_CONTRACT, HOLD_IDENTITY, HYPER_EDGE,
+    PART_OF_COLLECTION, RESOLVE, RESOLVE_CONTRACT,
 };
 use crate::tigergraph::upsert::create_contract_to_identity_resolve_record;
 use crate::tigergraph::upsert::create_identity_domain_resolve_record;
 use crate::tigergraph::upsert::create_identity_to_contract_hold_record;
 use crate::tigergraph::upsert::{create_ens_identity_ownership, create_ens_identity_resolve};
-use crate::tigergraph::vertex::{Contract, IdentitiesGraph, Identity};
+use crate::tigergraph::vertex::{Contract, DomainCollection, IdentitiesGraph, Identity};
 use crate::tigergraph::{EdgeList, EdgeWrapperEnum};
 use crate::upstream::{
-    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, Fetcher, Platform, Target,
-    TargetProcessedList,
+    Chain, ContractCategory, DataFetcher, DataSource, DomainNameSystem, DomainSearch, DomainStatus,
+    Fetcher, Platform, Target, TargetProcessedList, EXT,
 };
 use crate::util::{make_http_client, naive_now, parse_timestamp};
 use async_trait::async_trait;
@@ -649,4 +649,186 @@ async fn perform_fetch(target: &Target) -> Result<TargetProcessedList, Error> {
     }
 
     Ok(next_targets)
+}
+
+#[async_trait]
+impl DomainSearch for TheGraph {
+    async fn domain_search(name: &str) -> Result<EdgeList, Error> {
+        if name == "" {
+            warn!("TheGraph domain_search(name='') is not a valid domain name");
+            return Ok(vec![]);
+        }
+        debug!("TheGraph domain_search(name={})", name);
+
+        let mut edges = EdgeList::new();
+        let domain_collection = DomainCollection {
+            id: name.to_string(),
+            updated_at: naive_now(),
+        };
+
+        let ens_name = format!("{}.{}", name, EXT::Eth);
+        let merged_domains = domain_search(&ens_name).await?;
+        for domain in merged_domains.into_iter() {
+            let creation_tx = domain
+                .events
+                .first()
+                .map(|event| event.transaction_id.clone());
+            let ens_created_at = parse_timestamp(&domain.created_at).ok();
+            let ens_expired_at = match &domain.registration {
+                Some(registration) => parse_timestamp(&registration.expiry_date).ok(),
+                None => None,
+            };
+
+            let owner = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: Platform::Ethereum,
+                identity: domain.owner.id.clone(),
+                uid: None,
+                created_at: None,
+                display_name: None,
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: None,
+                updated_at: naive_now(),
+                expired_at: None,
+                reverse: Some(false),
+            };
+
+            let ens_domain: Identity = Identity {
+                uuid: Some(Uuid::new_v4()),
+                platform: Platform::ENS,
+                identity: domain.name.clone(),
+                uid: None,
+                created_at: ens_created_at,
+                display_name: Some(domain.name.clone()),
+                added_at: naive_now(),
+                avatar_url: None,
+                profile_url: None,
+                updated_at: naive_now(),
+                expired_at: ens_expired_at,
+                reverse: Some(false),
+            };
+
+            let ownership: Hold = Hold {
+                uuid: Uuid::new_v4(),
+                transaction: creation_tx,
+                id: domain.name.clone(),
+                source: DataSource::TheGraph,
+                created_at: ens_created_at,
+                updated_at: naive_now(),
+                fetcher: DataFetcher::RelationService,
+                expired_at: ens_expired_at,
+            };
+
+            // hold record
+            let hd = ownership.wrapper(&owner, &ens_domain, HOLD_IDENTITY);
+            edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+
+            let collection_edge = PartOfCollection {
+                platform: Platform::ENS,
+                name: domain.name.clone(),
+                tld: EXT::Eth.to_string(),
+                status: DomainStatus::Taken,
+            };
+            // create collection edge
+            let c = collection_edge.wrapper(&domain_collection, &ens_domain, PART_OF_COLLECTION);
+            edges.push(EdgeWrapperEnum::new_domain_collection_edge(c));
+
+            let resolved_address = domain.resolved_address.map(|r| r.id);
+            match resolved_address.clone() {
+                None => {
+                    trace!(
+                        "TheGraph domain_search(name={}): Resolve address not existed.",
+                        ens_name
+                    );
+                }
+                Some(address) => {
+                    // Filter zero address (without last 4 digits)
+                    if !address.starts_with("0x000000000000000000000000000000000000") {
+                        // Create resolve record
+                        let resolve = Resolve {
+                            uuid: Uuid::new_v4(),
+                            source: DataSource::TheGraph,
+                            system: DomainNameSystem::ENS,
+                            name: domain.name.clone(),
+                            fetcher: DataFetcher::RelationService,
+                            updated_at: naive_now(),
+                        };
+
+                        // resolve record
+                        let rs = resolve.wrapper(&ens_domain, &owner, RESOLVE);
+                        edges.push(EdgeWrapperEnum::new_resolve(rs));
+                    }
+                }
+            }
+        }
+
+        Ok(edges)
+    }
+}
+
+async fn domain_search(name: &str) -> Result<Vec<Domain>, Error> {
+    let query = QUERY_BY_ENS.to_string();
+    let target_var = name.to_string();
+    let endpoints = choose_endpoint();
+    let client = GQLClient::new(&endpoints);
+    let vars = QueryVars { target: target_var };
+
+    let resp = client.query_with_vars::<QueryResponse, QueryVars>(&query, vars);
+
+    let data: Option<QueryResponse> =
+        match tokio::time::timeout(std::time::Duration::from_secs(5), resp).await {
+            Ok(resp) => match resp {
+                Ok(resp) => resp,
+                Err(err) => {
+                    warn!(
+                        ?err,
+                        "TheGraph domain_search(name={}): Failed to fetch", name
+                    );
+                    None
+                }
+            },
+            Err(_) => {
+                warn!(
+                    "TheGraph domain_search(name={}): Timeout: no response in 5 seconds.",
+                    name
+                );
+                None
+            }
+        };
+
+    if data.is_none() {
+        info!("TheGraph domain_search(name={}): No result", name);
+        return Ok(vec![]);
+    }
+    let res = data.unwrap();
+    debug!(
+        wrapped = res.wrapped_domains.len(),
+        domains = res.domains.len(),
+        "TheGraph domain_search(name={}): Records found.",
+        name,
+    );
+    let mut merged_domains: Vec<Domain> = vec![];
+    // Rewrite correct owner info for wrapped domains.
+    for wd in res.wrapped_domains.into_iter() {
+        debug!(
+            domain = wd.name,
+            "TheGraph domain_search(name={}): Wrapped ENS found.", name
+        );
+        let mut domain = wd.domain.clone();
+        domain.owner = wd.owner;
+        merged_domains.push(domain);
+    }
+    for domain in res.domains.into_iter() {
+        if merged_domains.iter().any(|md| md.name == domain.name) {
+            debug!(
+                domain = domain.name,
+                "TheGraph domain_search(name={}): Wrapped ENS found before. Skip this.", name
+            );
+            continue;
+        } else {
+            merged_domains.push(domain);
+        }
+    }
+    Ok(merged_domains)
 }

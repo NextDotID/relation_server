@@ -210,15 +210,15 @@ impl Transfer for HoldRecord {
                 "expired_at".to_string(),
                 Attribute {
                     value: json!(expired_at),
-                    op: None,
+                    op: Some(OpCode::Max),
                 },
             );
         } else {
             attributes_map.insert(
                 "expired_at".to_string(),
                 Attribute {
-                    value: json!("1970-01-01 00:00:00"), // default value
-                    op: None,
+                    value: json!("1970-01-01T00:00:00"), // default value
+                    op: Some(OpCode::Max),
                 },
             );
         }
@@ -237,14 +237,14 @@ impl Transfer for HoldRecord {
         map.insert(
             "created_at".to_string(),
             self.created_at
-                .map_or(json!("1970-01-01 00:00:00"), |created_at| json!(created_at)),
+                .map_or(json!("1970-01-01T00:00:00"), |created_at| json!(created_at)),
         );
         map.insert("updated_at".to_string(), json!(self.updated_at));
         map.insert("fetcher".to_string(), json!(self.fetcher));
         map.insert(
             "expired_at".to_string(),
             self.expired_at
-                .map_or(json!("1970-01-01 00:00:00"), |expired_at| json!(expired_at)),
+                .map_or(json!("1970-01-01T00:00:00"), |expired_at| json!(expired_at)),
         );
         map
     }

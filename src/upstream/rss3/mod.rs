@@ -31,6 +31,7 @@ pub struct Rss3Response {
     pub result: Vec<ResultItem>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 pub struct ResultItem {
     pub timestamp: String,
@@ -49,6 +50,7 @@ pub struct ResultItem {
     pub actions: Vec<ActionItem>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 pub struct ActionItem {
     pub tag: String,
@@ -65,6 +67,7 @@ pub struct ActionItem {
     pub related_urls: Vec<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug, Clone)]
 pub struct MetaData {
     pub id: Option<String>,

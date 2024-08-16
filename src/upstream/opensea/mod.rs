@@ -84,7 +84,7 @@ async fn batch_fetch_connections(
     let hv = IdentitiesGraph::default();
 
     for record in records.iter() {
-        let sns_platform: Platform = record.sns_platform.parse()?;
+        let sns_platform: Platform = record.sns_platform.parse().unwrap_or(Platform::Unknown);
         let sns_handle = record.sns_handle.clone();
         let address = record.address.clone();
         if !record.is_verified {

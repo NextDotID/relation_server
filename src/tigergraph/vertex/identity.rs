@@ -233,7 +233,7 @@ impl Transfer for Identity {
             "added_at".to_string(),
             Attribute {
                 value: json!(self.added_at),
-                op: None,
+                op: Some(OpCode::IgnoreIfExists),
             },
         );
         attributes_map.insert(
@@ -248,15 +248,15 @@ impl Transfer for Identity {
                 "expired_at".to_string(),
                 Attribute {
                     value: json!(expired_at),
-                    op: None,
+                    op: Some(OpCode::Max),
                 },
             );
         } else {
             attributes_map.insert(
                 "expired_at".to_string(),
                 Attribute {
-                    value: json!("1970-01-01 00:00:00"), // default value
-                    op: None,
+                    value: json!("1970-01-01T00:00:00"), // default value
+                    op: Some(OpCode::Max),
                 },
             );
         }
@@ -308,14 +308,14 @@ impl Transfer for Identity {
         map.insert(
             "created_at".to_string(),
             self.created_at
-                .map_or(json!("1970-01-01 00:00:00"), |created_at| json!(created_at)),
+                .map_or(json!("1970-01-01T00:00:00"), |created_at| json!(created_at)),
         );
         map.insert("added_at".to_string(), json!(self.added_at));
         map.insert("updated_at".to_string(), json!(self.updated_at));
         map.insert(
             "expired_at".to_string(),
             self.expired_at
-                .map_or(json!("1970-01-01 00:00:00"), |expired_at| json!(expired_at)),
+                .map_or(json!("1970-01-01T00:00:00"), |expired_at| json!(expired_at)),
         );
         map.insert(
             "reverse".to_string(),

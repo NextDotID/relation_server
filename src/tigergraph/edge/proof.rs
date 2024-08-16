@@ -203,7 +203,7 @@ impl Transfer for ProofRecord {
         map.insert(
             "created_at".to_string(),
             self.created_at
-                .map_or(json!("1970-01-01 00:00:00"), |created_at| json!(created_at)),
+                .map_or(json!("1970-01-01T00:00:00"), |created_at| json!(created_at)),
         );
         map.insert("updated_at".to_string(), json!(self.updated_at));
         map.insert("fetcher".to_string(), json!(self.fetcher));
