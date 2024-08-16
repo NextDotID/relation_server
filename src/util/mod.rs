@@ -134,6 +134,10 @@ where
                 // tigergraph DATETIME default value
                 return Ok(None);
             }
+            if s == "1970-01-01T00:00:00" {
+                // tigergraph DATETIME default value
+                return Ok(None);
+            }
             let dt = NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S")
                 .map_err(serde::de::Error::custom)?;
             Ok(Some(dt))

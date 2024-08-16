@@ -18,6 +18,7 @@ use crate::{
     util::{make_client, naive_now, parse_body},
 };
 
+use chrono::NaiveDateTime;
 use http::uri::InvalidUri;
 use hyper::Method;
 use hyper::{client::HttpConnector, Body, Client};
@@ -895,6 +896,29 @@ impl From<BatchEdges> for UpsertGraph {
                 {
                     for (key, new_attr) in new_attributes {
                         match key.as_str() {
+                            "expired_at" => {
+                                if let Some(existing_attr) =
+                                    existing_attributes.get_mut("expired_at")
+                                {
+                                    if let (Some(exist_expired_at), Some(new_expired_at)) = (
+                                        existing_attr.value.as_str().and_then(|s| {
+                                            NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
+                                                .ok()
+                                        }),
+                                        new_attr.value.as_str().and_then(|s| {
+                                            NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
+                                                .ok()
+                                        }),
+                                    ) {
+                                        // Compare and update if the new expiration date is later
+                                        if new_expired_at > exist_expired_at {
+                                            existing_attr.value = new_attr.value;
+                                        }
+                                    }
+                                } else {
+                                    existing_attributes.insert(key, new_attr);
+                                }
+                            }
                             "reverse" => {
                                 if let Some(existing_attr) = existing_attributes.get_mut("reverse")
                                 {

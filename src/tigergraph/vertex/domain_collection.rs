@@ -288,7 +288,8 @@ impl DomainCollection {
                                         .get(&(Platform::Farcaster, EXT::Eth.to_string()))
                                     {
                                         available_domains.push(exist_domain.to_owned());
-                                    } else if let Some(exist_domain) =
+                                    }
+                                    if let Some(exist_domain) =
                                         exist_tld_map.get(&(Platform::Farcaster, "".to_string()))
                                     {
                                         available_domains.push(exist_domain.to_owned());
