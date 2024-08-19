@@ -42,6 +42,7 @@ url = "https://ens.fafrd.workers.dev/ens/"
 
 [upstream.dotbit_service]
 url = "https://indexer-v1.did.id"
+register_api = "https://register-api.d.id/v1/account/detail"
 
 [upstream.lens_api]
 url = "https://api-v2.lens.dev/playground"
