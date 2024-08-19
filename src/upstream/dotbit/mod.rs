@@ -20,10 +20,11 @@ use crate::util::{
     request_with_timeout, timestamp_to_naive,
 };
 use async_trait::async_trait;
+use http::StatusCode;
 use hyper::{Body, Method, Request};
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 use uuid::Uuid;
 
 pub struct DotBit {}
@@ -458,7 +459,7 @@ async fn batch_fetch_by_handle(target: &Target) -> Result<(TargetProcessedList, 
     let account_info = info.clone().unwrap().account_info.unwrap();
     let out_point = info.clone().unwrap().out_point.unwrap();
 
-    let account_addr = account_info.owner_key.to_lowercase();
+    let account_addr = account_info.owner_key.clone();
     let account_platform: Platform = account_info.owner_algorithm_id.into();
 
     let mut next_targets = TargetProcessedList::new();
@@ -650,7 +651,7 @@ async fn fetch_and_save_account_info(
         return Err(Error::NoResult);
     }
 
-    let account_addr = account_info.owner_key.to_lowercase();
+    let account_addr = account_info.owner_key.clone();
     let account_platform: Platform = account_info.owner_algorithm_id.into();
     if account_platform == Platform::Unknown {
         warn!(
@@ -988,6 +989,20 @@ impl From<Platform> for CoinType {
     }
 }
 
+impl From<CoinType> for Platform {
+    fn from(coin_type: CoinType) -> Self {
+        match coin_type {
+            CoinType::ETH => Platform::Ethereum,
+            CoinType::TRX => Platform::Tron,
+            CoinType::BNB => Platform::BNBSmartChain,
+            CoinType::Matic => Platform::Polygon,
+            CoinType::Doge => Platform::Doge,
+            CoinType::CKB => Platform::CKB,
+            _ => Platform::Unknown,
+        }
+    }
+}
+
 impl From<i64> for Platform {
     fn from(algo_id: i64) -> Self {
         match algo_id {
@@ -1010,92 +1025,238 @@ impl DomainSearch for DotBit {
         debug!("Dotbit domain_search(name={})", name);
 
         let dotbit_fullname = format!("{}.{}", name, EXT::Bit);
-        let info = query_by_handle(&Platform::Dotbit, &dotbit_fullname).await?;
-        if info.is_none() {
+        let account_detail = search_account_detail(&dotbit_fullname).await?;
+        if account_detail.is_none() {
             return Ok(vec![]);
         }
-        let account_info = info.clone().unwrap().account_info.unwrap();
-        let out_point = info.clone().unwrap().out_point.unwrap();
-
-        let account_addr = account_info.owner_key.to_lowercase();
-        let account_platform: Platform = account_info.owner_algorithm_id.into();
-
-        let created_at_naive = timestamp_to_naive(account_info.create_at_unix, 0);
-        let expired_at_naive = timestamp_to_naive(account_info.expired_at_unix, 0);
-
+        let account_detail = account_detail.unwrap();
         let mut edges = EdgeList::new();
         let domain_collection = DomainCollection {
             id: name.to_string(),
             updated_at: naive_now(),
         };
 
-        let wallet: Identity = Identity {
-            uuid: Some(Uuid::new_v4()),
-            platform: account_platform,
-            identity: account_addr.clone(),
-            uid: None,
-            created_at: created_at_naive,
-            display_name: None,
-            added_at: naive_now(),
-            avatar_url: None,
-            profile_url: None,
-            updated_at: naive_now(),
-            expired_at: None,
-            reverse: Some(false),
+        match account_detail.status {
+            0 => {} // DomainStatus::Available
+            6 => {
+                let account_addr = account_detail.owner.clone();
+                let account_coin_type: CoinType = account_detail
+                    .owner_coin_type
+                    .parse()
+                    .unwrap_or(CoinType::Unknown);
+                let account_platform: Platform = account_coin_type.into();
+                if account_platform == Platform::Unknown {
+                    warn!(
+                        "Dotbit domain_search(name={}) account platform(coin_type={}) Unknown",
+                        name, account_detail.owner_coin_type
+                    );
+                    return Ok(vec![]);
+                }
+
+                let created_at_naive = timestamp_to_naive(account_detail.registered_at, 1000);
+                let expired_at_naive = timestamp_to_naive(account_detail.expired_at, 0);
+                let tx_hash = account_detail.confirm_proposal_hash.clone();
+
+                let wallet: Identity = Identity {
+                    uuid: Some(Uuid::new_v4()),
+                    platform: account_platform,
+                    identity: account_addr.clone(),
+                    uid: None,
+                    created_at: created_at_naive,
+                    display_name: None,
+                    added_at: naive_now(),
+                    avatar_url: None,
+                    profile_url: None,
+                    updated_at: naive_now(),
+                    expired_at: None,
+                    reverse: Some(false),
+                };
+
+                let dotbit: Identity = Identity {
+                    uuid: Some(Uuid::new_v4()),
+                    platform: Platform::Dotbit,
+                    identity: dotbit_fullname.clone(),
+                    uid: None,
+                    created_at: created_at_naive,
+                    display_name: Some(dotbit_fullname.clone()),
+                    added_at: naive_now(),
+                    avatar_url: None,
+                    profile_url: None,
+                    updated_at: naive_now(),
+                    expired_at: expired_at_naive,
+                    reverse: Some(false),
+                };
+
+                let hold: Hold = Hold {
+                    uuid: Uuid::new_v4(),
+                    source: DataSource::Dotbit,
+                    transaction: Some(tx_hash),
+                    id: "0".to_string(),
+                    created_at: created_at_naive,
+                    updated_at: naive_now(),
+                    fetcher: DataFetcher::RelationService,
+                    expired_at: expired_at_naive,
+                };
+
+                let resolve: Resolve = Resolve {
+                    uuid: Uuid::new_v4(),
+                    source: DataSource::Dotbit,
+                    system: DomainNameSystem::DotBit,
+                    name: dotbit_fullname.clone(),
+                    fetcher: DataFetcher::RelationService,
+                    updated_at: naive_now(),
+                };
+
+                let collection_edge = PartOfCollection {
+                    platform: Platform::Dotbit,
+                    name: dotbit_fullname.clone(),
+                    tld: EXT::Bit.to_string(),
+                    status: DomainStatus::Taken,
+                };
+
+                // hold record
+                let hd = hold.wrapper(&wallet, &dotbit, HOLD_IDENTITY);
+                // 'regular' resolution involves mapping from a name to an address.
+                let rs = resolve.wrapper(&dotbit, &wallet, RESOLVE);
+                // create collection edge
+                let c = collection_edge.wrapper(&domain_collection, &dotbit, PART_OF_COLLECTION);
+
+                edges.push(EdgeWrapperEnum::new_hold_identity(hd));
+                edges.push(EdgeWrapperEnum::new_resolve(rs));
+                edges.push(EdgeWrapperEnum::new_domain_collection_edge(c));
+            }
+            _ => {
+                let dotbit: Identity = Identity {
+                    uuid: Some(Uuid::new_v4()),
+                    platform: Platform::Dotbit,
+                    identity: dotbit_fullname.clone(),
+                    uid: None,
+                    created_at: None,
+                    display_name: Some(dotbit_fullname.clone()),
+                    added_at: naive_now(),
+                    avatar_url: None,
+                    profile_url: None,
+                    updated_at: naive_now(),
+                    expired_at: None,
+                    reverse: Some(false),
+                };
+
+                let collection_edge = PartOfCollection {
+                    platform: Platform::Dotbit,
+                    name: dotbit_fullname.clone(),
+                    tld: EXT::Bit.to_string(),
+                    status: DomainStatus::Protected,
+                };
+
+                let c = collection_edge.wrapper(&domain_collection, &dotbit, PART_OF_COLLECTION);
+                edges.push(EdgeWrapperEnum::new_domain_collection_edge(c));
+            }
         };
 
-        let dotbit: Identity = Identity {
-            uuid: Some(Uuid::new_v4()),
-            platform: Platform::Dotbit,
-            identity: dotbit_fullname.clone(),
-            uid: None,
-            created_at: created_at_naive,
-            display_name: Some(dotbit_fullname.clone()),
-            added_at: naive_now(),
-            avatar_url: None,
-            profile_url: None,
-            updated_at: naive_now(),
-            expired_at: expired_at_naive,
-            reverse: Some(false),
-        };
-
-        let hold: Hold = Hold {
-            uuid: Uuid::new_v4(),
-            source: DataSource::Dotbit,
-            transaction: Some(out_point.tx_hash),
-            id: out_point.index.to_string(),
-            created_at: created_at_naive,
-            updated_at: naive_now(),
-            fetcher: DataFetcher::RelationService,
-            expired_at: expired_at_naive,
-        };
-
-        let resolve: Resolve = Resolve {
-            uuid: Uuid::new_v4(),
-            source: DataSource::Dotbit,
-            system: DomainNameSystem::DotBit,
-            name: dotbit_fullname.clone(),
-            fetcher: DataFetcher::RelationService,
-            updated_at: naive_now(),
-        };
-
-        let collection_edge = PartOfCollection {
-            platform: Platform::Dotbit,
-            name: dotbit_fullname.clone(),
-            tld: EXT::Bit.to_string(),
-            status: DomainStatus::Taken,
-        };
-
-        // hold record
-        let hd = hold.wrapper(&wallet, &dotbit, HOLD_IDENTITY);
-        // 'regular' resolution involves mapping from a name to an address.
-        let rs = resolve.wrapper(&dotbit, &wallet, RESOLVE);
-        // create collection edge
-        let c = collection_edge.wrapper(&domain_collection, &dotbit, PART_OF_COLLECTION);
-
-        edges.push(EdgeWrapperEnum::new_hold_identity(hd));
-        edges.push(EdgeWrapperEnum::new_resolve(rs));
-        edges.push(EdgeWrapperEnum::new_domain_collection_edge(c));
         Ok(edges)
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AccountDetailRequest {
+    pub account: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AccountDetailResult {
+    pub err_no: i32,
+    pub err_msg: Option<String>,
+    pub data: Option<AccountDetail>,
+}
+
+// status
+// -1: not open for registration
+// 0: can be registered
+// 1: payment confirmation
+// 2: application for registration
+// 3: pre-registration
+// 4: proposal
+// 5: confirming the proposal
+// 6: has been registered
+// 7: reserve account
+// 8: on sale
+// 9: auction
+// 13: unregisterable
+// 14: sub-account
+// 15: cross-chain
+// 17: on dutch auction period
+// 18: on dutch auction deliver period
+// 19: account in approval transfer
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AccountDetail {
+    pub account: String,
+    pub owner: String,
+    pub owner_coin_type: String,
+    pub registered_at: i64,
+    pub expired_at: i64,
+    pub status: i32,
+    pub confirm_proposal_hash: String,
+}
+
+async fn search_account_detail(name: &str) -> Result<Option<AccountDetail>, Error> {
+    let params = AccountDetailRequest {
+        account: name.to_string(),
+    };
+    let json_params = serde_json::to_string(&params).map_err(|err| Error::JSONParseError(err))?;
+
+    let client = make_client();
+    let req = Request::builder()
+        .method(Method::POST)
+        .uri(C.upstream.dotbit_service.register_api.clone())
+        .body(Body::from(json_params))
+        .map_err(|_err| {
+            Error::ParamError(format!("Dotbit accountDetail build request error {}", _err))
+        })?;
+
+    let mut resp = request_with_timeout(&client, req, None)
+        .await
+        .map_err(|err| {
+            Error::ManualHttpClientError(format!(
+                "Dotbit accountDetail error: {:?}",
+                err.to_string()
+            ))
+        })?;
+
+    if !resp.status().is_success() {
+        let err_message = format!("Dotbit accountDetail error, statusCode: {}", resp.status());
+        error!(err_message);
+        return Err(Error::General(err_message, resp.status()));
+    }
+
+    match parse_body::<AccountDetailResult>(&mut resp).await {
+        Ok(result) => {
+            if result.err_no != 0 {
+                if result.err_no == 30003 {
+                    // account not exist
+                    debug!(
+                        "Dotbit accountDetail code[{}] {:?}.",
+                        result.err_no, result.err_msg
+                    );
+                    return Ok(None);
+                } else {
+                    let err_message = format!(
+                        "Dotbit accountDetail error | Code: {:?}, Message: {:?}",
+                        result.err_no, result.err_msg
+                    );
+                    error!(err_message);
+                    return Err(Error::General(
+                        err_message,
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                    ));
+                }
+            } else {
+                return Ok(result.data);
+            }
+        }
+        Err(err) => {
+            let err_message = format!("Dotbit accountDetail error parse_body error: {:?}", err);
+            error!(err_message);
+            return Err(Error::General(err_message, resp.status()));
+        }
+    };
 }
