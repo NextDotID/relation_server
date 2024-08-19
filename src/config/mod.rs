@@ -116,6 +116,7 @@ pub struct ConfigENSReverse {
 #[derive(Clone, Deserialize, Default)]
 pub struct ConfigDotbitService {
     pub url: String,
+    pub register_api: String,
 }
 
 #[derive(Clone, Deserialize, Default)]

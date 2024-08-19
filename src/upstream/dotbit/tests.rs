@@ -11,7 +11,7 @@ use crate::{
 
 #[tokio::test]
 async fn test_domain_search() -> Result<(), Error> {
-    let name = "sujiyan";
+    let name = "vitalik";
     let edges = DotBit::domain_search(name).await?;
     println!("data: {:?}", edges);
     Ok(())
