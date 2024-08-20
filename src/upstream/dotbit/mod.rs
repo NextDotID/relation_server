@@ -1054,7 +1054,7 @@ impl DomainSearch for DotBit {
                 }
 
                 let created_at_naive = timestamp_to_naive(account_detail.registered_at, 1000);
-                let expired_at_naive = timestamp_to_naive(account_detail.expired_at, 0);
+                let expired_at_naive = timestamp_to_naive(account_detail.expired_at, 1000);
                 let tx_hash = account_detail.confirm_proposal_hash.clone();
 
                 let wallet: Identity = Identity {
