@@ -140,7 +140,14 @@ impl ExpandIdentityRecord {
 
     /// The expiry date for the domain, from either the registration, or the wrapped domain if PCC is burned
     async fn expired_at(&self) -> Option<i64> {
-        if !vec![Platform::Dotbit, Platform::ENS, Platform::Genome].contains(&self.platform) {
+        if !vec![
+            Platform::Dotbit,
+            Platform::ENS,
+            Platform::Genome,
+            Platform::Basenames,
+        ]
+        .contains(&self.platform)
+        {
             return None;
         }
         self.expired_at.map(|dt| dt.and_utc().timestamp())
@@ -162,6 +169,7 @@ impl ExpandIdentityRecord {
             Platform::Solana,
             Platform::SNS,
             Platform::Genome,
+            Platform::Basenames,
         ]
         .contains(&self.platform)
         {
@@ -182,6 +190,7 @@ impl ExpandIdentityRecord {
             Platform::ENS,
             Platform::SNS,
             Platform::Genome,
+            Platform::Basenames,
         ]
         .contains(&self.platform)
         {

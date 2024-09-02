@@ -48,6 +48,11 @@ pub enum ContractCategory {
     #[graphql(name = "gns")]
     GNS,
 
+    #[strum(serialize = "basenames")]
+    #[serde(rename = "basenames")]
+    #[graphql(name = "basenames")]
+    Basenames,
+
     #[default]
     #[serde(rename = "unknown")]
     #[graphql(name = "unknown")]

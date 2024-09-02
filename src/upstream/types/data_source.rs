@@ -148,6 +148,14 @@ pub enum DataSource {
     #[graphql(name = "sns")]
     SNS,
 
+    /// Basenames
+    /// Basenames are a core onchain building block that enable builders to establish their identity on Base by registering human-readable names for their wallet address(es).
+    /// https://www.base.org/names
+    #[strum(serialize = "basenames")]
+    #[serde(rename = "basenames")]
+    #[graphql(name = "basenames")]
+    Basenames,
+
     /// opensea
     /// https://opensea.io
     /// Twitter <-> Ethereum
