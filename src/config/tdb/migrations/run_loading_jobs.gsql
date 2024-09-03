@@ -1,34 +1,36 @@
 CREATE LOADING JOB Load_Basenames FOR GRAPH SocialGraph {
-LOAD /home/tigergraph/shared_data/basenames/ethereum.Identities.csv"
+LOAD "/home/tigergraph/shared_data/basenames/ethereum.Identities.csv"
     TO VERTEX Identities VALUES ($"primary_id", $"id", REDUCE(ignore_if_exists($"uuid")), $"platform", $"identity", _, _, _, REDUCE(min($"created_at")), REDUCE(min($"added_at")), REDUCE(max($"updated_at")), _, _, REDUCE(or($"reverse"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
 
-LOAD /home/tigergraph/shared_data/basenames/basenames.Identities.csv"
+LOAD "/home/tigergraph/shared_data/basenames/basenames.Identities.csv"
     TO VERTEX Identities VALUES ($"primary_id", $"id", REDUCE(ignore_if_exists($"uuid")), $"platform", $"identity", $"display_name", _, _, REDUCE(min($"created_at")), REDUCE(min($"added_at")), REDUCE(max($"updated_at")), _, REDUCE(max($"expired_at")), REDUCE(or($"reverse"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
 
-LOAD /home/tigergraph/shared_data/basenames/IdentitiesGraph.csv"
+LOAD "/home/tigergraph/shared_data/basenames/IdentitiesGraph.csv"
     TO VERTEX IdentitiesGraph VALUES ($"primary_id", $"id", $"updated_nanosecond") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
 
-LOAD /home/tigergraph/shared_data/basenames/DomainCollection.csv"
+LOAD "/home/tigergraph/shared_data/basenames/DomainCollection.csv"
     TO VERTEX DomainCollection VALUES ($"primary_id", $"id", REDUCE(max($"updated_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
 
-LOAD /home/tigergraph/shared_data/basenames/Hold_Identity.csv"
+LOAD "/home/tigergraph/shared_data/basenames/Hold_Identity.csv"
     TO EDGE Hold_Identity VALUES ($"from", $"to", $"source", REDUCE(ignore_if_exists($"uuid")), _, $"id", REDUCE(min($"created_at")), REDUCE(max($"updated_at")), $"fetcher", REDUCE(max($"expired_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
 
-LOAD /home/tigergraph/shared_data/basenames/Hold_Contract.csv"
-    TO EDGE Hold_Contract VALUES ($"from", $"to", $"source", _, $"id", REDUCE(ignore_if_exists($"uuid")), REDUCE(min($"created_at")), REDUCE(max($"updated_at")), $"fetcher", REDUCE(max($"expired_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+LOAD "/home/tigergraph/shared_data/basenames/Hold_Contract.csv"
+    TO EDGE Hold_Contract VALUES ($"from", $"to", $"source", "", $"id", REDUCE(ignore_if_exists($"uuid")), REDUCE(min($"created_at")), REDUCE(max($"updated_at")), $"fetcher", REDUCE(max($"expired_at"))) USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
 
-LOAD /home/tigergraph/shared_data/basenames/Resolve.csv"
+LOAD "/home/tigergraph/shared_data/basenames/Resolve.csv"
     TO EDGE Resolve VALUES ($"from", $"to", $"source", $"system", $"name", REDUCE(ignore_if_exists($"uuid")), REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
 
-LOAD /home/tigergraph/shared_data/basenames/Reverse_Resolve.csv"
+LOAD "/home/tigergraph/shared_data/basenames/Reverse_Resolve.csv"
     TO EDGE Reverse_Resolve VALUES ($"from", $"to", $"source", $"system", $"name", REDUCE(ignore_if_exists($"uuid")), REDUCE(max($"updated_at")), $"fetcher") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
 
-LOAD /home/tigergraph/shared_data/basenames/PartOfIdentitiesGraph_Reverse.csv"
-    TO EDGE PartOfIdentitiesGraph VALUES ($"from", $"to") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
+LOAD "/home/tigergraph/shared_data/basenames/PartOfIdentitiesGraph_Reverse.csv"
+    TO EDGE PartOfIdentitiesGraph_Reverse VALUES ($"from", $"to") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
 
-LOAD /home/tigergraph/shared_data/basenames/PartOfCollection.csv"
+LOAD "/home/tigergraph/shared_data/basenames/PartOfCollection.csv"
     TO EDGE PartOfCollection VALUES ($"from", $"to", $"platform", $"name", $"tld", $"status") USING SEPARATOR = "\t", EOL = "\n", HEADER = "true";
 }
+
+RUN LOADING JOB Load_Basenames
 
 
 CREATE LOADING JOB Load_DBExport_SocialGraph FOR GRAPH SocialGraph {
