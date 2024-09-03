@@ -347,6 +347,12 @@ impl IdentityGraph {
                                     let duration_since_update =
                                         current_time.signed_duration_since(updated_at);
                                     // Check if the difference is greater than 2 hours
+                                    tracing::trace!(
+                                        "updated_at {}, duration_since_update {}, current_time {}",
+                                        updated_at,
+                                        duration_since_update,
+                                        current_time
+                                    );
                                     if duration_since_update > Duration::hours(2) {
                                         tracing::info!("Basenames refetching...");
                                         return Ok(None);
