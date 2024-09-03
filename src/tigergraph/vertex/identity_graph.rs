@@ -6,9 +6,10 @@ use crate::{
         Attribute, BaseResponse, Graph, OpCode, Transfer,
     },
     upstream::{Chain, DataSource, Platform},
-    util::parse_body,
+    util::{naive_now, parse_body},
 };
 use async_trait::async_trait;
+use chrono::Duration;
 use http::uri::InvalidUri;
 use hyper::{client::HttpConnector, Body, Client, Method};
 use serde::de::{self, MapAccess, Visitor};
@@ -322,15 +323,41 @@ impl IdentityGraph {
                                 return Ok(None); // If vertices=1, it's isolated vertex
                             }
                         } else {
-                            // filter out dataSource == "keybase" edges
+                            // filter out dataSource == "basenames" edges
                             let filter_edges: Vec<IdentityConnection> = result
                                 .edges
                                 .clone()
                                 .into_iter()
-                                .filter(|e| e.source != DataSource::Keybase.to_string())
+                                .filter(|e| e.data_source != DataSource::Basenames)
                                 .collect();
+
                             if filter_edges.len() == 0 {
-                                return Ok(None);
+                                // only have basenames edges
+                                let basenames_vertex: Vec<ExpandIdentityRecord> = result
+                                    .vertices
+                                    .clone()
+                                    .into_iter()
+                                    .filter(|v| v.record.platform == Platform::Ethereum)
+                                    .collect();
+
+                                if basenames_vertex.len() > 0 {
+                                    let updated_at =
+                                        basenames_vertex.first().cloned().unwrap().updated_at;
+                                    let current_time = naive_now();
+                                    let duration_since_update =
+                                        current_time.signed_duration_since(updated_at);
+                                    // Check if the difference is greater than 2 hours
+                                    tracing::trace!(
+                                        "updated_at {}, duration_since_update {}, current_time {}",
+                                        updated_at,
+                                        duration_since_update,
+                                        current_time
+                                    );
+                                    if duration_since_update > Duration::hours(2) {
+                                        tracing::info!("Basenames refetching...");
+                                        return Ok(None);
+                                    }
+                                }
                             }
                         }
                         return Ok(Some(result));

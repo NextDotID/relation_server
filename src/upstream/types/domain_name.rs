@@ -29,6 +29,14 @@ pub enum DomainNameSystem {
     #[graphql(name = "ens")]
     ENS,
 
+    /// Basenames
+    /// Basenames are a core onchain building block that enable builders to establish their identity on Base by registering human-readable names for their wallet address(es).
+    /// https://www.base.org/names
+    #[strum(serialize = "basenames")]
+    #[serde(rename = "basenames")]
+    #[graphql(name = "basenames")]
+    Basenames,
+
     /// SNS: Solana Name Service
     /// https://www.sns.id
     #[strum(serialize = "sns")]
@@ -207,6 +215,13 @@ pub enum EXT {
     #[serde(rename = "eth")]
     #[graphql(name = "eth")]
     Eth,
+
+    /// Basenames: Basenames on L2
+    /// https://www.base.org/names
+    #[strum(serialize = "base.eth")]
+    #[serde(rename = "base.eth")]
+    #[graphql(name = "base.eth")]
+    BaseEth,
 
     /// https://www.sns.id: Solana Name Service
     #[strum(serialize = "sol")]
@@ -444,6 +459,7 @@ lazy_static! {
     pub static ref EXTENSION: HashMap<Platform, Vec<EXT>> = {
         let mut extension = HashMap::new();
         extension.insert(Platform::ENS, vec![EXT::Eth]); // name.eth
+        extension.insert(Platform::Basenames, vec![EXT::BaseEth]); // name.base.eth
         extension.insert(Platform::SNS, vec![EXT::Sol]);  // name.sol
         extension.insert(Platform::Dotbit, vec![EXT::Bit]); // name.bit
         extension.insert(Platform::Lens, vec![EXT::Lens]); // lens/handle
@@ -501,6 +517,7 @@ impl From<EXT> for Platform {
     fn from(ext: EXT) -> Self {
         match ext {
             EXT::Eth => Platform::ENS,
+            EXT::BaseEth => Platform::Basenames,
             EXT::Sol => Platform::SNS,
             EXT::Bit => Platform::Dotbit,
             EXT::Lens => Platform::Lens,
@@ -552,6 +569,7 @@ impl From<EXT> for DomainNameSystem {
     fn from(ext: EXT) -> Self {
         match ext {
             EXT::Eth => DomainNameSystem::ENS,
+            EXT::BaseEth => DomainNameSystem::Basenames,
             EXT::Sol => DomainNameSystem::SNS,
             EXT::Bit => DomainNameSystem::DotBit,
             EXT::Lens => DomainNameSystem::Lens,
@@ -603,6 +621,7 @@ impl From<DomainNameSystem> for Platform {
     fn from(domain: DomainNameSystem) -> Self {
         match domain {
             DomainNameSystem::ENS => Platform::ENS,
+            DomainNameSystem::Basenames => Platform::Basenames,
             DomainNameSystem::SNS => Platform::SNS,
             DomainNameSystem::DotBit => Platform::Dotbit,
             DomainNameSystem::UnstoppableDomains => Platform::UnstoppableDomains,
