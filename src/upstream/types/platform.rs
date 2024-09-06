@@ -104,6 +104,14 @@ pub enum Platform {
     #[graphql(name = "ens")]
     ENS,
 
+    /// Basenames:
+    /// Basenames are a core onchain building block that enable builders to establish their identity on Base by registering human-readable names for their wallet address(es).
+    /// https://www.base.org/names
+    #[strum(serialize = "basenames")]
+    #[serde(rename = "basenames")]
+    #[graphql(name = "basenames")]
+    Basenames,
+
     /// Solana Name Service: Create a human-readable identity by replacing decentralized addresses with a domain name.
     /// https://www.sns.id
     #[strum(serialize = "sns")]

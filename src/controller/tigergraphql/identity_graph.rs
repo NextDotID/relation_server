@@ -9,9 +9,10 @@ use crate::{
         },
     },
     upstream::{fetch_all, Chain, ContractCategory, DataSource, Platform, Target},
-    util::make_http_client,
+    util::{make_http_client, naive_now},
 };
 use async_graphql::{Context, Object};
+use chrono::Duration;
 use dataloader::non_cached::Loader;
 use tracing::{event, Level};
 use uuid::Uuid;
@@ -140,7 +141,14 @@ impl ExpandIdentityRecord {
 
     /// The expiry date for the domain, from either the registration, or the wrapped domain if PCC is burned
     async fn expired_at(&self) -> Option<i64> {
-        if !vec![Platform::Dotbit, Platform::ENS, Platform::Genome].contains(&self.platform) {
+        if !vec![
+            Platform::Dotbit,
+            Platform::ENS,
+            Platform::Genome,
+            Platform::Basenames,
+        ]
+        .contains(&self.platform)
+        {
             return None;
         }
         self.expired_at.map(|dt| dt.and_utc().timestamp())
@@ -162,6 +170,7 @@ impl ExpandIdentityRecord {
             Platform::Solana,
             Platform::SNS,
             Platform::Genome,
+            Platform::Basenames,
         ]
         .contains(&self.platform)
         {
@@ -182,6 +191,7 @@ impl ExpandIdentityRecord {
             Platform::ENS,
             Platform::SNS,
             Platform::Genome,
+            Platform::Basenames,
         ]
         .contains(&self.platform)
         {
@@ -330,7 +340,92 @@ impl ExpandIdentityRecord {
                 )
                 .await?)
             }
-            Some(identity_graph) => Ok(Some(identity_graph)),
+            Some(identity_graph) => {
+                // filter out dataSource == "basenames" edges
+                let filter_edges: Vec<IdentityConnection> = identity_graph
+                    .edges
+                    .clone()
+                    .into_iter()
+                    .filter(|e| e.data_source != DataSource::Basenames)
+                    .collect();
+
+                if filter_edges.len() == 0 {
+                    // only have basenames edges
+                    let basenames_vertex: Vec<ExpandIdentityRecord> = identity_graph
+                        .vertices
+                        .clone()
+                        .into_iter()
+                        .filter(|v| {
+                            v.record.platform == Platform::Basenames
+                                && v.record.identity == self.identity
+                        })
+                        .collect();
+
+                    if basenames_vertex.len() > 0 {
+                        let updated_at = basenames_vertex.first().cloned().unwrap().updated_at;
+                        let current_time = naive_now();
+                        let duration_since_update = current_time.signed_duration_since(updated_at);
+                        // Check if the difference is greater than 2 hours
+                        if duration_since_update > Duration::hours(2) {
+                            let basename_address = basenames_vertex.first().cloned().unwrap();
+                            let resolved_address = match basename_address.resolve_address {
+                                Some(addr_list) => {
+                                    if addr_list.len() > 0 {
+                                        addr_list.first().cloned().unwrap().address
+                                    } else {
+                                        match basename_address.owner_address {
+                                            Some(owner_addr_list) => {
+                                                if owner_addr_list.len() > 0 {
+                                                    owner_addr_list
+                                                        .first()
+                                                        .cloned()
+                                                        .unwrap()
+                                                        .address
+                                                } else {
+                                                    "".to_string()
+                                                }
+                                            }
+                                            None => "".to_string(),
+                                        }
+                                    }
+                                }
+                                None => match basename_address.owner_address {
+                                    Some(owner_addr_list) => {
+                                        if owner_addr_list.len() > 0 {
+                                            owner_addr_list.first().cloned().unwrap().address
+                                        } else {
+                                            "".to_string()
+                                        }
+                                    }
+                                    None => "".to_string(),
+                                },
+                            };
+                            if resolved_address != "".to_string() {
+                                tracing::trace!("Basenames refetching {} ...", resolved_address);
+                                let target = Target::Identity(Platform::Ethereum, resolved_address);
+                                let fetch_result = fetch_all(vec![target], Some(3)).await;
+                                if fetch_result.is_err() {
+                                    event!(
+                                        Level::WARN,
+                                        ?self.platform,
+                                        self.identity,
+                                        err = fetch_result.unwrap_err().to_string(),
+                                        "Failed to fetch_all"
+                                    );
+                                }
+                                return Ok(IdentityGraph::find_graph_by_platform_identity(
+                                    &client,
+                                    &self.platform,
+                                    &self.identity,
+                                    reverse,
+                                )
+                                .await?);
+                            }
+                        }
+                    }
+                }
+                Ok(Some(identity_graph))
+            }
         }
     }
 }

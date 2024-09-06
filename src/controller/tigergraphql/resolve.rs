@@ -9,7 +9,7 @@ use crate::{
         fetch_all, fetch_domains, trim_name, Chain, ContractCategory, DataFetcher, DataSource,
         DomainNameSystem, DomainStatus, Platform, Target,
     },
-    util::make_http_client,
+    util::{make_http_client, naive_now},
 };
 use async_graphql::{Context, Object};
 use strum::IntoEnumIterator;
@@ -188,20 +188,53 @@ impl ResolveQuery {
                 }
             }
             Some(found) => {
-                if found.collection.is_outdated() {
-                    event!(
-                        Level::DEBUG,
-                        process_name,
-                        "Outdated. Delete and Refetching all available domains."
-                    );
-                    tokio::spawn(async move {
-                        // Delete and Refetch in the background
-                        sleep(Duration::from_secs(10)).await;
+                // filter out dataSource == "basenames" edges
+                let filter_edges: Vec<AvailableDomain> = found
+                    .domains
+                    .clone()
+                    .into_iter()
+                    .filter(|e| e.platform != Platform::Basenames && e.availability == false)
+                    .collect();
+
+                if filter_edges.len() == 0 {
+                    // only have basenames edges
+                    let updated_at = found.collection.updated_at.clone();
+                    let current_time = naive_now();
+                    let duration_since_update = current_time.signed_duration_since(updated_at);
+                    // Check if the difference is greater than 2 hours
+                    if duration_since_update > chrono::Duration::hours(2) {
+                        event!(
+                            Level::DEBUG,
+                            process_name,
+                            "Outdated. Delete and Refetching all available domains."
+                        );
                         delete_domain_collection(&client, &process_name).await?;
                         fetch_domains(&name).await?;
-                        Ok::<_, Error>(())
-                    });
+                        match DomainCollection::domain_available_search(&client, &process_name)
+                            .await?
+                        {
+                            None => return Ok(None),
+                            Some(result) => return Ok(Some(result.domains)),
+                        }
+                    }
+                } else {
+                    if found.collection.is_outdated() {
+                        event!(
+                            Level::DEBUG,
+                            process_name,
+                            "Outdated. Delete and Refetching all available domains."
+                        );
+                        let client_clone = client.clone();
+                        tokio::spawn(async move {
+                            // Delete and Refetch in the background
+                            sleep(Duration::from_secs(10)).await;
+                            delete_domain_collection(&client_clone, &process_name).await?;
+                            fetch_domains(&name).await?;
+                            Ok::<_, Error>(())
+                        });
+                    }
                 }
+
                 Ok(Some(found.domains))
             }
         }
