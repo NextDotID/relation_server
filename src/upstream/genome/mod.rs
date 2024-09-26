@@ -565,7 +565,7 @@ async fn fetch_address_by_domain(
 }
 
 async fn get_name(address: &str) -> Result<Vec<Metadata>, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let uri: http::Uri = format!(
         "{}/get_name?tld=gno&address={}",
         C.upstream.genome_api.url.clone(),
@@ -622,7 +622,7 @@ async fn get_name(address: &str) -> Result<Vec<Metadata>, Error> {
 }
 
 async fn get_address(domain: &str) -> Result<Vec<Metadata>, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let uri: http::Uri = format!(
         "{}/get_address?tld=gno&domain={}",
         C.upstream.genome_api.url.clone(),

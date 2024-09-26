@@ -476,7 +476,7 @@ pub struct Metadata {
 }
 
 async fn get_clusters_by_address(address: &str) -> Result<Vec<Metadata>, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let uri: http::Uri = format!(
         "{}/get_name?address={}",
         C.upstream.clusters_api.url.clone(),
@@ -535,7 +535,7 @@ async fn get_clusters_by_address(address: &str) -> Result<Vec<Metadata>, Error> 
 }
 
 async fn get_address_by_clusters(name: &str) -> Result<Vec<Metadata>, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let uri: http::Uri = format!(
         "{}/get_address?name={}",
         C.upstream.clusters_api.url.clone(),

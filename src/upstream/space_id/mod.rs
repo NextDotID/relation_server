@@ -437,7 +437,7 @@ async fn fetch_address_by_domain(
 
 /// Resolve Names: https://docs.space.id/developer-guide/web3-name-sdk/sid-api#resolve-names
 async fn get_address(domain: &str) -> Result<String, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let uri: http::Uri = format!(
         "{}/v1/getAddress?tld=bnb&domain={}",
         C.upstream.spaceid_api.url.clone(),
@@ -490,7 +490,7 @@ async fn get_address(domain: &str) -> Result<String, Error> {
 
 /// Reverse Resolve Names: https://docs.space.id/developer-guide/web3-name-sdk/sid-api#reverse-resolve-names
 async fn get_name(address: &str) -> Result<Option<String>, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let uri: http::Uri = format!(
         "{}/v1/getName?tld=bnb&address={}",
         C.upstream.spaceid_api.url.clone(),

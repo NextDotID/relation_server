@@ -119,7 +119,7 @@ async fn save_item(
 
 /// Trigger a refetch from github.
 pub async fn prefetch() -> Result<(), Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let uri: http::Uri = (C.upstream.sybil_service.url).parse().unwrap();
 
     let req = hyper::Request::builder()

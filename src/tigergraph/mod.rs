@@ -139,7 +139,7 @@ pub struct IdAllocationResult {
 }
 
 pub async fn id_allocation(payload: &IdAllocation) -> Result<IdAllocationResult, Error> {
-    let http_client = make_client();
+    let http_client = make_client().await.unwrap();
     let id_allocation_url = format!("{}:{}", C.tdb.host.trim_end_matches(":9000"), "9002");
     let uri: http::Uri = format!("{}/id_allocation/allocation", id_allocation_url,)
         .parse()
