@@ -60,7 +60,7 @@ spl-token = "3.0.0"
 solana-account-decoder = "<1.16.0"
 solana-program = "<1.16.0"
 sns-sdk = "=1.4.0"
-borsh = "0.9"
+borsh = "0.10"
 
 # GraphQL
 async-graphql = { version = "7", features = ["uuid", "chrono"] }
