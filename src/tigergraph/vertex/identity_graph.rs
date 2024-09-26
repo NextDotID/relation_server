@@ -321,17 +321,6 @@ impl IdentityGraph {
                             if result.vertices.len() > 1 {
                                 return Ok(None); // If vertices=1, it's isolated vertex
                             }
-                        } else {
-                            // filter out dataSource == "keybase" edges
-                            let filter_edges: Vec<IdentityConnection> = result
-                                .edges
-                                .clone()
-                                .into_iter()
-                                .filter(|e| e.source != DataSource::Keybase.to_string())
-                                .collect();
-                            if filter_edges.len() == 0 {
-                                return Ok(None);
-                            }
                         }
                         return Ok(Some(result));
                     }

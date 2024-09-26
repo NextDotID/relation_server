@@ -48,6 +48,11 @@ pub enum ContractCategory {
     #[graphql(name = "gns")]
     GNS,
 
+    #[strum(serialize = "basenames")]
+    #[serde(rename = "basenames")]
+    #[graphql(name = "basenames")]
+    Basenames,
+
     #[default]
     #[serde(rename = "unknown")]
     #[graphql(name = "unknown")]
@@ -63,6 +68,7 @@ impl ContractCategory {
             ENS => Some("0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85".to_lowercase()),
             SNS => Some("4gj2A7SSgWUGfHTm2iG4NeH3kpySmGd54bj78TM4d7Fg".to_string()), // Solana Name Service
             GNS => Some("0x5dc881dda4e4a8d312be3544ad13118d1a04cb17".to_string()), // Gnosis Name Service
+            Basenames => Some("0x4ccb0bb02fcaba27e82a56646e81d8c5bc4119a5".to_string()), // Basenames
             _ => None,
         }
     }
@@ -76,6 +82,7 @@ impl ContractCategory {
             POAP => Some(Chain::Ethereum),
             SNS => Some(Chain::Solana),
             GNS => Some(Chain::Gnosis),
+            Basenames => Some(Chain::Base),
             _ => None,
         }
     }
