@@ -190,7 +190,7 @@ impl Fetcher for ENSReverseLookup {
 }
 
 pub async fn fetch_record(wallet: &str) -> Result<Response, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let url: http::Uri = format!("{}{}", C.upstream.ens_reverse.url, wallet)
         .parse()
         .map_err(|err: http::uri::InvalidUri| {

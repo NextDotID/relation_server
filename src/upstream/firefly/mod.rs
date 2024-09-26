@@ -185,7 +185,7 @@ async fn search_records(
     platform: &Platform,
     identity: &str,
 ) -> Result<Vec<AggregationRecord>, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let uri: http::Uri = format!(
         "{}/aggregation/search?platform={}&identity={}",
         C.upstream.aggregation_service.url.clone(),

@@ -1,16 +1,26 @@
 #[cfg(test)]
 mod tests;
 
-use std::{collections::HashSet, hash::Hash};
+use std::{collections::HashSet, hash::Hash, sync::Arc};
 
 use crate::error::Error;
 use chrono::{DateTime, NaiveDateTime};
-use http::Response;
+use deadpool::managed::{Manager, Object, Pool, RecycleResult};
+use http::{Response, StatusCode};
 use hyper::{body::HttpBody as _, client::HttpConnector, Body, Client, Request};
 use hyper_tls::HttpsConnector;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 const DEFAULT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+static CLIENT_POOL: Lazy<Arc<ClientPool>> = Lazy::new(|| {
+    let manager = ClientManager{};
+    let pool = Pool::builder(manager)
+        .build()
+        .unwrap();
+    Arc::new(pool)
+});
 
 /// Returns current UNIX timestamp (unit: second).
 pub fn timestamp() -> i64 {
@@ -58,13 +68,32 @@ pub fn utc_to_naive(s: String) -> Result<NaiveDateTime, Error> {
     Ok(dt.naive_utc())
 }
 
-pub fn make_client() -> Client<HttpsConnector<HttpConnector>> {
-    let https = HttpsConnector::new();
-    // let mut http = HttpConnector::new();
-    // http.set_connect_timeout(Some(std::time::Duration::from_secs(5)));
-    // let https = HttpsConnector::new_with_connector(http);
+pub struct ClientManager;
 
-    Client::builder().build::<_, hyper::Body>(https)
+#[async_trait::async_trait]
+impl Manager for ClientManager {
+    type Type = Client<HttpsConnector<HttpConnector>>;
+    type Error = Error;
+
+    // make_client() implementation moved here
+    async fn create(&self) -> Result<Client<HttpsConnector<HttpConnector>>, Error> {
+        let https = HttpsConnector::new();
+        Ok(Client::builder().build::<_, hyper::Body>(https))
+    }
+
+    async fn recycle(&self, _: &mut Client<HttpsConnector<HttpConnector>>) -> RecycleResult<Error> {
+        Ok(())
+    }
+}
+
+type ClientPool = Pool<ClientManager>;
+
+pub async fn make_client() -> Result<Object<ClientManager>, Error> {
+    let pool = CLIENT_POOL.clone();
+    let client = pool.get().await.map_err(|_| {
+        Error::General("Failed to acquire client from pool".to_string(), StatusCode::INTERNAL_SERVER_ERROR)
+    })?;
+    Ok(client)
 }
 
 pub fn make_http_client() -> Client<HttpConnector> {
@@ -76,7 +105,7 @@ pub fn make_http_client() -> Client<HttpConnector> {
 
 /// If timeout is None, default timeout is 5 seconds.
 pub async fn request_with_timeout(
-    client: &Client<HttpsConnector<HttpConnector>>,
+    client: &Object<ClientManager>,
     req: Request<Body>,
     timeout: Option<std::time::Duration>,
 ) -> Result<Response<Body>, Error> {

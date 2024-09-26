@@ -204,7 +204,7 @@ async fn query_by_handle(
     };
     let json_params = serde_json::to_vec(&params)?;
 
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let req = Request::builder()
         .method(Method::POST)
         .uri(C.upstream.dotbit_service.url.clone())
@@ -268,7 +268,7 @@ async fn query_by_wallet(platform: &Platform, address: &str) -> Result<Vec<Accou
     };
     let json_params = serde_json::to_vec(&params)?;
 
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let req = Request::builder()
         .method(Method::POST)
         .uri(C.upstream.dotbit_service.url.clone())
@@ -315,7 +315,7 @@ async fn query_reverse_record(platform: &Platform, identity: &str) -> Result<Acc
     };
     let json_params = serde_json::to_vec(&params)?;
 
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let req = Request::builder()
         .method(Method::POST)
         .uri(C.upstream.dotbit_service.url.clone())
@@ -617,7 +617,7 @@ async fn fetch_and_save_account_info(
     };
     let json_params = serde_json::to_vec(&params)?;
 
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let req = Request::builder()
         .method(Method::POST)
         .uri(C.upstream.dotbit_service.url.clone())
@@ -741,7 +741,7 @@ async fn fetch_reverse_record(
     };
     let json_params = serde_json::to_vec(&params)?;
 
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let req = Request::builder()
         .method(Method::POST)
         .uri(C.upstream.dotbit_service.url.clone())
@@ -827,7 +827,7 @@ async fn fetch_account_list_by_addrs(
     };
     let json_params = serde_json::to_vec(&params)?;
 
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let req = Request::builder()
         .method(Method::POST)
         .uri(C.upstream.dotbit_service.url.clone())
@@ -1204,7 +1204,7 @@ async fn search_account_detail(name: &str) -> Result<Option<AccountDetail>, Erro
     };
     let json_params = serde_json::to_string(&params).map_err(|err| Error::JSONParseError(err))?;
 
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let req = Request::builder()
         .method(Method::POST)
         .uri(C.upstream.dotbit_service.register_api.clone())

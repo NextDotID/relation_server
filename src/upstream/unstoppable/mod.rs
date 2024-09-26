@@ -381,7 +381,7 @@ async fn fetch_domain_by_owner(
     owners: &str,
     next: Option<String>,
 ) -> Result<GetDomainByOwnerResp, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     // curl --request GET "https://api.unstoppabledomains.com/resolve/owners/0x50b6a9ba0b1ca77ce67c22b30afc0a5bbbdb5a18/domains"
     let uri: http::Uri = if next.is_none() {
         format!(
@@ -444,7 +444,7 @@ async fn fetch_domain_by_owner(
 }
 
 async fn fetch_owner_by_domain(domains: &str) -> Result<DomainResponse, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let uri: http::Uri = format!(
         "{}/resolve/domains/{}",
         C.upstream.unstoppable_api.url, domains
@@ -491,7 +491,7 @@ async fn fetch_owner_by_domain(domains: &str) -> Result<DomainResponse, Error> {
 /// Do not use `fetch_domain` query
 #[allow(dead_code)]
 async fn fetch_domain(owners: &str, page: &str) -> Result<RecordsForOwnerResponse, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let uri: http::Uri = if page.is_empty() {
         format!(
             "{}/domains?owners={}",
@@ -551,7 +551,7 @@ async fn fetch_domain(owners: &str, page: &str) -> Result<RecordsForOwnerRespons
 }
 
 async fn fetch_reverse(owner: &str) -> Result<ReverseResponse, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     // https://api.unstoppabledomains.com/resolve/reverse/{owner}
     let reverse_uri: http::Uri = format!(
         "{}/resolve/reverse/{}",
@@ -715,7 +715,7 @@ async fn fetch_domains_by_account(
 }
 
 async fn fetch_owner(domains: &str) -> Result<DomainResponse, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let uri: http::Uri = format!("{}/domains/{}", C.upstream.unstoppable_api.url, domains)
         .parse()
         .map_err(|_err: InvalidUri| Error::ParamError(format!("Uri format Error {}", _err)))?;
@@ -1040,7 +1040,7 @@ struct DomainInfo {
 
 // https://api.unstoppabledomains.com/api/domain/search/internal?q=0xbillys
 async fn domain_search(name: &str) -> Result<Vec<Exact>, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let encoded_name = urlencoding::encode(name);
     let uri: http::Uri = format!(
         "{}/api/domain/search/internal?q={}",

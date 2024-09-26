@@ -107,7 +107,7 @@ async fn batch_fetch_connections(
     platform: &Platform,
     identity: &str,
 ) -> Result<(TargetProcessedList, EdgeList), Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
 
     let uri: http::Uri = format!(
         "{}/v1/proof?exact=true&platform={}&identity={}",
@@ -259,7 +259,7 @@ async fn fetch_connections_by_platform_identity(
     platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
 
     let uri: http::Uri = format!(
         "{}/v1/proof?exact=true&platform={}&identity={}",

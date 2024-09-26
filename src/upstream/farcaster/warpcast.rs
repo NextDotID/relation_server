@@ -446,7 +446,7 @@ pub struct Verification {
 }
 
 async fn user_by_username(username: &str) -> Result<Option<User>, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let uri: http::Uri = format!(
         "{}/v2/user-by-username?username={}",
         C.upstream.warpcast_api.url, username
@@ -523,7 +523,7 @@ async fn user_by_verification(address: &str) -> Result<Option<User>, Error> {
         return Ok(None);
     }
 
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let uri: http::Uri = format!(
         "{}/v2/user-by-verification?address={}",
         C.upstream.warpcast_api.url, address
@@ -587,7 +587,7 @@ async fn user_by_verification(address: &str) -> Result<Option<User>, Error> {
 }
 
 async fn get_verifications(fid: i64) -> Result<Option<Vec<Verification>>, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let uri: http::Uri = format!(
         "{}/v2/verifications?fid={}",
         C.upstream.warpcast_api.url, fid

@@ -139,7 +139,7 @@ impl Fetcher for Rss3 {
 }
 
 async fn batch_fetch_nfts(target: &Target) -> Result<(TargetProcessedList, EdgeList), Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let address = target.identity()?.to_lowercase();
     let mut current_cursor = String::from("");
 

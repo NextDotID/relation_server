@@ -79,7 +79,7 @@ async fn fetch_connections_by_platform_identity(
     platform: &Platform,
     identity: &str,
 ) -> Result<TargetProcessedList, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let mut page = 1;
 
     let mut next_targets: TargetProcessedList = Vec::new();

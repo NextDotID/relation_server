@@ -176,7 +176,7 @@ async fn search_opensea_account(
     platform: &Platform,
     identity: &str,
 ) -> Result<Vec<SnsRecord>, Error> {
-    let client = make_client();
+    let client = make_client().await.unwrap();
     let uri: http::Uri = format!(
         "{}/aggregation/opensea_account?platform={}&identity={}",
         C.upstream.aggregation_service.url.clone(),
